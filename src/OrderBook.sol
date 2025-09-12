@@ -79,6 +79,10 @@ interface IOrderBook {
     function reportFill(OrderFillReport calldata report) external;
 }
 
+interface Messenger {
+    function sendFillReport(uint32 destinationChainId, OrderBook.OrderFillReport calldata report) external;
+}
+
 
 contract OrderBook is IOrderBook {
 
@@ -102,9 +106,12 @@ contract OrderBook is IOrderBook {
     /// @notice The minimum order amount
     uint256 public minOrderAmount;
 
-    uint32 public protocolChainId; // the chain ID of this chain according to the messaging network (e.g. Wormhole) 
+    uint32 public chainId; // the chain ID of this chain according to the messaging network (e.g. Wormhole) 
 
+    // mapping(address => uint32) public messengerOriginId;// messenger contract address => this chain's origin ID for that messenger (it can be different for different messaging networks)
     mapping(uint32 => address) public chainMessenger; // chain ID => contract to use for sending messages to and receiving messages from that chain
+    
+    
     mapping(address => uint256) public senderNonces;
     mapping(bytes32 => Order) public orders;
 
@@ -201,7 +208,7 @@ contract OrderBook is IOrderBook {
             revert("OrderBook: destination token not accepted");
         }
 
-        if (protocolChainId != orderData.destinationChainId) {
+        if (chainId != orderData.destinationChainId) {
             revert("OrderBook: fill data destination chain ID does not match protocol chain ID");
         }
 
@@ -235,15 +242,15 @@ contract OrderBook is IOrderBook {
         IERC20(orderData.destinationToken).transferFrom(msg.sender, orderData.recipient, fillAmount);
 
         // Handle releasing the corresponding amount of origin tokens to the filler
-        if (protocolChainId == orderData.originChainId) {
+        if (chainId == orderData.originChainId) {
             // If this is a fill on the origin chain, we can immediately release the corresponding amount of origin tokens to the recipient
             // This is because the origin and destination chains are the same, so no cross-chain messaging is needed
             IERC20(order.originToken).transferFrom(address(this), orderData.recipient, fillAmount);
         } else {
             // If this is a fill on a different chain than the origin chain, we need to send a message back to the origin chain to release the corresponding amount of origin tokens to the recipient
             // TODO implement cross-chain messaging to report the fill back to the origin chain
-            address messenger = chainMessenger[orderData.originChainId];
-            messenger.sendFillReport(
+            // TODO determine best method for batching these messages
+            IMessenger(chainMessenger[orderData.originChainId])sendFillReport(
                 orderData.originChainId,
                 OrderFillReport({
                     orderId: orderId,
@@ -251,7 +258,6 @@ contract OrderBook is IOrderBook {
                     fillAmount: fillAmount
                 })
             );
-            
         }
 
         emit Fill(orderId, msg.sender, fillAmount);
@@ -259,10 +265,11 @@ contract OrderBook is IOrderBook {
 
     // ========== Receiving Fill Reports ========== //
 
-    function reportFill(OrderFillReport calldata report) external override {
+    // TODO allow batch reporting to save gas and reduce the number of required messages
+    function reportFill(OrderFillReport calldata report[]) external override {
         Order storage order = orders[report.orderId];
 
-        if (order.originChainId != protocolChainId) {
+        if (order.originChainId != chainId) {
             revert("OrderBook: order origin chain ID does not match protocol chain ID");
         }
 
