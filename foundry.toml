@@ -7,6 +7,12 @@ optimizer = true
 optimizer_runs = 999999
 solc_version = "0.8.26"
 verbosity = 3
+src = "evm/src"
+test = "evm/test"
+libs = "evm/lib"
+script = "evm/script"
+out = "evm/out"
+broadcast = "evm/broadcast"
 
 [lint]
 lint_on_build = false
