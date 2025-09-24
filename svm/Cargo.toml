@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "svm/programs/*"
+    "programs/*"
 ]
 resolver = "2"
 

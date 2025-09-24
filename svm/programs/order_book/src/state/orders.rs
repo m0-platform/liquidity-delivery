@@ -83,9 +83,3 @@ pub struct FillReport {
 }
 
 
-#[account]
-#[derive(InitSpace)]
-pub struct Nonce {
-    pub bump: u8,
-    pub value: u64,
-}
