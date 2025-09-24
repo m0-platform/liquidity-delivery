@@ -41,11 +41,17 @@ pub struct ReportOrderFill<'info> {
     )]
     pub token_in_mint: InterfaceAccount<'info, Mint>,
 
+    /// CHECK: This is validated against the fill report
+    #[account(
+        address = Pubkey::new_from_array(fill_report.origin_recipient) @ OrderBookError::InvalidRecipient,
+    )]
+    pub origin_recipient: UncheckedAccount<'info>,
+
     #[account(
         init_if_needed,
         payer = relayer,
         associated_token::mint = token_in_mint,
-        associated_token::authority = Pubkey::new_from_array(fill_report.origin_recipient),
+        associated_token::authority = origin_recipient,
         associated_token::token_program = token_in_program
     )]
     pub recipient_token_in_ata: InterfaceAccount<'info, TokenAccount>,

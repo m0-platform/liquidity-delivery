@@ -65,11 +65,17 @@ pub struct FillCommon<'info> {
     )]
     pub solver_token_out_account: InterfaceAccount<'info, TokenAccount>,
 
+    /// CHECK: This is validated against the order data
+    #[account(
+        address = Pubkey::new_from_array(order_data.recipient) @ OrderBookError::InvalidRecipient,
+    )]
+    pub recipient: UncheckedAccount<'info>,
+
     #[account(
         init_if_needed,
         payer = solver,
         associated_token::mint = token_out_mint,
-        associated_token::authority = Pubkey::new_from_array(order_data.recipient),
+        associated_token::authority = recipient,
         associated_token::token_program = token_out_program,
     )]
     pub recipient_token_out_ata: InterfaceAccount<'info, TokenAccount>,
@@ -93,7 +99,7 @@ pub struct FillNativeOrder<'info> {
         bump = order.bump,
         constraint = order.order_type == OrderType::Native @ OrderBookError::InvalidOrderType,
     )]
-    pub order: Account<'info, Order<NativeOrder>>,
+    pub order: Account<'info, Order::<NativeOrder>>,
 
     #[account(
         mint::token_program = token_in_program,
@@ -233,7 +239,7 @@ pub struct FillForeignOrder<'info> {
         seeds = [ORDER_SEED_PREFIX, &order_id],
         bump
     )]
-    pub order: Account<'info, Order<ForeignOrder>>,
+    pub order: Account<'info, Order::<ForeignOrder>>,
 
     pub messenger_program: Program<'info, Messenger>,
 

@@ -36,4 +36,6 @@ pub enum OrderBookError {
     InvalidOriginChainId,
     #[msg("Report fill amount exceeds order amount")]
     Overfill,
+    #[msg("Invalid recipient address")]
+    InvalidRecipient,
 }
