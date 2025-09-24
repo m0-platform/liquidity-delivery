@@ -1,7 +1,7 @@
 // external dependencies
 use anchor_lang::prelude::*;
 use anchor_spl::token_interface::{
-    transfer_checked, TokenAccount, TokenInterface, TransferChecked,
+    Mint, transfer_checked, TokenAccount, TokenInterface, TransferChecked,
 };
 
 pub fn transfer_tokens_from_program<'info>(
