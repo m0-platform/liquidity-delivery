@@ -17,7 +17,7 @@ use messenger::{
 };
 
 // Handler Inputs
-#[derive(AnchorDeserialize)]
+#[derive(AnchorSerialize,AnchorDeserialize)]
 pub struct FillParams {
     pub amount_out_to_fill: u64,
     pub origin_recipient: [u8; 32],

@@ -14,7 +14,7 @@ use messenger::FillReport;
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(order_id: [u8; 32], fill_report: FillReport)]
+#[instruction(fill_report: FillReport)]
 pub struct ReportOrderFill<'info> {
     #[account(mut)]
     pub relayer: Signer<'info>,
@@ -30,7 +30,7 @@ pub struct ReportOrderFill<'info> {
 
     #[account(
         mut,
-        seeds = [ORDER_SEED_PREFIX, order_id.as_ref()],
+        seeds = [ORDER_SEED_PREFIX, fill_report.order_id.as_ref()],
         bump = order.bump,
     )]
     pub order: Account<'info, Order::<NativeOrder>>,
@@ -89,7 +89,7 @@ impl ReportOrderFill<'_> {
     }
 
     #[access_control(ctx.accounts.validate(&fill_report))]
-    pub fn handler(ctx: Context<Self>, order_id: [u8; 32], fill_report: FillReport) -> Result<()> {
+    pub fn handler(ctx: Context<Self>, fill_report: FillReport) -> Result<()> {
         let order = &mut ctx.accounts.order.data;
 
         // Update the amount filled on the order
@@ -130,7 +130,7 @@ impl ReportOrderFill<'_> {
             &ctx.accounts.order.to_account_info(),
             &[&[
                 ORDER_SEED_PREFIX,
-                &order_id,
+                &fill_report.order_id,
                 &[ctx.accounts.order.bump],
             ]],
             &ctx.accounts.token_in_program,
@@ -138,7 +138,7 @@ impl ReportOrderFill<'_> {
 
         // Emit an event for the fill report
         emit_cpi!(FillReported {
-            order_id,
+            order_id: fill_report.order_id,
             amount_out_filled: fill_report.amount_out_filled,
             origin_recipient: fill_report.origin_recipient,
         });

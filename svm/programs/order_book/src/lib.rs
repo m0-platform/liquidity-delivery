@@ -10,6 +10,8 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
+use messenger::FillReport;
+
 declare_id!("4Qgxc6VkBGaAQAikirnkApYNyy1W6asQgMHZxKgRcSL8");
 
 #[program]
@@ -32,17 +34,17 @@ pub mod order_book {
 
     // Solver actions
 
-    // pub fn fill_native_order(ctx: Context<FillNativeOrder>, order_id: [u8; 32], order_data: OrderData, fill_params: FillParams) -> Result<()> {
-    //     FillNativeOrder::handler(ctx, order_id, order_data, fill_params)
-    // }
+    pub fn fill_native_order(ctx: Context<FillNativeOrder>, order_id: [u8; 32], order_data: OrderData, fill_params: FillParams) -> Result<()> {
+        FillNativeOrder::handler(ctx, order_id, order_data, fill_params)
+    }
 
-    // pub fn fill_foreign_order(ctx: Context<FillForeignOrder>, order_id: [u8; 32], order_data: OrderData, fill_params: FillParams) -> Result<()> {
-    //     FillForeignOrder::handler(ctx, order_id, order_data, fill_params)
-    // }
+    pub fn fill_foreign_order(ctx: Context<FillForeignOrder>, order_id: [u8; 32], order_data: OrderData, fill_params: FillParams) -> Result<()> {
+        FillForeignOrder::handler(ctx, order_id, order_data, fill_params)
+    }
 
     // Crosschain messaging actions
 
-    // pub fn report_order_fill(ctx: Context<ReportFill>, fill_report: FillReport) -> Result<()> {
-    //     ReportOrderFill::handler(ctx, fill_report)
-    // }
+    pub fn report_order_fill(ctx: Context<ReportOrderFill>, fill_report: FillReport) -> Result<()> {
+        ReportOrderFill::handler(ctx, fill_report)
+    }
 }
