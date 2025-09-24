@@ -1,0 +1,14 @@
+{
+  "lib/common": {
+    "tag": {
+      "name": "v1.3.0",
+      "rev": "66657d984bb77ba83863dd4607704594a6c610bc"
+    }
+  },
+  "lib/forge-std": {
+    "tag": {
+      "name": "v1.10.0",
+      "rev": "8bbcf6e3f8f62f419e5429a0bd89331c85c37824"
+    }
+  }
+}

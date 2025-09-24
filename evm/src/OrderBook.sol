@@ -1,124 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0
-
 pragma solidity 0.8.26;
 
-interface IOrderBook {
-    event OrderOpen(bytes32 orderId, address tokenIn, uint128 amountIn, uint32 indexed destChainId, bytes32 indexed tokenOut, uint128 amountOut, bytes32 indexed solver);
-    event Fill(bytes32 orderId, bytes32 indexed solver, uint128 amountOutFilled);
-    event CancelRequest(bytes32 orderId, uint40 newFillDeadline);
-    event RefundClaimed(bytes32 orderId, address indexed sender, uint128 amountInRefunded);
-    event OrderCompleted(bytes32 orderId);
+import { IERC20 } from "../lib/common/src/interfaces/IERC20.sol";
 
-    struct OnchainOrderParams {
-        address tokenIn; 
-        uint32 destChainId;
-        bytes32 tokenOut; // 32 bytes used for addresses to accomodate SVM chains in the network
-        uint128 amountIn;
-        uint128 amountOut;
-        bytes32 recipient;	
-        uint40 fillDeadline; // order can be filled up to this time, remaining funds can be refunded after this
-        bytes32 solver; // may be the zero address, in which case the order can be filled by any approved solver
-    }
-
-    // struct GaslessOrderParams {
-    //     address originContract; // the contract address on the origin chain that this order can be submitted to
-    //     uint32 originChainId;
-    //     address originToken;
-    //     uint32 destinationChainId;
-    //     bytes32 destinationToken;  // 32 bytes used for addresses to accomodate SVM chains
-    //     address sender;
-    //     bytes32 recipient;
-    //     uint40 openDeadline; // order must be opened by this time
-    //     uint40 fillDeadline; // order can be filled up to this time, remaining funds can be refunded after this
-    //     uint256 amount; // amountIn == amountOut since all conversions are 1:1        
-    // }
-
-    enum OrderStatus {
-        DoesNotExist,
-        Created,
-        CancelRequested,
-        Completed
-    }
-
-    // Complete data about an order
-    struct Order {
-        OrderStatus status;
-        uint16 version; // version of the contract
-        uint32 destChainId;
-        uint40 fillDeadline; // timestamp by which the order must be filled on the destination chain
-        uint64 nonce; // a counter tied to the sender to allow unique
-        address tokenIn;
-        bytes32 tokenOut;
-        address sender; // address that provided the funds on the origin chain
-        bytes32 recipient; // address to receive the funds on the destination chain
-        uint128 amountIn;
-        uint128 amountOut;
-        bytes32 solver; // may be the zero address, in which case the order can be filled by any approved solver
-    }
-
-    // Data needed to compute a unique ID and fill an order on a destination chain
-    // It can be populated from the complete Order data
-    // Addresses are all 32 bytes to support both EVM and SVM environments
-    // Order ID is computed as the keccak256 hash of the abi-encoding of this struct
-    // bytes32 orderId = keccak256(abi.encode(orderData));
-    struct OrderData {
-        uint16 version; // version of the contract, prevents replays of prior orders on new deployments		
-        uint32 originChainId;
-        bytes32 sender;
-        uint64 nonce; // we could stop here and have a unique ID, however, including the delivery information allows us to check it on the destination
-        uint32 destChainId;
-        uint64 fillDeadline; 
-        uint128 amountOut;
-        bytes32 tokenOut;
-        bytes32 recipient;
-        bytes32 solver; // may be the zero address, in which case the order can be filled by any approved solver	
-    }
-
-    struct FillReport {
-        bytes32 orderId;
-        uint128 amountOutFilled; // amount the solver filled on the destination chain
-        bytes32 originRecipient; // address on the origin chain that should receive the released funds
-    }
-
-    struct FillParams {
-        uint128 amountOutToFill;
-        bytes32 originRecipient;
-    }
-
-    /// @notice Opens an order
-	/// @dev To be called by the user
-	/// @dev This method must emit the Open event
-	/// @param orderParams The OnchainOrderParams definition
-	function openOrder(OnchainOrderParams calldata orderParams) external;
-
-    // /// @notice Opens a gasless order on behalf of a user.
-	// /// @dev To be called by the filler.
-	// /// @dev This method must emit the Open event
-	// /// @param orderParams The GaslessOrderParams definition
-	// /// @param signature The user's signature over the order
-	// function openFor(GaslessOrderParams calldata orderParams, bytes calldata signature) external;
-
-    /// @notice Request cancellation of an order before its fill deadline
-    /// @dev To be called by the order sender
-    function requestCancelOrder(bytes32 orderId) external;
-
-    /// @notice Refund any remaining unfilled amount of an order after its fill deadline + finality buffer has passed
-    function claimRefund(bytes32 orderId) external;
-
-    /// @notice Fill an order on this chain
-	function fillOrder(OrderData calldata orderData) external;
-
-    /// @notice Report a fill that was made on another chain back to this chain as the origin chain
-    /// @dev To be called by a permitted messenger contract
-    function reportFill(FillReport calldata report) external;
-}
-
-interface IMessenger {
-    function sendFillReport(uint32 destinationChainId, IOrderBook.FillReport calldata report) external;
-}
-
+import { IOrderBook } from "./interfaces/IOrderBook.sol";
+import { IMessenger } from "./interfaces/IMessenger.sol";
+import { TypeConverter } from "./libs/TypeConverter.sol";
 
 contract OrderBook is IOrderBook {
+    using TypeConverter for *;
 
     // ========== Errors ========== //
     // TODO use custom errors vs. strings for gas savings
@@ -167,7 +57,7 @@ contract OrderBook is IOrderBook {
     function openOrder(OnchainOrderParams calldata orderParams) external override returns (bytes32 orderId) {
         // Validate order parameters
 
-        if (orderParams.fillDeadline < block.timestamp) {
+        if (uint256(orderParams.fillDeadline) < block.timestamp) {
             revert("OrderBook: fill deadline invalid");
         }
 
@@ -180,12 +70,12 @@ contract OrderBook is IOrderBook {
         // However, that may not be great UX
 
         // Create order
-        uint256 nonce = senderNonces[msg.sender]++;
+        uint64 nonce = senderNonces[msg.sender]++;
 
         orderId = getOrderId(OrderData({
             version: version, // origin contract version
             originChainId: chainId,
-            sender: msg.sender,
+            sender: msg.sender.toBytes32(),
             nonce: nonce,
             destChainId: orderParams.destChainId,
             fillDeadline: uint64(orderParams.fillDeadline),
@@ -211,7 +101,7 @@ contract OrderBook is IOrderBook {
         });
 
         // Transfer tokens in from the sender
-        IERC20(orderParams.tokenIn).transferFrom(msg.sender, address(this), orderParams.amountIn);
+        IERC20(orderParams.tokenIn).transferFrom(msg.sender, address(this), uint256(orderParams.amountIn));
 
         emit OrderOpen(orderId, orderParams.tokenIn, orderParams.amountIn, orderParams.destChainId, orderParams.tokenOut, orderParams.amountOut, orderParams.solver);
     }
@@ -230,7 +120,7 @@ contract OrderBook is IOrderBook {
             revert("OrderBook: caller is not order sender");
         }
 
-        if (order.fillDeadline < block.timestamp) {
+        if (uint256(order.fillDeadline) < block.timestamp) {
             revert("OrderBook: order fill deadline passed. refund already available");
         }
 
@@ -239,7 +129,7 @@ contract OrderBook is IOrderBook {
 
         // Set the fill deadline to the current time
         // This will allow the caller to claim a refund after the finality buffer has passed
-        order.fillDeadline = uint40(block.timestamp);
+        order.fillDeadline = uint40(block.timestamp); // can't overflow until year 36812
         
         emit CancelRequest(orderId, order.fillDeadline);
     }
@@ -273,7 +163,7 @@ contract OrderBook is IOrderBook {
 
         // TODO need to think about rounding and precision loss with different token decimal values
         // We can cast to uin256 for multiplication and then cast back after division because order.amountOut >= outRemaining
-        uint128 inRemaining = outFilled == 0 ? order.amountIn : uint128((uint256(order.amountIn) * outRemaining) / order.amountOut);
+        uint128 inRemaining = outFilled == 0 ? order.amountIn : ((uint256(order.amountIn) * outRemaining) / order.amountOut).toUint128();
 
         // Update the order amountIn and amountOut values to reflect the refund
         // This prevents double refunds if this function is called again
@@ -284,7 +174,7 @@ contract OrderBook is IOrderBook {
         order.status = OrderStatus.Completed;
 
         // Transfer the remaining amount back to the sender
-        IERC20(order.originToken).transfer(order.sender, uint256(inRemaining));
+        IERC20(order.tokenIn).transfer(order.sender, uint256(inRemaining));
 
         emit RefundClaimed(orderId, order.sender, inRemaining);
     }
@@ -306,7 +196,7 @@ contract OrderBook is IOrderBook {
         }
 
         // If the solver is specified, ensure that the caller is the designated solver
-        address solver = address(uint160(uint256(orderData.solver)));
+        address solver = orderData.solver.toAddress();
         if (solver != address(0) && solver != msg.sender) {
             revert("OrderBook: caller is not designated solver for order");
         }
@@ -343,15 +233,15 @@ contract OrderBook is IOrderBook {
             // Calculate the amount of origin tokens to release to the filler
             Order storage order = localOrders[orderId];
             // TODO same concerns about rounding and precision loss with different token decimal values
-            uint128 inToRelease = order.amountOut == fillAmount ? order.amountIn : uint128((uint256(order.amountIn) * fillAmount) / order.amountOut);
+            uint128 inToRelease = order.amountOut == fillAmount ? order.amountIn : ((uint256(order.amountIn) * fillAmount) / order.amountOut).toUint128();
 
             // If this is a fill on the origin chain, we can immediately release the corresponding amount of origin tokens to the recipient
             // This is because the origin and destination chains are the same, so no cross-chain messaging is needed
-            IERC20(order.tokenIn).transferFrom(address(this), address(uint160(uint256(fillerParams.originRecipient))), uint256(inToRelease));
+            IERC20(order.tokenIn).transferFrom(address(this), fillerParams.originRecipient.toAddress(), uint256(inToRelease));
         }
         
         // Transfer tokens from the solver to the recipient
-        IERC20(orderData.tokenOut).transferFrom(msg.sender, address(uint160(uint256(orderData.recipient))), uint256(fillAmount));
+        IERC20(orderData.tokenOut.toAddress()).transferFrom(msg.sender, orderData.recipient.toAddress(), uint256(fillAmount));
         
         // This block is split out to allow the above transfer to happen before any cross-chain messaging
         if (chainId != orderData.originChainId) {
@@ -377,8 +267,8 @@ contract OrderBook is IOrderBook {
     function reportFill(FillReport calldata report) external override {
         Order storage order = localOrders[report.orderId];
 
-        if (order.originChainId != chainId) {
-            revert("OrderBook: order origin chain ID does not match protocol chain ID");
+        if (!(order.status == OrderStatus.Created || order.status == OrderStatus.CancelRequested)) {
+            revert("OrderBook: order not active");
         }
 
         if (msg.sender != messenger) {
@@ -395,16 +285,27 @@ contract OrderBook is IOrderBook {
 
         // Calculate the corresponding amount of origin tokens to release to the solver's designated recipient
         // TODO same concerns about rounding and precision loss with different token decimal values
-        uint128 inToRelease = order.amountOut == report.amountOutFilled ? order.amountIn : uint128((uint256(order.amountIn) * report.amountOutFilled) / order.amountOut);
+        uint128 inToRelease = order.amountOut == report.amountOutFilled ? order.amountIn : ((uint256(order.amountIn) * report.amountOutFilled) / order.amountOut).toUint128();
 
         // Transfer the corresponding amount of origin tokens to the filler
-        IERC20(order.tokenIn).transferFrom(address(this), address(uint160(uint256(report.originRecipient))), uint256(inToRelease));
+        IERC20(order.tokenIn).transferFrom(address(this), report.originRecipient.toAddress(), uint256(inToRelease));
     }
 
 
     // Order IDs are unique across chains and allow using fill data to compute the identifier
     // This is useful for tracking data against orders on both the origin and destination chains
-    function getOrderId(OrderData calldata orderData) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(orderData));
+    function getOrderId(OrderData memory orderData) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(
+            orderData.version,
+            orderData.originChainId,
+            orderData.sender,
+            orderData.nonce,
+            orderData.destChainId,
+            orderData.fillDeadline,
+            orderData.amountOut,
+            orderData.tokenOut,
+            orderData.recipient,
+            orderData.solver
+        ));
     }
 }
