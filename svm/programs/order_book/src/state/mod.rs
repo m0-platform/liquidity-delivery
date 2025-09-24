@@ -1,3 +1,5 @@
+use anchor_lang::prelude::*;
+
 pub mod orders;
 pub use orders::*;
 
@@ -19,6 +21,6 @@ pub const GLOBAL_SEED: &[u8] = b"global";
 pub struct OrderBookGlobal {
     pub admin: Pubkey,
     pub chain_id: u32,
-    pub messenger: Pubkey,
+    pub messenger_authority: Pubkey,
     pub bump: u8,
 }
