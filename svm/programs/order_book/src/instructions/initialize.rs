@@ -31,12 +31,13 @@ pub struct Initialize<'info> {
 }
 
 impl Initialize<'_> {
-    pub fn handler(ctx: Context<Self>, chain_id: u32) -> Result<()> {
+    pub fn handler(ctx: Context<Self>, chain_id: u32, finality_buffer: u64) -> Result<()> {
         ctx.accounts.global_account.set_inner(OrderBookGlobal {
             admin: ctx.accounts.admin.key(),
             chain_id,
             messenger_authority: ctx.accounts.messenger_authority.key(),
-            bump: ctx.bumps.global_account
+            finality_buffer,
+            bump: ctx.bumps.global_account,
         });
 
         Ok(())

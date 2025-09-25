@@ -120,7 +120,7 @@ contract OrderBook is IOrderBook {
             revert("OrderBook: caller is not order sender");
         }
 
-        if (uint256(order.fillDeadline) < block.timestamp) {
+        if (uint256(order.fillDeadline) <= block.timestamp) {
             revert("OrderBook: order fill deadline passed. refund already available");
         }
 
