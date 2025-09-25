@@ -30,12 +30,16 @@ pub enum OrderBookError {
     InvalidFillDeadline,
     #[msg("Not authorized")]
     NotAuthorized,
-    #[msg("Invalid token in mint")]
-    InvalidTokenInMint,
+    #[msg("Invalid token mint")]
+    InvalidTokenMint,
     #[msg("Invalid origin chain ID")]
     InvalidOriginChainId,
     #[msg("Report fill amount exceeds order amount")]
     Overfill,
     #[msg("Invalid recipient address")]
     InvalidRecipient,
+    #[msg("Invalid order status")]
+    InvalidOrderStatus,
+    #[msg("Order is not expired yet")]
+    OrderNotExpired,
 }

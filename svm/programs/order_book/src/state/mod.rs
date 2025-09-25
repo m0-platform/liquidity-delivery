@@ -22,5 +22,6 @@ pub struct OrderBookGlobal {
     pub admin: Pubkey,
     pub chain_id: u32,
     pub messenger_authority: Pubkey,
+    pub finality_buffer: u64, // TODO consider storing for each chain instead of a global value. Doing this initially for simplicity.
     pub bump: u8,
 }

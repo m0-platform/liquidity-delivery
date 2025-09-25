@@ -24,13 +24,13 @@ pub mod order_book {
         OpenOrder::handler(ctx, params)
     }
 
-    // pub fn request_cancel_order(ctx: Context<RequestCancelOrder>, order_id: [u8; 32], order_data: OrderData) -> Result<()> {
-    //     RequestCancelOrder::handler(ctx, order_id, order_data)
-    // }
+    pub fn request_cancel_order(ctx: Context<RequestCancelOrder>, order_id: [u8; 32]) -> Result<()> {
+        RequestCancelOrder::handler(ctx, order_id)
+    }
 
-    // pub fn claim_refund(ctx: Context<ClaimRefund>, order_id: [u8; 32]) -> Result<()> {
-    //     ClaimRefund::handler(ctx, order_id)
-    // }
+    pub fn claim_refund(ctx: Context<ClaimRefund>, order_id: [u8; 32]) -> Result<()> {
+        ClaimRefund::handler(ctx, order_id)
+    }
 
     // Solver actions
 

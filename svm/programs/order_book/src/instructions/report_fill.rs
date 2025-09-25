@@ -36,7 +36,7 @@ pub struct ReportOrderFill<'info> {
     pub order: Account<'info, Order::<NativeOrder>>,
 
     #[account(
-        address = order.data.token_in @ OrderBookError::InvalidTokenInMint,
+        address = order.data.token_in @ OrderBookError::InvalidTokenMint,
         mint::token_program = token_in_program,
     )]
     pub token_in_mint: InterfaceAccount<'info, Mint>,
