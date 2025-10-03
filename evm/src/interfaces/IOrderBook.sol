@@ -90,7 +90,8 @@ interface IOrderBook {
 	/// @dev To be called by the user
 	/// @dev This method must emit the Open event
 	/// @param orderParams The OnchainOrderParams definition
-	function openOrder(OnchainOrderParams calldata orderParams) external returns (bytes32 orderId);
+    /// @return The unique ID of the opened order
+	function openOrder(OnchainOrderParams calldata orderParams) external returns (bytes32);
 
     // /// @notice Opens a gasless order on behalf of a user.
 	// /// @dev To be called by the filler.
