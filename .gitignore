@@ -34,3 +34,4 @@ gasreport.ansi
 svm/target
 **/*.rs.bk
 test-ledger
+target
