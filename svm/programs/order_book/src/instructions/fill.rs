@@ -7,7 +7,7 @@ use anchor_spl::{
 use crate::{
     constants::{ANCHOR_DISCRIMINATOR_SIZE, VERSION},
     error::OrderBookError,
-    state::{Order, OrderType, OrderStatus, NativeOrder, ForeignOrder, ORDER_SEED_PREFIX, OrderData, OrderBookGlobal, GLOBAL_SEED, compute_order_id},
+    state::{Order, OrderType, OrderStatus, NativeOrder, ForeignOrder, ORDER_SEED_PREFIX, OrderData, OrderBookGlobal, GLOBAL_SEED},
     utils::{transfer_tokens, transfer_tokens_from_program}
 };
 use messenger::{
@@ -336,7 +336,7 @@ fn validate_params(order_id: &[u8; 32], order_data: &OrderData, fill_params: &Fi
     // Validate the provided order ID matches the order data
     // We allow passing this in as a sanity check for callers
     // This also means we don't need to check the order data against the onchain data
-    let computed_order_id = compute_order_id(order_data);
+    let computed_order_id = order_data.compute_order_id();
     require!(computed_order_id == *order_id, OrderBookError::InvalidOrderId);
 
     // Validate the order has not expired

@@ -6,7 +6,7 @@ use anchor_spl::{
 use crate::{
     state::{
         Order, OrderData, OrderType, NativeOrder, OrderStatus, ORDER_SEED_PREFIX,
-        Nonce, NONCE_SEED_PREFIX, OrderBookGlobal, GLOBAL_SEED, compute_order_id
+        Nonce, NONCE_SEED_PREFIX, OrderBookGlobal, GLOBAL_SEED
     },
     utils::transfer_tokens,
     constants::{VERSION, ANCHOR_DISCRIMINATOR_SIZE},
@@ -65,7 +65,8 @@ pub struct OpenOrder<'info> {
         init,
         payer = payer,
         space = ANCHOR_DISCRIMINATOR_SIZE + Order::<NativeOrder>::INIT_SPACE,
-        seeds = [ORDER_SEED_PREFIX, &compute_order_id(
+        seeds = [
+            ORDER_SEED_PREFIX, 
             &OrderData {
                 version: VERSION as u16,
                 origin_chain_id: global_account.chain_id,
@@ -77,8 +78,8 @@ pub struct OpenOrder<'info> {
                 recipient: params.recipient,
                 amount_out: params.amount_out,
                 solver: params.solver,
-            }
-        )],
+            }.compute_order_id()
+        ],
         bump
     )]
     pub order: Account<'info, Order::<NativeOrder>>,
@@ -134,7 +135,7 @@ impl OpenOrder<'_> {
             },
         });
 
-        let order_id = compute_order_id(&OrderData {
+        let order_id = OrderData {
             version: VERSION,
             origin_chain_id: ctx.accounts.global_account.chain_id,
             sender: sender.to_bytes(),
@@ -145,7 +146,7 @@ impl OpenOrder<'_> {
             recipient: params.recipient,
             amount_out: params.amount_out,
             solver: params.solver,
-        });
+        }.compute_order_id();
 
         // Increment the sender's nonce account
         ctx.accounts.sender_nonce_account.value += 1;

@@ -4,26 +4,20 @@ use std::sync::Arc;
 use crate::error::Result;
 use crate::events::EventBus;
 
-pub mod order_producer;
-pub mod order_processor;
-pub mod order_confirmer;
+pub mod inventory_manager;
+pub mod order_listener;
 
-pub use order_producer::OrderProducer;
-pub use order_processor::OrderProcessor;
-pub use order_confirmer::OrderConfirmer;
+pub use inventory_manager::InventoryManager;
+pub use order_listener::OrderListener;
 
 /// Base trait for all components in the system
 #[async_trait]
 pub trait Component: Send + Sync {
-    /// Get the component name
     fn name(&self) -> &str;
-    
-    /// Initialize the component
+
     async fn initialize(&self) -> Result<()>;
-    
-    /// Start the component (begin processing)
+
     async fn start(&self, event_bus: Arc<EventBus>) -> Result<()>;
-    
-    /// Stop the component
+
     async fn stop(&self) -> Result<()>;
 }

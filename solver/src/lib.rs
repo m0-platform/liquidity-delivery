@@ -1,9 +1,9 @@
-pub mod events;
-pub mod stores;
 pub mod components;
 pub mod error;
+pub mod events;
+pub mod stores;
 
-pub use events::{OrderEvent, EventBus, EventHandler};
-pub use stores::{Store, EventStore};
 pub use components::Component;
 pub use error::SolverError;
+pub use events::{EventBus, EventHandler, OrderEvent};
+pub use stores::{OrderStore, Store};
