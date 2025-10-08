@@ -12,6 +12,7 @@ tracing-subscriber = { version = "0.3", features = ["json"] }
 m0-liquidity-sdk = "0.0.1"
 order_book = { version = "0.1.0", path = "../svm/programs/order_book" }
 hex = "0.4.3"
+dotenvy = "0.15"
 
 [dev-dependencies]
 tokio-test = "0.4"

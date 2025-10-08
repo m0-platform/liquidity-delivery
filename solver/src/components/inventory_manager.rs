@@ -17,12 +17,8 @@ impl InventoryManager {
 
 #[async_trait]
 impl Component for InventoryManager {
-    fn name(&self) -> &str {
-        "InventoryManager"
-    }
-
     async fn initialize(&self) -> Result<()> {
-        tracing::info!("InventoryManager: Initializing");
+        tracing::info!("Initializing");
         Ok(())
     }
 
@@ -31,11 +27,11 @@ impl Component for InventoryManager {
         _event_bus: Arc<EventBus>,
         mut shutdown_rx: broadcast::Receiver<()>,
     ) -> Result<()> {
-        tracing::info!("InventoryManager: Starting");
+        tracing::info!("Starting");
 
         tokio::spawn(async move {
             let _ = shutdown_rx.recv().await;
-            tracing::info!("InventoryManager: Received shutdown signal");
+            tracing::info!("Received shutdown signal");
         });
 
         Ok(())

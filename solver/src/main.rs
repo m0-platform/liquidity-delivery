@@ -1,6 +1,6 @@
 use solver::{
     components::{Component, InventoryManager, OrderListener},
-    EventBus,
+    Config, EventBus,
 };
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -8,12 +8,30 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize tracing
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+    // Load .env file if it exists
+    let _ = dotenvy::dotenv();
 
-    tracing::info!("Starting Solver Application");
+    // Load configuration from environment variables
+    let config = Config::from_env()?;
+
+    // Initialize tracing with appropriate format based on environment
+    if config.environment.is_production() {
+        // JSON format for production
+        tracing_subscriber::registry()
+            .with(tracing_subscriber::fmt::layer().json())
+            .init();
+    } else {
+        // Human-readable format for development
+        tracing_subscriber::registry()
+            .with(tracing_subscriber::fmt::layer())
+            .init();
+    }
+
+    tracing::info!(
+        environment = ?config.environment,
+        network = ?config.network,
+        "Starting Solver Application"
+    );
 
     // Initialize event bus
     let event_bus = Arc::new(EventBus::new(1000));

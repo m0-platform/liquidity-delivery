@@ -24,17 +24,13 @@ impl OrderListener {
 
 #[async_trait]
 impl Component for OrderListener {
-    fn name(&self) -> &str {
-        "OrderListener"
-    }
-
     async fn initialize(&self) -> Result<()> {
-        tracing::info!("OrderListener: Initializing");
+        tracing::info!("Initializing");
         Ok(())
     }
 
     async fn start(&self, event_bus: Arc<EventBus>, mut shutdown_rx: Receiver<()>) -> Result<()> {
-        tracing::info!("OrderListener: Starting");
+        tracing::info!("Starting");
 
         let order_store_clone = self.order_store.clone();
         let event_bus_clone = event_bus.clone();
@@ -46,7 +42,7 @@ impl Component for OrderListener {
             loop {
                 tokio::select! {
                     _ = shutdown_rx_event.recv() => {
-                        tracing::info!("OrderListener: Event handler received shutdown signal");
+                        tracing::info!("Event handler received shutdown signal");
                         break;
                     }
                     result = receiver.recv() => {
@@ -54,11 +50,11 @@ impl Component for OrderListener {
                             Ok(event) => {
                                 let store = order_store_clone.read().await;
                                 if let Err(e) = store.handle_event(event).await {
-                                    tracing::error!("OrderListener: Failed to handle event: {}", e);
+                                    tracing::error!("Failed to handle event: {}", e);
                                 }
                             }
                             Err(e) => {
-                                tracing::error!("OrderListener: Error receiving event: {}", e);
+                                tracing::error!("Error receiving event: {}", e);
                             }
                         }
                     }
@@ -73,7 +69,7 @@ impl Component for OrderListener {
             loop {
                 tokio::select! {
                     _ = shutdown_rx.recv() => {
-                        tracing::info!("OrderListener: Order polling received shutdown signal");
+                        tracing::info!("Order polling received shutdown signal");
                         break;
                     }
                     _ = interval.tick() => {
@@ -93,13 +89,13 @@ impl Component for OrderListener {
 
                         let event = OrderCreatedEvent::new(order);
 
-                        tracing::info!("OrderListener: Creating order {}", event.order_id,);
+                        tracing::info!("Creating order {}", event.order_id,);
 
                         if let Err(e) = event_bus_clone
                             .publish(Arc::new(OrderEvent::Created(event)))
                             .await
                         {
-                            tracing::error!("OrderListener: Failed to publish event: {}", e);
+                            tracing::error!("Failed to publish event: {}", e);
                         }
                     }
                 }
