@@ -8,7 +8,7 @@ tokio = { version = "1.35", features = ["full"] }
 async-trait = "0.1"
 thiserror = "1.0"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["json"] }
 m0-liquidity-sdk = "0.0.1"
 order_book = { version = "0.1.0", path = "../svm/programs/order_book" }
 hex = "0.4.3"

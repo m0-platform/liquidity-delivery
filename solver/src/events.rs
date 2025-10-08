@@ -69,7 +69,7 @@ impl OrderFillEvent {
     }
 }
 
-/// Event: Order fill
+/// Event: Order Rejected
 #[derive(Debug, Clone)]
 pub struct OrderRejectEvent {
     pub order_id: String,

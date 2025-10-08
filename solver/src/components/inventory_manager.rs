@@ -1,21 +1,17 @@
 use async_trait::async_trait;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::broadcast;
 
 use crate::components::Component;
 use crate::error::Result;
 use crate::EventBus;
 
 /// Component that listens to new orders created
-pub struct InventoryManager {
-    running: Arc<RwLock<bool>>,
-}
+pub struct InventoryManager {}
 
 impl InventoryManager {
     pub fn new() -> Self {
-        Self {
-            running: Arc::new(RwLock::new(false)),
-        }
+        Self {}
     }
 }
 
@@ -30,20 +26,18 @@ impl Component for InventoryManager {
         Ok(())
     }
 
-    async fn start(&self, event_bus: Arc<EventBus>) -> Result<()> {
+    async fn start(
+        &self,
+        _event_bus: Arc<EventBus>,
+        mut shutdown_rx: broadcast::Receiver<()>,
+    ) -> Result<()> {
         tracing::info!("InventoryManager: Starting");
 
-        let mut running = self.running.write().await;
-        *running = true;
-        drop(running);
+        tokio::spawn(async move {
+            let _ = shutdown_rx.recv().await;
+            tracing::info!("InventoryManager: Received shutdown signal");
+        });
 
-        Ok(())
-    }
-
-    async fn stop(&self) -> Result<()> {
-        tracing::info!("InventoryManager: Stopping");
-        let mut running = self.running.write().await;
-        *running = false;
         Ok(())
     }
 }

@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use std::sync::Arc;
+use tokio::sync::broadcast::Receiver;
 
 use crate::error::Result;
 use crate::events::EventBus;
@@ -17,7 +18,5 @@ pub trait Component: Send + Sync {
 
     async fn initialize(&self) -> Result<()>;
 
-    async fn start(&self, event_bus: Arc<EventBus>) -> Result<()>;
-
-    async fn stop(&self) -> Result<()>;
+    async fn start(&self, event_bus: Arc<EventBus>, shutdown_rx: Receiver<()>) -> Result<()>;
 }

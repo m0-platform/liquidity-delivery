@@ -3,16 +3,13 @@ use solver::{
     EventBus,
 };
 use std::sync::Arc;
+use tokio::sync::broadcast;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing
     tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "solver=info".into()),
-        )
         .with(tracing_subscriber::fmt::layer())
         .init();
 
@@ -20,6 +17,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize event bus
     let event_bus = Arc::new(EventBus::new(1000));
+
+    // Initialize shutdown channel
+    let (shutdown_tx, _) = broadcast::channel::<()>(1);
 
     // Initialize components
     let order_listener = Arc::new(OrderListener::new());
@@ -30,21 +30,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     inventory_manager.initialize().await?;
 
     // Start all components
-    order_listener.start(event_bus.clone()).await?;
-    inventory_manager.start(event_bus.clone()).await?;
+    order_listener
+        .start(event_bus.clone(), shutdown_tx.subscribe())
+        .await?;
+    inventory_manager
+        .start(event_bus.clone(), shutdown_tx.subscribe())
+        .await?;
 
     tracing::info!("All components started");
 
-    // Run for a limited time for demonstration
-    tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+    // Wait for SIGINT (Ctrl+C)
+    tokio::signal::ctrl_c().await?;
+    tracing::info!("Received shutdown signal");
+    let _ = shutdown_tx.send(());
 
-    // Stop all components
-    tracing::info!("Stopping application");
-    order_listener.stop().await?;
-    inventory_manager.stop().await?;
-
-    // Wait a bit for final processing
-    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+    // Wait for components to shutdown gracefully
+    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
     Ok(())
 }
