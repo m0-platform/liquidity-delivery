@@ -89,6 +89,31 @@ impl EventHandler for OrderStore {
 
                 order.state = OrderState::Rejected;
             }
+            OrderEvent::CancelRequest(e) => {
+                // Order cancellation has been requested
+                // We keep the order in the store but could add a "Cancelling" state if needed
+                tracing::info!("Cancel requested for order {}", e.order_id);
+            }
+            OrderEvent::RefundClaimed(e) => {
+                // Refund has been claimed for an unfilled order
+                // The order should be marked as complete/failed
+                if let Some(order) = orders.get_mut(&e.order_id) {
+                    order.state = OrderState::Rejected;
+                }
+                tracing::info!(
+                    "Refund claimed for order {}: {} refunded to {}",
+                    e.order_id,
+                    e.amount_refunded,
+                    e.sender
+                );
+            }
+            OrderEvent::Completed(e) => {
+                // Order has been fully completed
+                if let Some(order) = orders.get_mut(&e.order_id) {
+                    order.state = OrderState::Filled;
+                }
+                tracing::info!("Order {} completed", e.order_id);
+            }
         }
 
         Ok(())

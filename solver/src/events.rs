@@ -90,12 +90,78 @@ impl OrderRejectEvent {
     }
 }
 
+/// Event: Order cancel requested
+#[derive(Debug, Clone)]
+pub struct OrderCancelRequestEvent {
+    pub order_id: String,
+    pub timestamp: u64,
+    pub new_fill_deadline: u64,
+}
+
+impl OrderCancelRequestEvent {
+    pub fn new(order_id: String, new_fill_deadline: u64) -> Self {
+        Self {
+            order_id,
+            new_fill_deadline,
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        }
+    }
+}
+
+/// Event: Order refund claimed
+#[derive(Debug, Clone)]
+pub struct OrderRefundClaimedEvent {
+    pub order_id: String,
+    pub timestamp: u64,
+    pub sender: String,
+    pub amount_refunded: u128,
+}
+
+impl OrderRefundClaimedEvent {
+    pub fn new(order_id: String, sender: String, amount_refunded: u128) -> Self {
+        Self {
+            order_id,
+            sender,
+            amount_refunded,
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        }
+    }
+}
+
+/// Event: Order completed
+#[derive(Debug, Clone)]
+pub struct OrderCompletedEvent {
+    pub order_id: String,
+    pub timestamp: u64,
+}
+
+impl OrderCompletedEvent {
+    pub fn new(order_id: String) -> Self {
+        Self {
+            order_id,
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        }
+    }
+}
+
 /// Unified event enum
 #[derive(Debug, Clone)]
 pub enum OrderEvent {
     Created(OrderCreatedEvent),
     Fill(OrderFillEvent),
     Rejected(OrderRejectEvent),
+    CancelRequest(OrderCancelRequestEvent),
+    RefundClaimed(OrderRefundClaimedEvent),
+    Completed(OrderCompletedEvent),
 }
 
 impl OrderEvent {
@@ -104,6 +170,9 @@ impl OrderEvent {
             OrderEvent::Created(e) => e.order_id.clone(),
             OrderEvent::Fill(e) => e.order_id.clone(),
             OrderEvent::Rejected(e) => e.order_id.clone(),
+            OrderEvent::CancelRequest(e) => e.order_id.clone(),
+            OrderEvent::RefundClaimed(e) => e.order_id.clone(),
+            OrderEvent::Completed(e) => e.order_id.clone(),
         }
     }
 }

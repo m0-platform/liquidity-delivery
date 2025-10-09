@@ -30,6 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!(
         environment = ?config.environment,
         network = ?config.network,
+        chains_count = config.chains.len(),
         "Starting Solver Application"
     );
 
@@ -40,7 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (shutdown_tx, _) = broadcast::channel::<()>(1);
 
     // Initialize components
-    let order_listener = Arc::new(OrderListener::new());
+    let order_listener = Arc::new(OrderListener::new(config.chains.clone()));
     let inventory_manager = Arc::new(InventoryManager::new());
 
     // Initialize all components

@@ -1,5 +1,30 @@
+use serde::{Deserialize, Serialize};
 use std::env;
 use thiserror::Error;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChainConfig {
+    pub chain_id: u32,
+    pub rpc_url: String,
+    pub ws_url: Option<String>,
+    pub order_book_address: String,
+}
+
+impl ChainConfig {
+    pub fn new(
+        chain_id: u32,
+        rpc_url: String,
+        ws_url: Option<String>,
+        order_book_address: String,
+    ) -> Self {
+        Self {
+            chain_id,
+            rpc_url,
+            ws_url,
+            order_book_address,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Environment {
@@ -43,6 +68,7 @@ impl Network {
 pub struct Config {
     pub environment: Environment,
     pub network: Network,
+    pub chains: Vec<ChainConfig>,
 }
 
 impl Config {
@@ -55,9 +81,57 @@ impl Config {
             .map(|s| Network::from_str(&s))
             .unwrap()?;
 
+        // Load chain configurations from environment variables
+        // Format: CHAIN_<N>_ID, CHAIN_<N>_RPC_URL, CHAIN_<N>_WS_URL, CHAIN_<N>_ORDER_BOOK_ADDRESS
+        let mut chains = Vec::new();
+        let mut i = 0;
+        loop {
+            let chain_id_key = format!("CHAIN_{}_ID", i);
+            match env::var(&chain_id_key) {
+                Ok(chain_id_str) => {
+                    let chain_id = chain_id_str.parse::<u32>().map_err(|_| {
+                        ConfigError::InvalidChainConfig(format!(
+                            "Invalid chain ID: {}",
+                            chain_id_str
+                        ))
+                    })?;
+
+                    let rpc_url = env::var(&format!("CHAIN_{}_RPC_URL", i)).map_err(|_| {
+                        ConfigError::InvalidChainConfig(format!("Missing RPC URL for chain {}", i))
+                    })?;
+
+                    let ws_url = env::var(&format!("CHAIN_{}_WS_URL", i)).ok();
+
+                    let order_book_address = env::var(&format!("CHAIN_{}_ORDER_BOOK_ADDRESS", i))
+                        .map_err(|_| {
+                        ConfigError::InvalidChainConfig(format!(
+                            "Missing OrderBook address for chain {}",
+                            i
+                        ))
+                    })?;
+
+                    chains.push(ChainConfig::new(
+                        chain_id,
+                        rpc_url,
+                        ws_url,
+                        order_book_address,
+                    ));
+                    i += 1;
+                }
+                Err(_) => break,
+            }
+        }
+
+        if chains.is_empty() {
+            return Err(ConfigError::InvalidChainConfig(
+                "No chains configured".to_string(),
+            ));
+        }
+
         Ok(Config {
             environment,
             network,
+            chains,
         })
     }
 }
@@ -69,4 +143,7 @@ pub enum ConfigError {
 
     #[error("Invalid network value: {0}. Expected 'local', 'devnet', or 'mainnet'")]
     InvalidNetwork(String),
+
+    #[error("Invalid chain configuration: {0}")]
+    InvalidChainConfig(String),
 }
