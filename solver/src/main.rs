@@ -1,7 +1,12 @@
-use solver::{
-    components::{Component, InventoryManager, OrderListener},
-    Config, EventBus,
-};
+mod components;
+mod config;
+mod error;
+mod events;
+mod stores;
+
+use components::{Component, EvmEventListener, InventoryManager};
+use config::Config;
+use events::EventBus;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -41,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (shutdown_tx, _) = broadcast::channel::<()>(1);
 
     // Initialize components
-    let order_listener = Arc::new(OrderListener::new(config.chains.clone()));
+    let order_listener = Arc::new(EvmEventListener::new(config.chains.clone()));
     let inventory_manager = Arc::new(InventoryManager::new());
 
     // Initialize all components

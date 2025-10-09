@@ -6,11 +6,11 @@ use tokio::sync::broadcast::Receiver;
 use crate::error::Result;
 use crate::events::{EventBus, OrderEvent};
 
+pub mod evm_event_listener;
 pub mod inventory_manager;
-pub mod order_listener;
 
+pub use evm_event_listener::EvmEventListener;
 pub use inventory_manager::InventoryManager;
-pub use order_listener::OrderListener;
 
 /// Base trait for all components in the system
 #[async_trait]

@@ -1,7 +1,7 @@
 use alloy::primitives::Address;
 use alloy::providers::{Provider, ProviderBuilder, WsConnect};
 use alloy::rpc::types::Filter;
-use alloy::sol_types::{sol, SolEvent};
+use alloy::sol_types::SolEvent;
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use order_book::OrderData;
@@ -14,59 +14,19 @@ use crate::components::Component;
 use crate::config::ChainConfig;
 use crate::error::{Result, SolverError};
 use crate::events::{
-    EventHandler, OrderCancelRequestEvent, OrderCompletedEvent, OrderCreatedEvent, OrderFillEvent,
-    OrderRefundClaimedEvent,
+    CancelRequest, EventBus, EventHandler, Fill, OrderCancelRequestEvent, OrderCompleted,
+    OrderCompletedEvent, OrderCreatedEvent, OrderEvent, OrderFillEvent, OrderOpen,
+    OrderRefundClaimedEvent, RefundClaimed,
 };
-use crate::{EventBus, OrderEvent, OrderStore};
-
-// Define Solidity events using alloy's sol! macro
-sol! {
-    #![sol(rpc, alloy_sol_types = alloy::sol_types)]
-
-    #[derive(Debug)]
-    event OrderOpen(
-        bytes32 indexed orderId,
-        address tokenIn,
-        uint128 amountIn,
-        uint32 indexed destChainId,
-        bytes32 indexed tokenOut,
-        uint128 amountOut,
-        bytes32 solver
-    );
-
-    #[derive(Debug)]
-    event Fill(
-        bytes32 indexed orderId,
-        address indexed solver,
-        uint128 amountOutFilled
-    );
-
-    #[derive(Debug)]
-    event CancelRequest(
-        bytes32 indexed orderId,
-        uint40 newFillDeadline
-    );
-
-    #[derive(Debug)]
-    event RefundClaimed(
-        bytes32 indexed orderId,
-        address indexed sender,
-        uint128 amountInRefunded
-    );
-
-    #[derive(Debug)]
-    event OrderCompleted(
-        bytes32 indexed orderId
-    );
-}
+use crate::stores::OrderStore;
 
 /// Component that listens to new orders created on multiple EVM chains
-pub struct OrderListener {
+pub struct EvmEventListener {
     order_store: Arc<RwLock<OrderStore>>,
     chains: Vec<ChainConfig>,
 }
 
-impl OrderListener {
+impl EvmEventListener {
     pub fn new(chains: Vec<ChainConfig>) -> Self {
         Self {
             order_store: Arc::new(RwLock::new(OrderStore::new())),
@@ -228,7 +188,7 @@ impl OrderListener {
         );
 
         let order_id = format!("{:x}", event.orderId);
-        let fill_event = OrderFillEvent::new(order_id, event.amountOutFilled as u64);
+        let fill_event = OrderFillEvent::new(order_id, event.amountOutFilled);
 
         event_bus
             .publish(Arc::new(OrderEvent::Fill(fill_event)))
@@ -324,7 +284,7 @@ impl OrderListener {
 }
 
 #[async_trait]
-impl Component for OrderListener {
+impl Component for EvmEventListener {
     fn name() -> &'static str {
         "OrderListener"
     }

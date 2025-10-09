@@ -4,8 +4,7 @@ use tokio::sync::broadcast;
 
 use crate::components::Component;
 use crate::error::Result;
-use crate::events::{EventHandler, OrderEvent};
-use crate::EventBus;
+use crate::events::{EventBus, EventHandler, OrderEvent};
 
 /// Component that listens to new orders created
 pub struct InventoryManager {}
