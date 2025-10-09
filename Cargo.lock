@@ -2868,9 +2868,9 @@ checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
 name = "m0-liquidity-sdk"
-version = "0.0.1"
+version = "0.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "869ddb9943f5fc7e82f4f02e8aa67ad459ab95eb79448a58f6eebc7c3dc884c8"
+checksum = "35dadf34e545f102435b2c3050448c30322190cbe03db301ba246d880a882288"
 dependencies = [
  "bytes",
  "futures-core",

@@ -52,12 +52,12 @@ impl EvmEventListener {
 
         // Parse the OrderBook contract address
         let contract_address = Address::from_str(&chain.order_book_address)
-            .map_err(|e| SolverError::InvalidAddress(format!("Invalid contract address: {}", e)))?;
+            .map_err(|e| SolverError::Component(format!("Invalid contract address: {}", e)))?;
 
         // Create WebSocket connection
         let ws = WsConnect::new(ws_url);
         let provider = ProviderBuilder::new().connect_ws(ws).await.map_err(|e| {
-            SolverError::Transport(format!("Failed to connect to chain {}: {}", chain_id, e))
+            SolverError::Component(format!("Failed to connect to chain {}: {}", chain_id, e))
         })?;
 
         // Create filters for all events
@@ -73,7 +73,7 @@ impl EvmEventListener {
 
         // Subscribe to logs
         let sub = provider.subscribe_logs(&filter).await.map_err(|e| {
-            SolverError::Rpc(format!(
+            SolverError::Component(format!(
                 "Failed to subscribe to logs on chain {}: {}",
                 chain_id, e
             ))
@@ -118,7 +118,7 @@ impl EvmEventListener {
         let log_data = alloy::primitives::Log {
             address: Address::from_slice(log.address().as_slice()),
             data: alloy::primitives::LogData::new(log.topics().to_vec(), log.data().data.clone())
-                .ok_or_else(|| SolverError::EventParsing("Invalid log data".to_string()))?,
+                .ok_or_else(|| SolverError::Component("Invalid log data".to_string()))?,
         };
 
         // Match on event signature and decode
@@ -144,7 +144,7 @@ impl EvmEventListener {
         event_bus: &Arc<EventBus>,
     ) -> Result<()> {
         let event = OrderOpen::decode_log(log)
-            .map_err(|e| SolverError::EventParsing(format!("Failed to decode OrderOpen: {}", e)))?;
+            .map_err(|e| SolverError::Component(format!("Failed to decode OrderOpen: {}", e)))?;
 
         tracing::info!(
             "OrderOpen event on chain {}: orderId={:?}",
@@ -179,7 +179,7 @@ impl EvmEventListener {
     /// Handle Fill event
     async fn handle_fill(log: &alloy::primitives::Log, event_bus: &Arc<EventBus>) -> Result<()> {
         let event = Fill::decode_log(log)
-            .map_err(|e| SolverError::EventParsing(format!("Failed to decode Fill: {}", e)))?;
+            .map_err(|e| SolverError::Component(format!("Failed to decode Fill: {}", e)))?;
 
         tracing::info!(
             "Fill event: orderId={:?}, amountOutFilled={}",
@@ -204,7 +204,7 @@ impl EvmEventListener {
         event_bus: &Arc<EventBus>,
     ) -> Result<()> {
         let event = CancelRequest::decode_log(log).map_err(|e| {
-            SolverError::EventParsing(format!("Failed to decode CancelRequest: {}", e))
+            SolverError::Component(format!("Failed to decode CancelRequest: {}", e))
         })?;
 
         tracing::info!(
@@ -231,7 +231,7 @@ impl EvmEventListener {
         event_bus: &Arc<EventBus>,
     ) -> Result<()> {
         let event = RefundClaimed::decode_log(log).map_err(|e| {
-            SolverError::EventParsing(format!("Failed to decode RefundClaimed: {}", e))
+            SolverError::Component(format!("Failed to decode RefundClaimed: {}", e))
         })?;
 
         tracing::info!(
@@ -259,7 +259,7 @@ impl EvmEventListener {
         event_bus: &Arc<EventBus>,
     ) -> Result<()> {
         let event = OrderCompleted::decode_log(log).map_err(|e| {
-            SolverError::EventParsing(format!("Failed to decode OrderCompleted: {}", e))
+            SolverError::Component(format!("Failed to decode OrderCompleted: {}", e))
         })?;
 
         tracing::info!("OrderCompleted event: orderId={:?}", event.orderId);
@@ -300,7 +300,7 @@ impl Component for EvmEventListener {
     async fn start(&self, event_bus: Arc<EventBus>, shutdown_rx: Receiver<()>) -> Result<()> {
         tracing::info!("Starting OrderListener");
 
-        // Task to handle events
+        // Task to handle events (update stores)
         let order_store = self.order_store.clone();
         Self::spawn_event_handler(event_bus.clone(), shutdown_rx.resubscribe(), move |event| {
             let store = order_store.clone();

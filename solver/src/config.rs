@@ -2,30 +2,6 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use thiserror::Error;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ChainConfig {
-    pub chain_id: u32,
-    pub rpc_url: String,
-    pub ws_url: Option<String>,
-    pub order_book_address: String,
-}
-
-impl ChainConfig {
-    pub fn new(
-        chain_id: u32,
-        rpc_url: String,
-        ws_url: Option<String>,
-        order_book_address: String,
-    ) -> Self {
-        Self {
-            chain_id,
-            rpc_url,
-            ws_url,
-            order_book_address,
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Environment {
     Development,
@@ -69,6 +45,7 @@ pub struct Config {
     pub environment: Environment,
     pub network: Network,
     pub chains: Vec<ChainConfig>,
+    pub liquidity_api_url: String,
 }
 
 impl Config {
@@ -80,6 +57,9 @@ impl Config {
         let network = env::var("NETWORK")
             .map(|s| Network::from_str(&s))
             .unwrap()?;
+
+        let liquidity_api_url =
+            env::var("LIQUIDITY_API_URL").expect("LIQUIDITY_API_URL must be set");
 
         // Load chain configurations from environment variables
         // Format: CHAIN_<N>_ID, CHAIN_<N>_RPC_URL, CHAIN_<N>_WS_URL, CHAIN_<N>_ORDER_BOOK_ADDRESS
@@ -132,7 +112,32 @@ impl Config {
             environment,
             network,
             chains,
+            liquidity_api_url,
         })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ChainConfig {
+    pub chain_id: u32,
+    pub rpc_url: String,
+    pub ws_url: Option<String>,
+    pub order_book_address: String,
+}
+
+impl ChainConfig {
+    pub fn new(
+        chain_id: u32,
+        rpc_url: String,
+        ws_url: Option<String>,
+        order_book_address: String,
+    ) -> Self {
+        Self {
+            chain_id,
+            rpc_url,
+            ws_url,
+            order_book_address,
+        }
     }
 }
 

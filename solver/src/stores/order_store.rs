@@ -77,6 +77,10 @@ impl Store for OrderStore {
     fn name(&self) -> &str {
         "OrderStore"
     }
+
+    async fn initialize(&self) -> Result<()> {
+        Ok(())
+    }
 }
 
 #[async_trait]
