@@ -152,14 +152,13 @@ impl EvmEventListener {
             event.orderId
         );
 
-        // Convert to internal OrderData structure
         let order = OrderData {
             version: 0, // TODO: Get from contract or config
             origin_chain_id: chain_id,
-            sender: Self::address_to_bytes32(event.tokenIn),
-            nonce: 0, // TODO: Extract from orderId or fetch from contract
+            sender: [0u8; 32], // TODO: Extract from event
+            nonce: 0,          // TODO: Extract from event
             dest_chain_id: event.destChainId,
-            fill_deadline: 0, // TODO: Extract from contract
+            fill_deadline: 0, // TODO: Extract from event
             token_out: event.tokenOut.into(),
             recipient: event.solver.into(),
             amount_out: event.amountOut,
@@ -274,31 +273,24 @@ impl EvmEventListener {
 
         Ok(())
     }
-
-    /// Helper function to convert Address to [u8; 32]
-    fn address_to_bytes32(addr: Address) -> [u8; 32] {
-        let mut bytes = [0u8; 32];
-        bytes[12..32].copy_from_slice(addr.as_slice());
-        bytes
-    }
 }
 
 #[async_trait]
 impl Component for EvmEventListener {
     fn name() -> &'static str {
-        "OrderListener"
+        "EvmEventListener"
     }
 
     async fn initialize(&self) -> Result<()> {
         tracing::info!(
-            "Initializing OrderListener for {} chains",
+            "Initializing EvmEventListener for {} chains",
             self.chains.len()
         );
         Ok(())
     }
 
     async fn start(&self, event_bus: Arc<EventBus>, shutdown_rx: Receiver<()>) -> Result<()> {
-        tracing::info!("Starting OrderListener");
+        tracing::info!("Starting EvmEventListener");
 
         // Task to handle events (update stores)
         let order_store = self.order_store.clone();

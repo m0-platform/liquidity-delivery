@@ -8,9 +8,11 @@ use crate::events::{EventBus, OrderEvent};
 
 pub mod evm_event_listener;
 pub mod inventory_manager;
+pub mod svm_event_listener;
 
 pub use evm_event_listener::EvmEventListener;
 pub use inventory_manager::InventoryManager;
+pub use svm_event_listener::SvmEventListener;
 
 /// Base trait for all components in the system
 #[async_trait]

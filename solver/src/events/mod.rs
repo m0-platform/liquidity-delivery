@@ -1,13 +1,17 @@
+use async_trait::async_trait;
+use std::sync::Arc;
+
+use crate::error::Result;
+
 pub mod event_bus;
 pub mod events;
 pub mod evm;
+pub mod svm;
 
-use crate::error::Result;
-use async_trait::async_trait;
 pub use event_bus::*;
 pub use events::*;
 pub use evm::*;
-use std::sync::Arc;
+pub use svm::*;
 
 /// Event handler trait for components
 #[async_trait]

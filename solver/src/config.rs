@@ -32,10 +32,18 @@ pub enum Network {
 impl Network {
     pub fn from_str(s: &str) -> Result<Self, ConfigError> {
         match s.to_lowercase().as_str() {
-            "local" => Ok(Network::Local),
+            "local" | "localnet" => Ok(Network::Local),
             "devnet" => Ok(Network::Devnet),
             "mainnet" => Ok(Network::Mainnet),
             _ => Err(ConfigError::InvalidNetwork(s.to_string())),
+        }
+    }
+
+    pub fn to_string(&self) -> &'static str {
+        match self {
+            Network::Local => "localnet",
+            Network::Devnet => "devnet",
+            Network::Mainnet => "mainnet",
         }
     }
 }
