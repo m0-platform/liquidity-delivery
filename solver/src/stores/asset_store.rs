@@ -6,8 +6,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::error::{Result, SolverError};
-use crate::events::{EventHandler, OrderEvent};
-use crate::stores::Store;
+use crate::events::{EventHandler, SolverEvent};
 
 /// Event store for tracking order status
 pub struct AssetStore {
@@ -25,8 +24,8 @@ impl AssetStore {
 }
 
 #[async_trait]
-impl Store for AssetStore {
-    fn name(&self) -> &str {
+impl EventHandler for AssetStore {
+    fn name(&self) -> &'static str {
         "AssetStore"
     }
 
@@ -53,11 +52,8 @@ impl Store for AssetStore {
 
         Ok(())
     }
-}
 
-#[async_trait]
-impl EventHandler for AssetStore {
-    async fn handle_event(&self, _: Arc<OrderEvent>) -> Result<()> {
-        Ok(())
+    async fn handle_event(&self, _event: Arc<SolverEvent>) -> Result<Arc<Vec<SolverEvent>>> {
+        Ok(Arc::new(vec![]))
     }
 }

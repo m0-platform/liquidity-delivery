@@ -1,15 +1,24 @@
+use m0_liquidity_sdk::types::Asset;
 use order_book::OrderData;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Unified event enum
 #[derive(Debug, Clone)]
-pub enum OrderEvent {
+pub enum SolverEvent {
+    // System Events
+    Start,
+    Stop,
+
+    // Order events
     Created(OrderCreatedEvent),
     Fill(OrderFillEvent),
     Rejected(OrderRejectEvent),
     CancelRequest(OrderCancelRequestEvent),
     RefundClaimed(OrderRefundClaimedEvent),
     Completed(OrderCompletedEvent),
+
+    // Inventory events
+    RequestRebalance(RequestRebalance),
 }
 
 /// Event: New order created
@@ -136,4 +145,13 @@ impl OrderCompletedEvent {
                 .as_secs(),
         }
     }
+}
+
+/// Event: Request inventory rebalance
+#[derive(Debug, Clone)]
+pub struct RequestRebalance {
+    pub target_order_id: String,
+    pub timestamp: u64,
+    pub asset: Asset,
+    pub amount: u128,
 }

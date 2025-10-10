@@ -3,11 +3,11 @@ use std::fmt;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
-use super::events::OrderEvent;
+use super::events::SolverEvent;
 
 /// Event bus for pub/sub pattern
 pub struct EventBus {
-    sender: broadcast::Sender<Arc<OrderEvent>>,
+    sender: broadcast::Sender<Arc<SolverEvent>>,
 }
 
 impl EventBus {
@@ -17,13 +17,13 @@ impl EventBus {
     }
 
     /// Publish an event to all subscribers
-    pub async fn publish(&self, event: Arc<OrderEvent>) -> Result<()> {
+    pub async fn publish(&self, event: Arc<SolverEvent>) -> Result<()> {
         let _ = self.sender.send(event.clone());
         Ok(())
     }
 
     /// Subscribe to events (returns a receiver)
-    pub fn subscribe(&self) -> broadcast::Receiver<Arc<OrderEvent>> {
+    pub fn subscribe(&self) -> broadcast::Receiver<Arc<SolverEvent>> {
         self.sender.subscribe()
     }
 }

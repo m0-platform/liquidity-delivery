@@ -1,26 +1,30 @@
 use async_trait::async_trait;
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use crate::error::Result;
 use crate::events::{EventHandler, SolverEvent};
+use crate::stores::OrderStore;
 
-/// Component that listens to new orders created
-pub struct InventoryManager {}
+pub struct OrderProcessor {
+    order_store: Arc<RwLock<OrderStore>>,
+}
 
-impl InventoryManager {
+impl OrderProcessor {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            order_store: Arc::new(RwLock::new(OrderStore::new())),
+        }
     }
 }
 
 #[async_trait]
-impl EventHandler for InventoryManager {
+impl EventHandler for OrderProcessor {
     fn name(&self) -> &'static str {
-        "InventoryManager"
+        "OrderProcessor"
     }
 
     async fn initialize(&self) -> Result<()> {
-        tracing::info!("Initializing");
         Ok(())
     }
 

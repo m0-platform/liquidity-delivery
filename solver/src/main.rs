@@ -4,22 +4,24 @@ mod error;
 mod events;
 mod stores;
 
-use components::{Component, EvmEventListener, InventoryManager};
+use components::{EvmEventListener, InventoryManager};
 use config::Config;
 use events::EventBus;
-use std::sync::Arc;
-use tokio::sync::broadcast;
+use std::{error::Error, future::Future, sync::Arc};
+use tokio::sync::broadcast::{self, Receiver};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Load .env file if it exists
-    let _ = dotenvy::dotenv();
+use crate::{
+    components::{OrderProcessor, SvmEventListener},
+    error::SolverError,
+    events::{EventHandler, SolverEvent},
+};
 
-    // Load configuration from environment variables
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let _ = dotenvy::dotenv();
     let config = Config::from_env()?;
 
-    // Initialize tracing with appropriate format based on environment
     if config.environment.is_production() {
         // JSON format for production
         tracing_subscriber::registry()
@@ -46,20 +48,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (shutdown_tx, _) = broadcast::channel::<()>(1);
 
     // Initialize components
-    let order_listener = Arc::new(EvmEventListener::new(config.chains.clone()));
+    let evm_listener = Arc::new(EvmEventListener::new(
+        event_bus.clone(),
+        config.chains.clone(),
+    ));
+    let svm_listener = Arc::new(SvmEventListener::new(
+        event_bus.clone(),
+        config.chains.clone(),
+        config.network,
+    ));
+    let order_processor = Arc::new(OrderProcessor::new());
     let inventory_manager = Arc::new(InventoryManager::new());
 
     // Initialize all components
-    order_listener.initialize().await?;
+    evm_listener.initialize().await?;
+    svm_listener.initialize().await?;
+    order_processor.initialize().await?;
     inventory_manager.initialize().await?;
 
-    // Start all components
-    order_listener
-        .start(event_bus.clone(), shutdown_tx.subscribe())
-        .await?;
-    inventory_manager
-        .start(event_bus.clone(), shutdown_tx.subscribe())
-        .await?;
+    // Spawn handlers for all components
+    let evm_listener_clone = evm_listener.clone();
+    spawn_event_handler(
+        evm_listener.name(),
+        event_bus.clone(),
+        shutdown_tx.subscribe(),
+        move |event| {
+            let listener = evm_listener_clone.clone();
+            async move { listener.handle_event(event).await }
+        },
+    );
 
     tracing::info!("All components started");
 
@@ -67,9 +84,49 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::signal::ctrl_c().await?;
     tracing::info!("Received shutdown signal");
     let _ = shutdown_tx.send(());
+    event_bus.publish(Arc::new(SolverEvent::Stop)).await;
 
     // Wait for components to shutdown gracefully
     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
     Ok(())
+}
+
+fn spawn_event_handler<F, Fut>(
+    component_name: &'static str,
+    event_bus: Arc<EventBus>,
+    mut shutdown_rx: Receiver<()>,
+    handler: F,
+) where
+    F: Fn(Arc<SolverEvent>) -> Fut + Send + 'static,
+    Fut: Future<Output = Result<Arc<Vec<SolverEvent>>, SolverError>> + Send + 'static,
+{
+    tokio::spawn(async move {
+        let mut receiver = event_bus.subscribe();
+        loop {
+            tokio::select! {
+                _ = shutdown_rx.recv() => {
+                    tracing::info!("Shutting down event handler for {}", component_name);
+                    break;
+                },
+                result = receiver.recv() => {
+                    match result {
+                        Ok(event) => {
+                            match handler(event).await {
+                                Ok(new_events) => {
+                                    for new_event in new_events.iter() {
+                                        if let Err(e) = event_bus.publish(Arc::new(new_event.clone())).await {
+                                            tracing::error!("Failed to publish event from {}: {}", component_name, e);
+                                        }
+                                    }
+                                }
+                                Err(e) => tracing::error!("{} failed to handle event: {}", component_name, e),
+                            }
+                        }
+                        Err(e) =>  tracing::error!("Error receiving event on {}: {}", component_name, e)
+                    }
+                }
+            }
+        }
+    });
 }
