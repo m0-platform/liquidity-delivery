@@ -39,12 +39,18 @@ impl EventHandler for EvmEventListener {
 
     async fn handle_event(&self, event: SolverEvent) -> Result<Vec<SolverEvent>> {
         let store = self.order_store.read().await;
-        store.handle_event(event.clone()).await;
+        let _ = store.handle_event(event.clone()).await;
 
         match event {
             SolverEvent::Start => {
                 for chain in self.chains.iter() {
-                    self.start_event_listener(chain);
+                    if let Err(e) = self.start_event_listener(&chain).await {
+                        tracing::error!(
+                            "Failed to start event listener for {}: {}",
+                            chain.chain_id,
+                            e
+                        );
+                    }
                 }
             }
             SolverEvent::Stop => {
@@ -72,12 +78,6 @@ impl EvmEventListener {
 
     async fn start_event_listener(&self, chain: &ChainConfig) -> Result<()> {
         let chain_id = chain.chain_id;
-        tracing::info!(
-            "Starting listener for chain {} at {}",
-            chain_id,
-            chain.order_book_address
-        );
-
         let ws_url = chain.ws_url.as_ref().unwrap_or(&chain.rpc_url);
 
         // Parse the OrderBook contract address
@@ -117,8 +117,13 @@ impl EvmEventListener {
                 if let Some(log) = stream.next().await {
                     match Self::process_log(chain_id, &log) {
                         Ok(Some(event)) => {
-                            tracing::info!("Publishing event from chain {}: {:?}", chain_id, event);
-                            event_bus.publish(event).await;
+                            if let Err(e) = event_bus.publish(event).await {
+                                tracing::error!(
+                                    "Failed to publish event on chain {}: {}",
+                                    chain_id,
+                                    e
+                                );
+                            }
                         }
                         Ok(None) => (),
                         Err(e) => {
@@ -176,12 +181,6 @@ impl EvmEventListener {
     fn handle_order_open(chain_id: u32, log: &Log) -> Result<SolverEvent> {
         let event = OrderOpen::decode_log(log)
             .map_err(|e| SolverError::Component(format!("Failed to decode OrderOpen: {}", e)))?;
-
-        tracing::info!(
-            "OrderOpen event on chain {}: orderId={:?}",
-            chain_id,
-            event.orderId
-        );
 
         let order = OrderData {
             version: 0, // TODO: Get from contract or config

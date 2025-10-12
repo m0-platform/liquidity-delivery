@@ -73,10 +73,6 @@ impl OrderStore {
 
 #[async_trait]
 impl EventProcessor for OrderStore {
-    fn name(&self) -> &'static str {
-        "OrderStore"
-    }
-
     async fn initialize(&self) -> Result<()> {
         Ok(())
     }
@@ -124,12 +120,6 @@ impl EventProcessor for OrderStore {
                 if let Some(order) = orders.get_mut(&e.order_id) {
                     order.state = OrderState::Rejected;
                 }
-                tracing::info!(
-                    "Refund claimed for order {}: {} refunded to {}",
-                    e.order_id,
-                    e.amount_refunded,
-                    e.sender
-                );
             }
             SolverEvent::OrderCompleted(e) => {
                 if let Some(order) = orders.get_mut(&e.order_id) {

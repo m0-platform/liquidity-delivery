@@ -2,9 +2,6 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum SolverError {
-    #[error("Event bus error: {0}")]
-    EventBus(String),
-
     #[error("Store error: {0}")]
     Store(String),
 

@@ -49,7 +49,7 @@ impl EventHandler for SvmEventListener {
 
     async fn handle_event(&self, event: SolverEvent) -> Result<Vec<SolverEvent>> {
         let store = self.order_store.read().await;
-        store.handle_event(event.clone()).await;
+        let _ = store.handle_event(event.clone()).await;
 
         match event {
             SolverEvent::Start => {
@@ -88,13 +88,6 @@ impl SvmEventListener {
 
             program
                 .on::<OrderOpened>(move |ctx, event| {
-                    tracing::info!(
-                        "OrderOpen event on chain {}: orderId={:?}: signature: {}",
-                        chain_id_clone.clone(),
-                        event.order_id,
-                        ctx.signature,
-                    );
-
                     let order = OrderData {
                         version: 0, // TODO: Get from contract or config
                         origin_chain_id: chain_id_clone.clone(),

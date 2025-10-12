@@ -72,10 +72,6 @@ impl AssetStore {
 
 #[async_trait]
 impl EventProcessor for AssetStore {
-    fn name(&self) -> &'static str {
-        "AssetStore"
-    }
-
     async fn initialize(&self) -> Result<()> {
         let client = Client::new(&self.liquidity_api_url);
 

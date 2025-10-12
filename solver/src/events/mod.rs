@@ -25,8 +25,6 @@ pub trait EventHandler: Send + Sync {
 /// Event handler trait for stores
 #[async_trait]
 pub trait EventProcessor: Send + Sync {
-    fn name(&self) -> &'static str;
-
     // Initialize the component
     async fn initialize(&self) -> Result<()>;
 

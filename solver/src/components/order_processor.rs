@@ -34,7 +34,7 @@ impl EventHandler for OrderProcessor {
 
     async fn handle_event(&self, event: SolverEvent) -> Result<Vec<SolverEvent>> {
         let store = self.order_store.read().await;
-        store.handle_event(event.clone()).await;
+        let _ = store.handle_event(event.clone()).await;
 
         match event {
             SolverEvent::OrderCreated(e) => {
