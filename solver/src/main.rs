@@ -9,7 +9,6 @@ use config::Config;
 use events::EventBus;
 use std::{error::Error, future::Future, sync::Arc};
 use tokio::sync::broadcast::{self, Receiver};
-use tracing::event;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{
@@ -70,60 +69,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     event_logger.initialize().await?;
 
     // Spawn handlers for all components
-    let evm_listener_clone = evm_listener.clone();
-    spawn_event_handler(
-        evm_listener.name(),
-        event_bus.clone(),
-        shutdown_tx.subscribe(),
-        move |event| {
-            let listener = evm_listener_clone.clone();
-            async move { listener.handle_event(event).await }
-        },
-    );
-
-    let svm_listener_clone = svm_listener.clone();
-    spawn_event_handler(
-        svm_listener.name(),
-        event_bus.clone(),
-        shutdown_tx.subscribe(),
-        move |event| {
-            let listener = svm_listener_clone.clone();
-            async move { listener.handle_event(event).await }
-        },
-    );
-
-    let order_processor_clone = order_processor.clone();
-    spawn_event_handler(
-        order_processor.name(),
-        event_bus.clone(),
-        shutdown_tx.subscribe(),
-        move |event| {
-            let processor = order_processor_clone.clone();
-            async move { processor.handle_event(event).await }
-        },
-    );
-
-    let inventory_manager_clone = inventory_manager.clone();
-    spawn_event_handler(
-        inventory_manager.name(),
-        event_bus.clone(),
-        shutdown_tx.subscribe(),
-        move |event| {
-            let manager = inventory_manager_clone.clone();
-            async move { manager.handle_event(event).await }
-        },
-    );
-
-    let event_logger_clone = event_logger.clone();
-    spawn_event_handler(
-        event_logger.name(),
-        event_bus.clone(),
-        shutdown_tx.subscribe(),
-        move |event| {
-            let logger = event_logger_clone.clone();
-            async move { logger.handle_event(event).await }
-        },
-    );
+    register_component(&evm_listener, &event_bus, &shutdown_tx);
+    register_component(&svm_listener, &event_bus, &shutdown_tx);
+    register_component(&order_processor, &event_bus, &shutdown_tx);
+    register_component(&inventory_manager, &event_bus, &shutdown_tx);
+    register_component(&event_logger, &event_bus, &shutdown_tx);
 
     tracing::info!("All components registered");
     let _ = event_bus.publish(SolverEvent::Start).await;
@@ -138,6 +88,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
     tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
     Ok(())
+}
+
+/// Helper function to register a component with the event bus
+fn register_component<T>(
+    component: &Arc<T>,
+    event_bus: &Arc<EventBus>,
+    shutdown_tx: &broadcast::Sender<()>,
+) where
+    T: EventHandler + 'static,
+{
+    let component_clone = component.clone();
+    spawn_event_handler(
+        component.name(),
+        event_bus.clone(),
+        shutdown_tx.subscribe(),
+        move |event| {
+            let c = component_clone.clone();
+            async move { c.handle_event(event).await }
+        },
+    );
 }
 
 fn spawn_event_handler<F, Fut>(
