@@ -4,8 +4,11 @@ use alloy::{
     providers::ProviderBuilder,
     sol,
 };
+use solver::Config;
 use std::{env, time::Duration};
 use tokio::time::sleep;
+use tracing::level_filters::LevelFilter;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::IOrderBook::OnchainOrderParams;
 
@@ -18,19 +21,31 @@ sol!(
 
 #[tokio::test]
 async fn test_create_order() {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(LevelFilter::INFO)
+        .init();
+
     let provider = ProviderBuilder::new().connect_anvil_with_wallet();
 
     let contract = OrderBook::deploy(&provider)
         .await
         .expect("Failed to deploy contract");
 
-    println!("Deployed contract at address: {}", contract.address());
+    tracing::info!("Deployed contract at address: {}", contract.address());
 
-    // Override values in .env for testing if necessary
-    env::set_var("CHAIN_11155111_RPC_URL", "http://localhost:8545");
+    // Start the solver with test configuration
+    let mut config = Config::default();
+    config.chains.push(solver::config::ChainConfig {
+        chain_id: 11155111,
+        rpc_url: "http://localhost:8545".to_string(),
+        ws_url: "ws://localhost:8545".to_string(),
+        order_book_address: contract.address().to_string(),
+    });
 
-    // Start the solver
-    let shutdown_tx = solver::run_solver().await.expect("Failed to start solver");
+    let shutdown_tx = solver::run_solver(config)
+        .await
+        .expect("Failed to start solver");
 
     let builder = contract.openOrder(OnchainOrderParams {
         tokenIn: hex!("0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238").into(),
@@ -51,6 +66,8 @@ async fn test_create_order() {
         .await
         .expect("Failed to confirm transaction");
 
+    tracing::info!("Created order");
+
     // Let the solver run and pick up the order
     sleep(Duration::from_secs(5)).await;
 
@@ -61,5 +78,5 @@ async fn test_create_order() {
     sleep(Duration::from_secs(1)).await;
 
     // If we got here without panicking, the test passed
-    println!("Solver successfully started and shut down");
+    tracing::info!("Solver successfully started and shut down");
 }

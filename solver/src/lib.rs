@@ -1,16 +1,15 @@
 mod components;
-mod config;
+pub mod config;
 mod error;
 mod events;
 mod stores;
 mod utils;
 
 use components::{EvmEventListener, InventoryManager};
-use config::Config;
+pub use config::Config;
 use events::EventBus;
 use std::{error::Error, future::Future, sync::Arc};
 use tokio::sync::broadcast::{self, Receiver};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{
     components::{OrderProcessor, SvmEventListener},
@@ -20,24 +19,7 @@ use crate::{
 
 /// Initialize and run the solver application
 /// Returns a shutdown sender that can be used to stop the application
-pub async fn run_solver() -> Result<broadcast::Sender<()>, Box<dyn Error>> {
-    let _ = dotenvy::dotenv();
-    let config = Config::from_env()?;
-
-    if config.environment.is_production() {
-        // JSON format for production
-        tracing_subscriber::registry()
-            .with(tracing_subscriber::fmt::layer().json())
-            .with(config.log_level)
-            .init();
-    } else {
-        // Human-readable format for development
-        tracing_subscriber::registry()
-            .with(tracing_subscriber::fmt::layer())
-            .with(config.log_level)
-            .init();
-    }
-
+pub async fn run_solver(config: Config) -> Result<broadcast::Sender<()>, Box<dyn Error>> {
     tracing::info!(
         environment = ?config.environment,
         network = ?config.network,

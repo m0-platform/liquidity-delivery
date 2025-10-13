@@ -1,8 +1,28 @@
+use solver::config::Config;
 use std::error::Error;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let shutdown_tx = solver::run_solver().await?;
+    let _ = dotenvy::dotenv();
+    let config = Config::from_env()?;
+
+    if config.environment.is_production() {
+        // JSON format for production
+        tracing_subscriber::registry()
+            .with(tracing_subscriber::fmt::layer().json())
+            .with(config.log_level)
+            .init();
+    } else {
+        // Human-readable format for development
+        tracing_subscriber::registry()
+            .with(tracing_subscriber::fmt::layer())
+            .with(config.log_level)
+            .init();
+    }
+
+    let shutdown_tx = solver::run_solver(config).await?;
 
     // Wait for SIGINT (Ctrl+C)
     tokio::signal::ctrl_c().await?;

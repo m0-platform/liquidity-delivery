@@ -60,6 +60,18 @@ pub struct Config {
     pub log_level: LevelFilter,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            environment: Environment::Development,
+            network: Network::Local,
+            chains: Vec::new(),
+            liquidity_api_url: String::from("https://api-mainnet-b325.up.railway.app"),
+            log_level: LevelFilter::INFO,
+        }
+    }
+}
+
 impl Config {
     pub fn from_env() -> Result<Self, ConfigError> {
         let environment = env::var("ENV")
