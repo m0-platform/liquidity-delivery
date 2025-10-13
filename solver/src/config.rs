@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::env;
 use thiserror::Error;
 
+use crate::utils::{chain_id, supported_chains};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Environment {
     Development,
@@ -70,44 +72,36 @@ impl Config {
             env::var("LIQUIDITY_API_URL").expect("LIQUIDITY_API_URL must be set");
 
         // Load chain configurations from environment variables
-        // Format: CHAIN_<N>_ID, CHAIN_<N>_RPC_URL, CHAIN_<N>_WS_URL, CHAIN_<N>_ORDER_BOOK_ADDRESS
         let mut chains = Vec::new();
-        let mut i = 0;
-        loop {
-            let chain_id_key = format!("CHAIN_{}_ID", i);
-            match env::var(&chain_id_key) {
-                Ok(chain_id_str) => {
-                    let chain_id = chain_id_str.parse::<u32>().map_err(|_| {
-                        ConfigError::InvalidChainConfig(format!(
-                            "Invalid chain ID: {}",
-                            chain_id_str
-                        ))
-                    })?;
+        for chain in supported_chains() {
+            let chain_id = chain_id(chain);
+            let enabled_key = format!("CHAIN_{}_ENABLED", chain_id);
 
-                    let rpc_url = env::var(&format!("CHAIN_{}_RPC_URL", i)).map_err(|_| {
-                        ConfigError::InvalidChainConfig(format!("Missing RPC URL for chain {}", i))
-                    })?;
-
-                    let ws_url = env::var(&format!("CHAIN_{}_WS_URL", i)).ok();
-
-                    let order_book_address = env::var(&format!("CHAIN_{}_ORDER_BOOK_ADDRESS", i))
-                        .map_err(|_| {
-                        ConfigError::InvalidChainConfig(format!(
-                            "Missing OrderBook address for chain {}",
-                            i
-                        ))
-                    })?;
-
-                    chains.push(ChainConfig::new(
-                        chain_id,
-                        rpc_url,
-                        ws_url,
-                        order_book_address,
-                    ));
-                    i += 1;
-                }
-                Err(_) => break,
+            if env::var(enabled_key).unwrap_or(String::new()) != "true" {
+                continue;
             }
+
+            let rpc_url = env::var(&format!("CHAIN_{}_RPC_URL", chain_id)).map_err(|_| {
+                ConfigError::InvalidChainConfig(format!("Missing RPC URL for chain {}", chain))
+            })?;
+            let ws_url = env::var(&format!("CHAIN_{}_WS_URL", chain_id)).map_err(|_| {
+                ConfigError::InvalidChainConfig(format!("Missing WSS URL for chain {}", chain))
+            })?;
+
+            let order_book_address = env::var(&format!("CHAIN_{}_ORDER_BOOK_ADDRESS", chain_id))
+                .map_err(|_| {
+                    ConfigError::InvalidChainConfig(format!(
+                        "Missing OrderBook address for chain {}",
+                        chain
+                    ))
+                })?;
+
+            chains.push(ChainConfig {
+                chain_id,
+                rpc_url,
+                ws_url,
+                order_book_address,
+            });
         }
 
         if chains.is_empty() {
@@ -129,24 +123,8 @@ impl Config {
 pub struct ChainConfig {
     pub chain_id: u32,
     pub rpc_url: String,
-    pub ws_url: Option<String>,
+    pub ws_url: String,
     pub order_book_address: String,
-}
-
-impl ChainConfig {
-    pub fn new(
-        chain_id: u32,
-        rpc_url: String,
-        ws_url: Option<String>,
-        order_book_address: String,
-    ) -> Self {
-        Self {
-            chain_id,
-            rpc_url,
-            ws_url,
-            order_book_address,
-        }
-    }
 }
 
 #[derive(Error, Debug)]

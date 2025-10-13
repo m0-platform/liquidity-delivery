@@ -3,6 +3,7 @@ mod config;
 mod error;
 mod events;
 mod stores;
+mod utils;
 
 use components::{EvmEventListener, InventoryManager};
 use config::Config;

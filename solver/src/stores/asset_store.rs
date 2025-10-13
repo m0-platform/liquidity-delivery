@@ -8,6 +8,7 @@ use tokio::sync::RwLock;
 
 use crate::error::{Result, SolverError};
 use crate::events::{EventProcessor, SolverEvent};
+use crate::utils;
 
 /// Event store for tracking order status
 pub struct AssetStore {
@@ -32,20 +33,6 @@ impl AssetStore {
     pub async fn get_asset(&self, address: [u8; 32], chain_id: u32) -> Result<Option<Asset>> {
         let assets = self.assets.read().await;
         Ok(assets.get(&AssetKey { address, chain_id }).cloned())
-    }
-
-    fn chain_id(chain: Chain) -> u32 {
-        match chain {
-            Chain::Ethereum => todo!(),
-            Chain::Solana => todo!(),
-            Chain::Arbitrum => todo!(),
-            Chain::Optimism => todo!(),
-            Chain::Base => todo!(),
-            Chain::Linea => todo!(),
-            Chain::Fogo => todo!(),
-            Chain::Sepolia => todo!(),
-            Chain::ArbitrumSepolia => todo!(),
-        }
     }
 
     fn parse_address(chain: Chain, address: String) -> [u8; 32] {
@@ -86,7 +73,7 @@ impl EventProcessor for AssetStore {
         for asset in response.into_inner() {
             assets.insert(
                 AssetKey {
-                    chain_id: Self::chain_id(asset.chain),
+                    chain_id: utils::chain_id(asset.chain),
                     address: Self::parse_address(asset.chain, asset.address.clone()),
                 },
                 asset,

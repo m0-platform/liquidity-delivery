@@ -78,14 +78,13 @@ impl EvmEventListener {
 
     async fn start_event_listener(&self, chain: &ChainConfig) -> Result<()> {
         let chain_id = chain.chain_id;
-        let ws_url = chain.ws_url.as_ref().unwrap_or(&chain.rpc_url);
 
         // Parse the OrderBook contract address
         let contract_address = Address::from_str(&chain.order_book_address)
             .map_err(|e| SolverError::Component(format!("Invalid contract address: {}", e)))?;
 
         // Create WebSocket connection
-        let ws = WsConnect::new(ws_url);
+        let ws = WsConnect::new(chain.ws_url.clone());
         let provider = ProviderBuilder::new().connect_ws(ws).await.map_err(|e| {
             SolverError::Component(format!("Failed to connect to chain {}: {}", chain_id, e))
         })?;
