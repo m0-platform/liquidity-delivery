@@ -1,17 +1,13 @@
 {
-  "name": "@mzero-labs/foundry-template",
+  "name": "@m0/liquidity-delivery",
   "version": "1.0.0",
-  "description": "Template to kickstart a Foundry project",
+  "description": "",
   "main": "index.js",
-  "author": "M^0 Labs <contact@m0.xyz>",
+  "author": "M0 Labs <contact@m0.xyz>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MZero-Labs/foundry-template.git"
+    "url": "git+https://github.com/m0-foundation/liquidity-toolkit.git"
   },
-  "bugs": {
-    "url": "https://github.com/MZero-Labs/foundry-template/issues"
-  },
-  "homepage": "https://github.com/MZero-Labs/foundry-template#readme",
   "scripts": {
     "build": "make -B build",
     "clean": "make -B clean",
@@ -31,7 +27,8 @@
     "test-gas": "make -B gas-report",
     "test-fuzz": "make -B fuzz",
     "test-integration": "make -B integration",
-    "test-invariant": "make -B invariant"
+    "test-invariant": "make -B invariant",
+    "test-solver": "RUSTFLAGS=-Awarnings cargo test --package solver --test integration_test"
   },
 
   "devDependencies": {

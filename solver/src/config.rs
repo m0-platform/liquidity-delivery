@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::env;
 use thiserror::Error;
+use tracing_subscriber::filter::LevelFilter;
 
 use crate::utils::{chain_id, supported_chains};
 
@@ -56,6 +57,7 @@ pub struct Config {
     pub network: Network,
     pub chains: Vec<ChainConfig>,
     pub liquidity_api_url: String,
+    pub log_level: LevelFilter,
 }
 
 impl Config {
@@ -70,6 +72,11 @@ impl Config {
 
         let liquidity_api_url =
             env::var("LIQUIDITY_API_URL").expect("LIQUIDITY_API_URL must be set");
+
+        let log_level = env::var("LOG_LEVEL")
+            .ok()
+            .and_then(|s| s.parse::<LevelFilter>().ok())
+            .unwrap_or(LevelFilter::INFO);
 
         // Load chain configurations from environment variables
         let mut chains = Vec::new();
@@ -115,6 +122,7 @@ impl Config {
             network,
             chains,
             liquidity_api_url,
+            log_level,
         })
     }
 }

@@ -80,6 +80,7 @@ impl EventProcessor for AssetStore {
             );
         }
 
+        tracing::info!("Loaded {} assets into AssetStore", assets.len());
         Ok(())
     }
 
