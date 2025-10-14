@@ -1,7 +1,9 @@
 use alloy::{
     hex,
+    node_bindings::Anvil,
     primitives::{aliases::U40, FixedBytes},
     providers::ProviderBuilder,
+    signers::local::PrivateKeySigner,
     sol,
 };
 use solver::Config;
@@ -26,7 +28,16 @@ async fn test_create_order() {
         .with(LevelFilter::INFO)
         .init();
 
-    let provider = ProviderBuilder::new().connect_anvil_with_wallet();
+    let anvil = Anvil::new()
+        .block_time(1)
+        .chain_id(11155111)
+        .try_spawn()
+        .expect("failed to spawn anvil node");
+
+    let signer: PrivateKeySigner = anvil.keys()[0].clone().into();
+    let provider = ProviderBuilder::new()
+        .wallet(signer)
+        .connect_http(anvil.endpoint_url());
 
     let contract = OrderBook::deploy(&provider)
         .await
@@ -38,8 +49,8 @@ async fn test_create_order() {
     let mut config = Config::default();
     config.chains.push(solver::config::ChainConfig {
         chain_id: 11155111,
-        rpc_url: "http://localhost:8545".to_string(),
-        ws_url: "ws://localhost:8545".to_string(),
+        rpc_url: anvil.endpoint_url().to_string(),
+        ws_url: anvil.ws_endpoint_url().to_string(),
         order_book_address: contract.address().to_string(),
     });
 
