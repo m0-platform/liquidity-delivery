@@ -123,7 +123,9 @@ impl EvmEventListener {
         let mut stream = sub.into_stream();
         let event_bus = self.event_bus.clone();
 
+        // Keep the provider alive by moving it into the task
         let handle = tokio::spawn(async move {
+            let _provider = provider; // Keep provider alive
             loop {
                 if let Some(log) = stream.next().await {
                     match Self::process_log(chain_id, &log) {

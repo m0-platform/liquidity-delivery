@@ -9,7 +9,7 @@
     "url": "git+https://github.com/m0-foundation/liquidity-toolkit.git"
   },
   "scripts": {
-    "test-solver": "RUSTFLAGS=-Awarnings cargo test --package solver --test integration_test -- --nocapture"
+    "test-solver": "RUSTFLAGS=-Awarnings cargo test --package solver --test integration_test"
   },
 
   "devDependencies": {

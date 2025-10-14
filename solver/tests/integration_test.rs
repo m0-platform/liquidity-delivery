@@ -9,8 +9,7 @@ use alloy::{
 use solver::Config;
 use std::time::Duration;
 use tokio::time::sleep;
-use tracing::level_filters::LevelFilter;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_test::traced_test;
 
 use crate::IOrderBook::OnchainOrderParams;
 
@@ -22,12 +21,8 @@ sol!(
 );
 
 #[tokio::test]
-async fn test_create_order() {
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
-        .with(LevelFilter::INFO)
-        .init();
-
+#[traced_test]
+async fn test_order_rejected() {
     let anvil = Anvil::new()
         .block_time(1)
         .chain_id(11155111)
@@ -59,8 +54,9 @@ async fn test_create_order() {
         .expect("Failed to start solver");
 
     // Let the solver boot up
-    sleep(Duration::from_secs(1)).await;
+    sleep(Duration::from_millis(10)).await;
 
+    // Random order that will be rejected by the Solver
     let builder = contract.openOrder(OnchainOrderParams {
         tokenIn: hex!("0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238").into(),
         destChainId: 421614,
@@ -83,14 +79,13 @@ async fn test_create_order() {
     tracing::info!("Created order");
 
     // Let the solver run and pick up the order
-    sleep(Duration::from_secs(5)).await;
+    sleep(Duration::from_millis(500)).await;
 
     // Send shutdown signal
     let _ = shutdown_tx.send(());
+    sleep(Duration::from_millis(10)).await;
 
-    // Wait for graceful shutdown
-    sleep(Duration::from_secs(1)).await;
-
-    // If we got here without panicking, the test passed
-    tracing::info!("Solver successfully started and shut down");
+    // Check that the OrderRejected event was created
+    assert!(logs_contain("event=\"OrderRejected\" order_id=6dd444764fa0dc3229a76f38314ae608a4e69cef19bce9c636e4661c7f58117e"));
+    assert!(logs_contain("reason=Asset not supported"));
 }
