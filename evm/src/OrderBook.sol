@@ -132,6 +132,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
         // Set the fill deadline to the current time
         // This will allow the caller to claim a refund after the finality buffer has passed
+        // TODO it might be better to add a different variable so we aren't changing one used in the order ID derivation
         order.fillDeadline = uint40(block.timestamp); // can't overflow until year 36812
 
         emit CancelRequest(orderId_, order.fillDeadline);
@@ -221,7 +222,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
             // If this is a fill on the origin chain, we can immediately release the corresponding amount of origin tokens to the recipient
             // This is because the origin and destination chains are the same, so no cross-chain messaging is needed
-            IERC20(order.tokenIn).transferFrom(address(this), fillerParams_.originRecipient.toAddress(), uint256(inToRelease_));
+            IERC20(order.tokenIn).transfer(fillerParams_.originRecipient.toAddress(), uint256(inToRelease_));
         }
         
         // Transfer tokens from the solver to the recipient
@@ -271,7 +272,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
     // ========== Admin Functions ========== //
 
-    function setDestinationConfig(uint32 destChainId_, bool isSupported_, uint40 finalityBuffer_) external {
+    function setDestinationConfig(uint32 destChainId_, bool isSupported_, uint40 finalityBuffer_) external override {
         // TODO add access control
 
         if (isSupported_ && finalityBuffer_ == 0) revert InvalidFinalityBuffer();
@@ -288,7 +289,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
     // Order IDs are unique across chains and allow using fill data to compute the identifier
     // This is useful for tracking data against orders on both the origin and destination chains
-    function getOrderId(OrderData memory orderData_) public pure returns (bytes32) {
+    function getOrderId(OrderData memory orderData_) public pure override returns (bytes32) {
         return keccak256(abi.encodePacked(
             orderData_.version,
             orderData_.originChainId,
@@ -303,17 +304,17 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         ));
     }
 
-    function getOrder(bytes32 orderId_) external view returns (Order memory) {
+    function getOrder(bytes32 orderId_) external view override returns (Order memory) {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         return $.localOrders[orderId_];
     }
 
-    function isDestinationSupported(uint32 destChainId_) external view returns (bool) {
+    function isDestinationSupported(uint32 destChainId_) external view override returns (bool) {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         return $.destinations[destChainId_].isSupported;
     }
 
-    function getDestinationFinalityBuffer(uint32 destChainId_) external view returns (uint40) {
+    function getDestinationFinalityBuffer(uint32 destChainId_) external view override returns (uint40) {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         return $.destinations[destChainId_].finalityBuffer;
     }
