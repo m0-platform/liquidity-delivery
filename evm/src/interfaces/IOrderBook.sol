@@ -134,4 +134,20 @@ interface IOrderBook {
     /// @notice Report a fill that was made on another chain back to this chain as the origin chain
     /// @dev To be called by a permitted messenger contract
     function reportFill(FillReport calldata report) external;
+
+    // ========== Admin Functions ========== //
+
+    function setDestinationConfig(uint32 destChainId, bool isSupported, uint40 finalityBuffer) external;
+
+
+    // ========== View Functions ========== //
+
+    function getOrderId(OrderData calldata orderData) external pure returns (bytes32);
+
+    function getOrder(bytes32 orderId) external view returns (Order memory);
+
+    function isDestinationSupported(uint32 destChainId) external view returns (bool);
+
+    function getDestinationFinalityBuffer(uint32 destChainId) external view returns (uint40);
+
 }
