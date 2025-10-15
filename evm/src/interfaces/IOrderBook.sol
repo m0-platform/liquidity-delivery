@@ -16,6 +16,7 @@ interface IOrderBook {
     error AmountOutZero();
     error InvalidDeadline();
     error InvalidDestinationChain();
+    error InvalidFinalityBuffer();
     error InvalidOrderStatus();
     error InvalidOrderVersion();
     error NotAuthorized();
@@ -99,6 +100,11 @@ interface IOrderBook {
     struct FillParams {
         uint128 amountOutToFill;
         bytes32 originRecipient;
+    }
+
+    struct Destination {
+        bool isSupported;
+        uint40 finalityBuffer; // number of seconds to wait after the fill deadline before allowing refunds
     }
 
     /// @notice Opens an order

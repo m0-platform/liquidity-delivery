@@ -2,43 +2,59 @@
 pragma solidity 0.8.26;
 
 import { IERC20 } from "../lib/common/src/interfaces/IERC20.sol";
+import { AccessControlUpgradeable } from "../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 
 import { IOrderBook } from "./interfaces/IOrderBook.sol";
 import { IMessenger } from "./interfaces/IMessenger.sol";
 import { TypeConverter } from "./libs/TypeConverter.sol";
 
-contract OrderBook is IOrderBook {
+abstract contract OrderBookStorageLayout {
+    /// @custom:storage-location erc7201:M0.storage.OrderBook
+    struct OrderBookStorageStruct {
+        // destination configuration
+        mapping(uint32 destChainId => IOrderBook.Destination) destinations;
+
+        // only store full data about origin orders
+        mapping(bytes32 orderId => IOrderBook.Order) localOrders;
+
+        // store fill amounts for both origin and destination orders
+        mapping(bytes32 orderId => uint128 filledAmount) orderAmountOutFilled;
+
+        // track nonces for each sender to ensure unique order IDs
+        mapping(address sender => uint64 nonce) senderNonces;
+    }
+
+    // keccak256(abi.encode(uint256(keccak256("M0.storage.OrderBook")) - 1)) & ~bytes32(uint256(0xff))
+    bytes32 private constant _ORDER_BOOK_STORAGE_LOCATION =
+        0x820bf725beb8a0ae85e433f17c2d2091cee8f490a62ab8bd0d9dd95db3dddc00;
+
+    function _getOrderBookStorageLocation() internal pure returns (OrderBookStorageStruct storage $) {
+        assembly {
+            $.slot := _ORDER_BOOK_STORAGE_LOCATION
+        }
+    }
+}
+
+contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeable {
     using TypeConverter for *;
 
     // ========== State Variables ========== //
 
     // TODO add proxy storage configuration
 
-    /// @notice the chain ID of this chain according to the messaging network used by this contract
-    uint32 public chainId; 
+    /// @notice Version of the limit order system
+    uint16 public constant VERSION = 1;
 
-    // version of the limit order system
-    uint16 public constant version = 1;
+    /// @notice the chain ID of this chain according to the messaging network used by this contract
+    uint32 public immutable chainId; 
 
     // TODO this messaging setup is unclear, but this is a simple stand-in
     // sends crosschain messages to report fills on this chain to other chains
     // receive crosschain messages to report fills on other chains to this chain
-    address public messenger;
+    address public immutable messenger;
     // Alternative: chain-specific messengers
     // mapping(address => uint32) public messengerOriginId;// messenger contract address => this chain's origin ID for that messenger (it can be different for different messaging networks)
     // mapping(uint32 => address) public chainMessenger; // chain ID => contract to use for sending messages to and receiving messages from that chain
-
-    // chain ID => number of seconds to wait for finality after fill deadline before allowing refunds
-    mapping(uint32 destChainId => uint40 finalityBuffer) public destChainFinalityBuffer; 
-
-    // only store full data about origin orders
-    mapping(bytes32 orderId => Order) public localOrders;
-
-    // store fill amounts for both origin and destination orders
-    mapping(bytes32 orderId => uint128 filledAmount) public orderAmountOutFilled;
-
-    // track nonces for each sender to ensure unique order IDs
-    mapping(address sender => uint64 nonce) public senderNonces;
 
     // ========== Constructor ========== //
 
@@ -56,15 +72,16 @@ contract OrderBook is IOrderBook {
         if (orderParams_.amountIn == 0) revert AmountInZero();
         if (orderParams_.amountOut == 0) revert AmountOutZero();
 
-        // TODO should we store a list of valid destination chains? What about destination tokens?
-        // With the fillDeadline boundaries, the worst case is that an unsupported order can't be filled and is refunded after expiry
-        // However, that may not be great UX
+        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
+
+        // Destination chain must either be the current chain or a supported destination
+        if (orderParams_.destChainId != chainId && !$.destinations[orderParams_.destChainId].isSupported) revert InvalidDestinationChain();
 
         // Create order
-        uint64 nonce_ = senderNonces[msg.sender]++;
+        uint64 nonce_ = $.senderNonces[msg.sender]++;
 
         bytes32 orderId_ = getOrderId(OrderData({
-            version: version, // origin contract version
+            version: VERSION, // origin contract version
             originChainId: chainId,
             sender: msg.sender.toBytes32(),
             nonce: nonce_,
@@ -76,8 +93,8 @@ contract OrderBook is IOrderBook {
             solver: orderParams_.solver
         }));
 
-        localOrders[orderId_] = Order({
-            version: version, // origin contract version
+        $.localOrders[orderId_] = Order({
+            version: VERSION, // origin contract version
             status: OrderStatus.Created,
             destChainId: orderParams_.destChainId,
             fillDeadline: orderParams_.fillDeadline,
@@ -102,7 +119,8 @@ contract OrderBook is IOrderBook {
     // ========== Refunding Orders ========== //
 
     function requestCancelOrder(bytes32 orderId_) external override {
-        Order storage order = localOrders[orderId_];
+        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
+        Order storage order = $.localOrders[orderId_];
 
         // Validate that the order can be cancelled and the caller is the sender
         if (order.status != OrderStatus.Created) revert InvalidOrderStatus();
@@ -124,17 +142,18 @@ contract OrderBook is IOrderBook {
     // This allows applications to gracefully handle refunds for orders that weren't filled 
     // Alternatively, if a user requested a refund, they can claim it here
     function claimRefund(bytes32 orderId_) external override {
-        Order storage order = localOrders[orderId_];
+        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
+        Order storage order = $.localOrders[orderId_];
 
         // Validate that the order can be refunded
         if (order.status != OrderStatus.Created && order.status != OrderStatus.CancelRequested) revert InvalidOrderStatus();
 
         // Check that the fill deadline + finality buffer has passed
-        uint40 finalityBuffer_ = destChainFinalityBuffer[order.destChainId];
+        uint40 finalityBuffer_ = $.destinations[order.destChainId].finalityBuffer;
         if (uint256(order.fillDeadline) + finalityBuffer_ >= block.timestamp) revert RefundPending();
 
         // Calculate the refund amount
-        uint128 outFilled_ = orderAmountOutFilled[orderId_];
+        uint128 outFilled_ = $.orderAmountOutFilled[orderId_];
         uint128 outRemaining_ = order.amountOut - outFilled_;
 
         if (outRemaining_ == 0) revert OrderFilled();
@@ -163,7 +182,7 @@ contract OrderBook is IOrderBook {
         // Validate fill data
         if (chainId != orderData_.destChainId) revert InvalidDestinationChain();
         if (uint256(orderData_.fillDeadline) < block.timestamp) revert OrderExpired();
-        if (orderData_.version != version) revert InvalidOrderVersion();
+        if (orderData_.version != VERSION) revert InvalidOrderVersion();
 
         // If the solver is specified, ensure that the caller is the designated solver
         address solver_ = orderData_.solver.toAddress();
@@ -174,26 +193,29 @@ contract OrderBook is IOrderBook {
         // to ensure they have the order data correct
         if (orderId_ != getOrderId(orderData_)) revert OrderIdMismatch();
 
+        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
+
         // Calculate fill amount as the minimum of the filler provided amount and the remaining unfilled amount
-        uint128 outFilled_ = orderAmountOutFilled[orderId_];
+        uint128 outFilled_ = $.orderAmountOutFilled[orderId_];
         uint128 outRemaining_ = orderData_.amountOut - outFilled_;
         if (outRemaining_ == 0) revert OrderFilled();
         bool fullFill_ = fillerParams_.amountOutToFill >= outRemaining_;
         uint128 fillAmount_ = fullFill_ ? outRemaining_ : fillerParams_.amountOutToFill;
 
         // Update order fill amount
-        orderAmountOutFilled[orderId_] += fillAmount_;
+        $.orderAmountOutFilled[orderId_] += fillAmount_;
 
         // Handle releasing the corresponding amount of origin tokens to the filler
         if (chainId == orderData_.originChainId) {
             // If a full fill, mark the order as completed
+            Order storage order = $.localOrders[orderId_];
+
             if (fullFill_) {
-                localOrders[orderId_].status = OrderStatus.Completed;
+                order.status = OrderStatus.Completed;
                 emit OrderCompleted(orderId_);
             }
 
-            // Calculate the amount of origin tokens to release to the filler
-            Order storage order = localOrders[orderId_];
+            // Calculate the amount of origin tokens to release to the filler            
             // TODO same concerns about rounding and precision loss with different token decimal values
             uint128 inToRelease_ = order.amountOut == fillAmount_ ? order.amountIn : ((uint256(order.amountIn) * fillAmount_) / order.amountOut).toUint128();
 
@@ -225,15 +247,15 @@ contract OrderBook is IOrderBook {
     // ========== Receiving Fill Reports ========== //
 
     function reportFill(FillReport calldata report_) external override {
-        Order storage order = localOrders[report_.orderId];
+        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
+        Order storage order = $.localOrders[report_.orderId];
 
         // Validate the fill report and sender
         if (order.status != OrderStatus.Created && order.status != OrderStatus.CancelRequested) revert InvalidOrderStatus();
         if (msg.sender != messenger) revert NotAuthorized();
 
         // Update the fill amount for the order
-        orderAmountOutFilled[report_.orderId] += report_.amountOutFilled;
-        uint128 outFilled = orderAmountOutFilled[report_.orderId];
+        uint128 outFilled = ($.orderAmountOutFilled[report_.orderId] += report_.amountOutFilled);
         if (outFilled == order.amountOut) {
             order.status = OrderStatus.Completed;
             emit OrderCompleted(report_.orderId);
@@ -249,11 +271,17 @@ contract OrderBook is IOrderBook {
 
     // ========== Admin Functions ========== //
 
-    function setFinalityBuffer(uint32 destChainId_, uint40 finalityBuffer_) external {
+    function setDestinationConfig(uint32 destChainId_, bool isSupported_, uint40 finalityBuffer_) external {
         // TODO add access control
-        destChainFinalityBuffer[destChainId_] = finalityBuffer_;
-    }
 
+        if (isSupported_ && finalityBuffer_ == 0) revert InvalidFinalityBuffer();
+
+        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
+        $.destinations[destChainId_] = Destination({
+            isSupported: isSupported_,
+            finalityBuffer: finalityBuffer_
+        });
+    }
 
     // =========== View Functions ========== //
 
@@ -276,6 +304,17 @@ contract OrderBook is IOrderBook {
     }
 
     function getOrder(bytes32 orderId_) external view returns (Order memory) {
-        return localOrders[orderId_];
+        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
+        return $.localOrders[orderId_];
+    }
+
+    function isDestinationSupported(uint32 destChainId_) external view returns (bool) {
+        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
+        return $.destinations[destChainId_].isSupported;
+    }
+
+    function getDestinationFinalityBuffer(uint32 destChainId_) external view returns (uint40) {
+        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
+        return $.destinations[destChainId_].finalityBuffer;
     }
 }
