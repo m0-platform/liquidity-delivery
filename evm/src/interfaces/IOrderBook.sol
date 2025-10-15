@@ -4,12 +4,27 @@ pragma solidity ^0.8;
 interface IOrderBook {
     // TODO NatSpec for all events and methods
 
+    // ========== Events ========== //
     event OrderOpen(bytes32 orderId, address tokenIn, uint128 amountIn, uint32 indexed destChainId, bytes32 indexed tokenOut, uint128 amountOut, bytes32 indexed solver);
     event Fill(bytes32 orderId, address indexed solver, uint128 amountOutFilled);
     event CancelRequest(bytes32 orderId, uint40 newFillDeadline);
     event RefundClaimed(bytes32 orderId, address indexed sender, uint128 amountInRefunded);
     event OrderCompleted(bytes32 orderId);
 
+    // ========== Errors ========== //
+    error AmountInZero();
+    error AmountOutZero();
+    error InvalidDeadline();
+    error InvalidDestinationChain();
+    error InvalidOrderStatus();
+    error InvalidOrderVersion();
+    error NotAuthorized();
+    error OrderExpired();
+    error OrderFilled();
+    error OrderIdMismatch();
+    error RefundPending();
+
+    // ========== Structs and Enums ========== //
     struct OnchainOrderParams {
         address tokenIn; 
         uint32 destChainId;

@@ -10,20 +10,9 @@ import { TypeConverter } from "./libs/TypeConverter.sol";
 contract OrderBook is IOrderBook {
     using TypeConverter for *;
 
-    // ========== Errors ========== //
-    error AmountInZero();
-    error AmountOutZero();
-    error InvalidDeadline();
-    error InvalidDestinationChain();
-    error InvalidOrderStatus();
-    error InvalidOrderVersion();
-    error NotAuthorized();
-    error OrderExpired();
-    error OrderFilled();
-    error OrderIdMismatch();
-    error RefundPending();
-
     // ========== State Variables ========== //
+
+    // TODO add proxy storage configuration
 
     /// @notice the chain ID of this chain according to the messaging network used by this contract
     uint32 public chainId; 
@@ -53,8 +42,9 @@ contract OrderBook is IOrderBook {
 
     // ========== Constructor ========== //
 
-    constructor() {
-        chainId = uint32(block.chainid); // TODO replace with messaging network chain ID if different
+    constructor(uint32 chainId_, address messenger_) {
+        chainId = chainId_;
+        messenger = messenger_;
     }
 
     // ========== Initiating Orders ========== //
@@ -257,10 +247,20 @@ contract OrderBook is IOrderBook {
         IERC20(order.tokenIn).transferFrom(address(this), report_.originRecipient.toAddress(), uint256(inToRelease_));
     }
 
+    // ========== Admin Functions ========== //
+
+    function setFinalityBuffer(uint32 destChainId_, uint40 finalityBuffer_) external {
+        // TODO add access control
+        destChainFinalityBuffer[destChainId_] = finalityBuffer_;
+    }
+
+
+    // =========== View Functions ========== //
+
 
     // Order IDs are unique across chains and allow using fill data to compute the identifier
     // This is useful for tracking data against orders on both the origin and destination chains
-    function getOrderId(OrderData memory orderData_) internal pure returns (bytes32) {
+    function getOrderId(OrderData memory orderData_) public pure returns (bytes32) {
         return keccak256(abi.encodePacked(
             orderData_.version,
             orderData_.originChainId,
@@ -273,5 +273,9 @@ contract OrderBook is IOrderBook {
             orderData_.recipient,
             orderData_.solver
         ));
+    }
+
+    function getOrder(bytes32 orderId_) external view returns (Order memory) {
+        return localOrders[orderId_];
     }
 }
