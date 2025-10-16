@@ -8,6 +8,8 @@ contract MockMessenger is IMessenger {
 
     address public orderBook;
 
+    mapping(bytes32 => IOrderBook.FillReport) public fillReports;
+
     function setOrderBook(address orderBook_) external {
         orderBook = orderBook_;
     }
@@ -16,6 +18,7 @@ contract MockMessenger is IMessenger {
         uint32 destinationChainId,
         IOrderBook.FillReport calldata report
     ) external override {
+        fillReports[report.orderId] = report;
         emit FillReportSent(destinationChainId, report);
     }
 
@@ -23,5 +26,9 @@ contract MockMessenger is IMessenger {
         IOrderBook.FillReport calldata report
     ) external {
         IOrderBook(orderBook).reportFill(report);
+    }
+
+    function isFillReported(bytes32 orderId) external view returns (bool) {
+        return fillReports[orderId].amountOutFilled != 0;
     }
 }
