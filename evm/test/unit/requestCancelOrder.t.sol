@@ -20,7 +20,7 @@ contract RequestCancelOrderTest is UnitTestBase {
     //   [X] it reverts with an NotAuthorized error
     // [X] given the order can be cancelled
     //   [X] it updates the order status to CancelRequested
-    //   [X] it sets the fill deadline to the current block timestamp
+    //   [X] it sets the refund requested at timestamp to the current block timestamp
     //   [X] it emits an CancelRequest event
 
     function setUp() public override {
@@ -56,7 +56,7 @@ contract RequestCancelOrderTest is UnitTestBase {
         bytes32 orderId = _placeOrder(users[0], params);
 
         // Fill the order
-        _fillOrder(users[2], orderId);
+        _fillOrder(users[2], orderId, params.amountOut);
 
         // Try to cancel the order
         vm.prank(users[0]);
@@ -67,7 +67,7 @@ contract RequestCancelOrderTest is UnitTestBase {
     function test_givenXchainOrderHasBeenFilled_reverts() public {
         // Report fill from destination chain
         bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
-        _reportFill(orderId, params.amountOut, users[2]);
+        _reportFill(users[2], orderId, params.amountOut);
 
         // Try to cancel the order
         vm.prank(users[0]);
@@ -90,11 +90,11 @@ contract RequestCancelOrderTest is UnitTestBase {
         vm.warp(block.timestamp + 1 minutes); // make the timestamp non-zero
         vm.prank(users[0]);
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.CancelRequest(orderId, uint40(block.timestamp));
+        emit IOrderBook.CancelRequested(orderId, uint40(block.timestamp));
         orderBook.requestCancelOrder(orderId);
         
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
         assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.CancelRequested), "order status should be CancelRequested");
-        assertEq(order.fillDeadline, uint40(block.timestamp), "fill deadline should be updated to current block timestamp");
+        assertEq(order.refundRequestedAt, uint40(block.timestamp), "refundRequestedAt should be updated to current block timestamp");
     }
 }

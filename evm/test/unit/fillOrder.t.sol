@@ -219,7 +219,7 @@ contract FillOrderTest is UnitTestBase {
         bytes32 orderId = _placeOrder(users[0], params);
 
         // Fill it completely
-        _fillOrder(users[2], orderId);
+        _fillOrder(users[2], orderId, params.amountOut);
 
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
 

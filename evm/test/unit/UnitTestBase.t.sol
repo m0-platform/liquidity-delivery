@@ -99,10 +99,10 @@ abstract contract UnitTestBase is Test {
         return orderId_;
     }
 
-    function _fillOrder(address solver_, bytes32 orderId_) internal from(solver_) {
+    function _fillOrder(address solver_, bytes32 orderId_, uint128 fillAmount_) internal from(solver_) {
         // Get the order data
         IOrderBook.Order memory order = orderBook.getOrder(orderId_);
-        MockERC20(order.tokenOut.toAddress()).approve(address(orderBook), type(uint128).max);
+        MockERC20(order.tokenOut.toAddress()).approve(address(orderBook), fillAmount_);
 
         orderBook.fillOrder(
             orderId_, 
@@ -119,16 +119,16 @@ abstract contract UnitTestBase is Test {
                 solver: order.solver
             }),
             IOrderBook.FillParams({
-                amountOutToFill: order.amountOut,
+                amountOutToFill: fillAmount_,
                 originRecipient: order.solver
             })
         );
     }
 
     function _reportFill(
+        address solver_,
         bytes32 orderId_, 
-        uint128 amountOutFilled_, 
-        address solver_
+        uint128 amountOutFilled_
     ) internal {
         // Report the fill back to the origin chain
         vm.prank(address(messenger));
