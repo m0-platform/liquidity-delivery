@@ -6,7 +6,7 @@ interface IOrderBook {
 
     // ========== Events ========== //
     event OrderOpen(bytes32 orderId, address tokenIn, uint128 amountIn, uint32 indexed destChainId, bytes32 indexed tokenOut, uint128 amountOut, bytes32 indexed solver);
-    event Fill(bytes32 orderId, address indexed solver, uint128 amountOutFilled);
+    event Fill(bytes32 indexed orderId, address indexed solver, uint128 amountOutFilled);
     event CancelRequested(bytes32 orderId, uint40 newFillDeadline);
     event RefundClaimed(bytes32 orderId, address indexed sender, uint128 amountInRefunded);
     event OrderCompleted(bytes32 orderId);
