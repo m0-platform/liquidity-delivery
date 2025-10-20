@@ -8,6 +8,7 @@ import { ERC712ExtendedUpgradeable } from "../lib/common/src/ERC712ExtendedUpgra
 import { IOrderBook } from "./interfaces/IOrderBook.sol";
 import { IMessenger } from "./interfaces/IMessenger.sol";
 import { TypeConverter } from "./libs/TypeConverter.sol";
+import { TransferHelper } from "./libs/TransferHelper.sol";
 
 abstract contract OrderBookStorageLayout {
     /// @custom:storage-location erc7201:M0.storage.OrderBook
@@ -38,6 +39,7 @@ abstract contract OrderBookStorageLayout {
 
 contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeable, ERC712ExtendedUpgradeable {
     using TypeConverter for *;
+    using TransferHelper for IERC20;
 
     // ========== State Variables ========== //
 
@@ -66,7 +68,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         messenger = messenger_;
     }
 
-    function initialize() external initializer {
+    function initialize(address admin) external initializer {
         __ERC712ExtendedUpgradeable_init("M0 OrderBook");
     }
 
@@ -147,8 +149,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
             solver: orderParams_.solver
         });
 
-        // Transfer tokens in from the sender
-        IERC20(orderParams_.tokenIn).transferFrom(sender_, address(this), uint256(orderParams_.amountIn));
+        // Transfer tokens in from the sender, ensuring the required amount is received
+        IERC20(orderParams_.tokenIn).safeTransferExactFrom(sender_, address(this), uint256(orderParams_.amountIn));
 
         emit OrderOpen(orderId_, orderParams_.tokenIn, orderParams_.amountIn, orderParams_.destChainId, orderParams_.tokenOut, orderParams_.amountOut, orderParams_.solver);
 
@@ -200,9 +202,6 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         uint128 outFilled_ = $.orderAmountOutFilled[orderId_];
         uint128 outRemaining_ = order.amountOut - outFilled_;
 
-        // TODO shouldn't need this check, but leaving for now
-        if (outRemaining_ == 0) revert OrderFilled();
-
         // TODO need to think about rounding and precision loss with different token decimal values
         // We can cast to uin256 for multiplication and then cast back after division because order.amountOut >= outRemaining
         uint128 inRemaining_ = outFilled_ == 0 ? order.amountIn : ((uint256(order.amountIn) * outRemaining_) / order.amountOut).toUint128();
@@ -216,7 +215,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         order.status = OrderStatus.Completed;
 
         // Transfer the remaining amount back to the sender
-        IERC20(order.tokenIn).transfer(order.sender, uint256(inRemaining_));
+        IERC20(order.tokenIn).safeTransfer(order.sender, uint256(inRemaining_));
 
         emit RefundClaimed(orderId_, order.sender, inRemaining_);
     }
@@ -268,16 +267,17 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
             // If this is a fill on the origin chain, we can immediately release the corresponding amount of origin tokens to the recipient
             // This is because the origin and destination chains are the same, so no cross-chain messaging is needed
-            IERC20(order.tokenIn).transfer(fillerParams_.originRecipient.toAddress(), uint256(inToRelease_));
+            IERC20(order.tokenIn).safeTransferExact(fillerParams_.originRecipient.toAddress(), uint256(inToRelease_));
         }
         
         // Transfer tokens from the solver to the recipient
-        IERC20(orderData_.tokenOut.toAddress()).transferFrom(msg.sender, orderData_.recipient.toAddress(), uint256(fillAmount_));
+        IERC20(orderData_.tokenOut.toAddress()).safeTransferExactFrom(msg.sender, orderData_.recipient.toAddress(), uint256(fillAmount_));
 
         // This block is split out to allow the above transfer to happen before any cross-chain messaging
         if (chainId != orderData_.originChainId) {
-            // If this is a fill on a different chain than the origin chain, we need to send a message back to the origin chain to release the corresponding amount of origin tokens to the recipient
-            // TODO implement cross-chain messaging to report the fill back to the origin chain
+            // If this is a fill on a different chain than the origin chain, 
+            // we need to send a message back to the origin chain to release 
+            // the corresponding amount of origin tokens to the recipient
             IMessenger(messenger).sendFillReport(
                 orderData_.originChainId,
                 FillReport({
@@ -314,7 +314,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         uint128 inToRelease_ = order.amountOut == report_.amountOutFilled ? order.amountIn : ((uint256(order.amountIn) * report_.amountOutFilled) / order.amountOut).toUint128();
 
         // Transfer the corresponding amount of origin tokens to the filler
-        IERC20(order.tokenIn).transfer(report_.originRecipient.toAddress(), uint256(inToRelease_));
+        IERC20(order.tokenIn).safeTransferExact(report_.originRecipient.toAddress(), uint256(inToRelease_));
     }
 
     /* ========== Admin Functions ========== */

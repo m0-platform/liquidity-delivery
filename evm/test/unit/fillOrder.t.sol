@@ -33,10 +33,15 @@ contract FillOrderTest is UnitTestBase {
     //     [X] it transfers a pro-rata amount in to the caller
     //     [X] it emits a Fill event
     // [X] given the order originated on a different chain (i.e. it is cross-chain)
-    //   [X] given the fill amount is greater than or equal to the amount out remaining
+    //   [X] given the fill amount is equal to the amount out remaining
     //     [X] it transfers the amount out remaining to be filled from the caller to the recipient
     //     [X] it sends a fill report to the origin chain via the messenger
     //     [X] it emits a Fill event
+    //   [ ] given the fill amount is greater than the amount out remaining to fill
+    //     [ ] the fill amount is reduced to the remaining amount out to fill
+    //     [ ] it transfers the amount out remaining to be filled from the caller to the
+    //     [ ] it sends a fill report to the origin chain via the messenger
+    //     [ ] it emits a Fill event
     //   [X] given the fill amount is less than the amount out remaining to fill
     //     [X] it transfers the fill amount out from the caller to the recipient
     //     [X] it sends a fill report to the origin chain via the messenger
@@ -431,7 +436,7 @@ contract FillOrderTest is UnitTestBase {
     }
 
     function test_solverNotSpecified_anyoneCanFill_success(address solver) public {
-        vm.assume(solver != address(orderBook));
+        vm.assume(solver != address(orderBook) && solver != users[0]);
 
         vm.deal(solver, 1 ether);
         tokens[1].mint(solver, MINT_AMOUNT);
