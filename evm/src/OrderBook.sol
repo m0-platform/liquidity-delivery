@@ -70,6 +70,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
     function initialize(address admin) external initializer {
         __ERC712ExtendedUpgradeable_init("M0 OrderBook");
+
+        _grantRole(DEFAULT_ADMIN_ROLE, admin);
     }
 
     /* ========== Initiating Orders ========== */
@@ -319,9 +321,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
     /* ========== Admin Functions ========== */
 
-    function setDestinationConfig(uint32 destChainId_, bool isSupported_, uint40 finalityBuffer_) external override {
-        // TODO add access control
-
+    function setDestinationConfig(uint32 destChainId_, bool isSupported_, uint40 finalityBuffer_) external override onlyRole(DEFAULT_ADMIN_ROLE) {
         if (isSupported_ && finalityBuffer_ == 0) revert InvalidFinalityBuffer();
 
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
