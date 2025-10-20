@@ -21,8 +21,17 @@ contract FillOrderTest is OrderBookTestBase {
     //   [X] it reverts with an OrderIdMismatch error
     // [X] given the order has already been filled (local)
     //   [X] it reverts with an OrderFilled error
+    // [X] given the fill amount is zero
+    //   [X] it reverts with a FillAmountZero error
     // [X] given the order originated on the current chain (i.e. it is local)
-    //   [X] given the fill amount is greater than or equal to the amount out remaining to fill
+    //   [X] given the fill amount is equal to the amount out remaining to fill
+    //     [X] it updates the order status to Completed
+    //     [X] it emits an OrderCompleted event
+    //     [X] it transfers the amount out remaining to be filled from the caller to the recipient
+    //     [X] it transfers the amount in remaining to the caller
+    //     [X] it emits a Fill event
+    //   [X] given the fill amount is greater than the amount out remaining to fill
+    //     [X] the fill amount is reduced to the remaining amount out to fill
     //     [X] it updates the order status to Completed
     //     [X] it emits an OrderCompleted event
     //     [X] it transfers the amount out remaining to be filled from the caller to the recipient
@@ -59,7 +68,6 @@ contract FillOrderTest is OrderBookTestBase {
 
     function test_destinationChainIdNotCurrentChain_reverts() public {
         // Create an order destined for chain 2 (use default params with destChainId=2)
-        params.solver = bytes32(0); // No designated solver to avoid NotAuthorized
         bytes32 orderId = _placeOrder(users[0], params);
 
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
@@ -91,7 +99,6 @@ contract FillOrderTest is OrderBookTestBase {
     function test_fillDeadlineHasPassed_reverts() public {
         // Create a local order
         params.destChainId = CHAIN_ID;
-        params.solver = bytes32(0); // No designated solver to avoid NotAuthorized
         bytes32 orderId = _placeOrder(users[0], params);
 
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
@@ -125,7 +132,6 @@ contract FillOrderTest is OrderBookTestBase {
     function test_orderVersionMismatch_reverts() public {
         // Create a local order
         params.destChainId = CHAIN_ID;
-        params.solver = bytes32(0); // No designated solver to avoid NotAuthorized
         bytes32 orderId = _placeOrder(users[0], params);
 
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
@@ -189,7 +195,6 @@ contract FillOrderTest is OrderBookTestBase {
     function test_orderIdMismatchWithOrderData_reverts() public {
         // Create a local order
         params.destChainId = CHAIN_ID;
-        params.solver = bytes32(0); // No designated solver to avoid NotAuthorized
         bytes32 orderId = _placeOrder(users[0], params);
 
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
@@ -252,6 +257,36 @@ contract FillOrderTest is OrderBookTestBase {
         );
     }
 
+    function test_fillAmountZero_reverts() public {
+        // Create a local order
+        params.destChainId = CHAIN_ID;
+        bytes32 orderId = _placeOrder(users[0], params);
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+
+        // Try to fill the order with a zero fill amount, expect revert
+        vm.prank(users[2]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.FillAmountZero.selector));
+        orderBook.fillOrder(
+            orderId,
+            IOrderBook.OrderData({
+                version: order.version,
+                originChainId: CHAIN_ID,
+                sender: order.sender.toBytes32(),
+                nonce: order.nonce,
+                destChainId: order.destChainId,
+                fillDeadline: order.fillDeadline,
+                amountOut: order.amountOut,
+                tokenOut: order.tokenOut,
+                recipient: order.recipient,
+                solver: order.solver
+            }),
+            IOrderBook.FillParams({
+                amountOutToFill: 0,
+                originRecipient: users[2].toBytes32()
+            })
+        );        
+    }
+
     function test_localOrderFullFill_success() public {
         // Create a local order
         params.destChainId = CHAIN_ID;
@@ -302,15 +337,68 @@ contract FillOrderTest is OrderBookTestBase {
         assertEq(tokens[0].balanceOf(address(orderBook)), orderBookTokenInBefore - order.amountIn, "orderBook should have released tokenIn");
     }
 
-    function test_localOrderPartialFill_success() public {
+    function testFuzz_localOrderOverfill_success(uint128 fillAmount) public {
+
         // Create a local order
         params.destChainId = CHAIN_ID;
         bytes32 orderId = _placeOrder(users[0], params);
 
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
 
-        // Fill half of the order
-        uint128 fillAmount = order.amountOut / 2;
+        // Cap the overfill to 2x the amountOut plus 1 (so we don't have 0)
+        fillAmount = (fillAmount % (order.amountOut - 1)) + 1 + order.amountOut;
+
+        // Record balances before fill
+        uint256 solverTokenOutBefore = tokens[1].balanceOf(users[2]);
+        uint256 recipientTokenOutBefore = tokens[1].balanceOf(users[0]);
+        uint256 solverTokenInBefore = tokens[0].balanceOf(users[2]);
+        uint256 orderBookTokenInBefore = tokens[0].balanceOf(address(orderBook));
+
+        vm.prank(users[2]);
+        vm.expectEmit(true, false, false, true);
+        emit IOrderBook.OrderCompleted(orderId);
+        vm.expectEmit(true, false, false, true);
+        emit IOrderBook.Fill(orderId, users[2], order.amountOut);
+        orderBook.fillOrder(
+            orderId,
+            IOrderBook.OrderData({
+                version: order.version,
+                originChainId: CHAIN_ID,
+                sender: order.sender.toBytes32(),
+                nonce: order.nonce,
+                destChainId: order.destChainId,
+                fillDeadline: order.fillDeadline,
+                amountOut: order.amountOut,
+                tokenOut: order.tokenOut,
+                recipient: order.recipient,
+                solver: order.solver
+            }),
+            IOrderBook.FillParams({
+                amountOutToFill: fillAmount,
+                originRecipient: users[2].toBytes32()
+            })
+        );
+
+        // Check order status
+        IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
+        assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Completed), "order should be completed");
+
+        // Check token transfers
+        assertEq(tokens[1].balanceOf(users[2]), solverTokenOutBefore - order.amountOut, "solver should have sent tokenOut");
+        assertEq(tokens[1].balanceOf(users[0]), recipientTokenOutBefore + order.amountOut, "recipient should have received tokenOut");
+        assertEq(tokens[0].balanceOf(users[2]), solverTokenInBefore + order.amountIn, "solver should have received tokenIn");
+        assertEq(tokens[0].balanceOf(address(orderBook)), orderBookTokenInBefore - order.amountIn, "order book should have sent tokenIn");
+    }
+
+    function testFuzz_localOrderPartialFill_success(uint128 fillAmount) public {
+        // Create a local order
+        params.destChainId = CHAIN_ID;
+        bytes32 orderId = _placeOrder(users[0], params);
+
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+
+        // Set the fill amount to a number less than amount out, but not zero
+        fillAmount = (fillAmount % (order.amountOut - 1)) + 1;
         uint128 expectedAmountIn = uint128((uint256(order.amountIn) * fillAmount) / order.amountOut);
 
         // Record balances before fill
@@ -393,7 +481,7 @@ contract FillOrderTest is OrderBookTestBase {
         assertTrue(messenger.isFillReported(orderId), "fill report should have been sent to origin chain");
     }
 
-    function test_crossChainOrderPartialFill_success() public {
+    function testFuzz_crossChainOrderOverfill_success(uint128 fillAmount) public {
         // Create order data for a cross-chain order (originated on chain 2, destined for chain 1)
         IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
             version: 1,
@@ -410,8 +498,51 @@ contract FillOrderTest is OrderBookTestBase {
 
         bytes32 orderId = orderBook.getOrderId(orderData);
 
-        // Fill half of the order
-        uint128 fillAmount = orderData.amountOut / 2;
+        // Set the fill amount to at most 2x the order amount
+        fillAmount = (fillAmount % (AMOUNT_OUT - 1)) + AMOUNT_OUT + 1;
+
+        // Record balances before fill
+        uint256 solverTokenOutBefore = tokens[1].balanceOf(users[2]);
+        uint256 recipientTokenOutBefore = tokens[1].balanceOf(users[0]);
+
+        // Fill the order on the destination chain
+        vm.prank(users[2]);
+        vm.expectEmit(true, false, false, true);
+        emit IOrderBook.Fill(orderId, users[2], orderData.amountOut);
+        orderBook.fillOrder(
+            orderId,
+            orderData,
+            IOrderBook.FillParams({
+                amountOutToFill: fillAmount,
+                originRecipient: users[2].toBytes32()
+            })
+        );
+
+        // Check token transfers on destination chain
+        assertEq(tokens[1].balanceOf(users[2]), solverTokenOutBefore - orderData.amountOut, "solver should have sent tokenOut");
+        assertEq(tokens[1].balanceOf(users[0]), recipientTokenOutBefore + orderData.amountOut, "recipient should have received tokenOut");
+        assertTrue(messenger.isFillReported(orderId), "fill report should have been sent to origin chain");                
+    }
+
+    function testFuzz_crossChainOrderPartialFill_success(uint128 fillAmount) public {
+        // Create order data for a cross-chain order (originated on chain 2, destined for chain 1)
+        IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
+            version: 1,
+            originChainId: DEST_CHAIN_ID, // Order was created on chain 2
+            sender: users[0].toBytes32(),
+            nonce: 0,
+            destChainId: CHAIN_ID, // To be filled on chain 1 (current chain)
+            fillDeadline: uint64(block.timestamp + FILL_DURATION),
+            amountOut: AMOUNT_OUT,
+            tokenOut: address(tokens[1]).toBytes32(),
+            recipient: users[0].toBytes32(),
+            solver: users[2].toBytes32()
+        });
+
+        bytes32 orderId = orderBook.getOrderId(orderData);
+
+        // Fill between 1 and the order amount - 1
+        fillAmount = fillAmount % (AMOUNT_OUT - 1) + 1;
 
         // Record balances before fill
         uint256 solverTokenOutBefore = tokens[1].balanceOf(users[2]);
