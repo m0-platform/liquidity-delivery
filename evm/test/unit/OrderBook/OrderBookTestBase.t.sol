@@ -15,6 +15,7 @@ abstract contract OrderBookTestBase is Test {
     OrderBook internal orderBook;
     MockMessenger internal messenger;
 
+    uint16 internal constant VERSION = 1;
     uint32 internal constant CHAIN_ID = 1;
     uint32 internal constant DEST_CHAIN_ID = 2;
     uint256 internal constant TOKEN_COUNT = 3;
