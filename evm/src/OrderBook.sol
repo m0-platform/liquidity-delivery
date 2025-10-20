@@ -82,12 +82,14 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     }
 
     /// @inheritdoc IOrderBook
+    // TODO still requires standard approval for tokenIn
+    // Think about supporting ERC20Permit OR Permit2 here to have not require a txn from the sender
     function openOrderFor(
         GaslessOrderParams calldata orderParams_,
         bytes calldata signature_
     ) external override returns (bytes32) {
         // Verify signature
-        _revertIfInvalidSignature(orderParams_.sender, _getDigest(_getGaslessOrderInternalDigest(orderParams_)), signature_);
+        _revertIfInvalidSignature(orderParams_.sender, getGaslessOrderDigest(orderParams_), signature_);
 
         // Verify origin chain and sender nonce
         if (orderParams_.originChainId != chainId) revert InvalidOriginChain();
@@ -361,6 +363,11 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         return $.orderAmountOutFilled[orderId_];
     }
 
+    function getSenderNonce(address sender_) external view override returns (uint64) {
+        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
+        return $.senderNonces[sender_];
+    }
+
     function isDestinationSupported(uint32 destChainId_) external view override returns (bool) {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         return $.destinations[destChainId_].isSupported;
@@ -371,8 +378,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         return $.destinations[destChainId_].finalityBuffer;
     }
 
-    function _getGaslessOrderInternalDigest(GaslessOrderParams memory orderParams_) internal pure returns (bytes32) {
-        return keccak256(abi.encode(
+    function getGaslessOrderDigest(GaslessOrderParams memory orderParams_) public view override returns (bytes32) {
+        return _getDigest(keccak256(abi.encode(
             GASLESS_ORDER_TYPEHASH,
             orderParams_.originChainId,
             orderParams_.tokenIn,
@@ -384,6 +391,6 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
             orderParams_.recipient,
             orderParams_.fillDeadline,
             orderParams_.solver
-        ));
+        )));
     }
 }

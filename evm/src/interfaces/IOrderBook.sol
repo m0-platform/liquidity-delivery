@@ -2,8 +2,6 @@
 pragma solidity >=0.8;
 
 interface IOrderBook {
-    
-
     /* ========== Events ========== */
 
     /**
@@ -337,6 +335,8 @@ interface IOrderBook {
      */
     function getAmountOutFilled(bytes32 orderId_) external view returns (uint128);
 
+    function getSenderNonce(address sender_) external view returns (uint64);
+
     /// @notice Returns whether orders can be created with the provided chain ID as the destination
     function isDestinationSupported(uint32 destChainId_) external view returns (bool);
 
@@ -345,4 +345,6 @@ interface IOrderBook {
      * @dev If a chain is not supported, this will return 0
      */
     function getDestinationFinalityBuffer(uint32 destChainId_) external view returns (uint40);
+
+    function getGaslessOrderDigest(GaslessOrderParams memory params_) external view returns (bytes32);
 }
