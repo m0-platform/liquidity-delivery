@@ -71,6 +71,7 @@ interface IOrderBook {
     /* ========== Errors ========== */
     error AmountInZero();
     error AmountOutZero();
+    error FillAmountZero();
     error FinalityPending();
     error InvalidDeadline();
     error InvalidDestinationChain();

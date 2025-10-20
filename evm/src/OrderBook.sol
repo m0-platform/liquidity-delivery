@@ -231,6 +231,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         if (chainId != orderData_.destChainId) revert InvalidDestinationChain();
         if (uint256(orderData_.fillDeadline) < block.timestamp) revert OrderExpired();
         if (orderData_.version != VERSION) revert InvalidOrderVersion();
+        if (fillerParams_.amountOutToFill == 0) revert FillAmountZero();
 
         // If the solver is specified, ensure that the caller is the designated solver
         address solver_ = orderData_.solver.toAddress();
