@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.26;
 
-import { UnitTestBase } from "./UnitTestBase.t.sol";
-import { IOrderBook } from "../../src/interfaces/IOrderBook.sol";
-import { TypeConverter } from "../../src/libs/TypeConverter.sol";
+import { OrderBookTestBase } from "./OrderBookTestBase.t.sol";
+import { IOrderBook } from "../../../src/interfaces/IOrderBook.sol";
+import { TypeConverter } from "../../../src/libs/TypeConverter.sol";
 
-contract FillOrderTest is UnitTestBase {
+contract FillOrderTest is OrderBookTestBase {
     using TypeConverter for *;
 
     // Test cases

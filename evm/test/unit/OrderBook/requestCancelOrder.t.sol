@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.26;
 
-import { UnitTestBase } from "./UnitTestBase.t.sol";
-import { IOrderBook } from "../../src/interfaces/IOrderBook.sol";
+import { OrderBookTestBase } from "./OrderBookTestBase.t.sol";
+import { IOrderBook } from "../../../src/interfaces/IOrderBook.sol";
 
-contract RequestCancelOrderTest is UnitTestBase {
+contract RequestCancelOrderTest is OrderBookTestBase {
     // Test cases
     // [X] given the order does not exist
     //   [X] it reverts with an InvalidOrderStatus error

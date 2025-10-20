@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.26;
 
-import { Test } from "../../lib/forge-std/src/Test.sol";
+import { Test } from "../../../lib/forge-std/src/Test.sol";
+import { ERC1967Proxy } from "../../../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
-import { OrderBook, IOrderBook } from "../../src/OrderBook.sol";
-import { TypeConverter } from "../../src/libs/TypeConverter.sol";
-import { MockMessenger } from "../mock/MockMessenger.t.sol";
-import { MockERC20 } from "../mock/MockERC20.t.sol";
+import { OrderBook, IOrderBook } from "../../../src/OrderBook.sol";
+import { TypeConverter } from "../../../src/libs/TypeConverter.sol";
+import { MockMessenger } from "../../mock/MockMessenger.t.sol";
+import { MockERC20 } from "../../mock/MockERC20.t.sol";
 
-abstract contract UnitTestBase is Test {
+abstract contract OrderBookTestBase is Test {
     using TypeConverter for *;
 
     OrderBook internal orderBook;
@@ -23,17 +24,32 @@ abstract contract UnitTestBase is Test {
     uint128 internal constant AMOUNT_OUT = 999e4;
     uint40 internal constant FILL_DURATION = 1 hours;
 
+    address internal admin;
     mapping(uint256 => MockERC20) internal tokens;
     mapping(uint256 => address) internal users;
 
     IOrderBook.OrderParams internal params;
 
     function setUp() public virtual {
+
+        // Deploy
         messenger = new MockMessenger();
-        orderBook = new OrderBook(CHAIN_ID, address(messenger));
+        admin = keccak256(abi.encodePacked("admin")).toAddress();
+        vm.deal(admin, 1 ether);
+        address implementation = address(new OrderBook(CHAIN_ID, address(messenger)));
+        orderBook = OrderBook(
+            address(new ERC1967Proxy(
+                implementation,
+                abi.encodeWithSelector(
+                    OrderBook.initialize.selector,
+                    admin
+                )
+            ))
+        );
 
+        // Configure
         messenger.setOrderBook(address(orderBook));
-
+        vm.prank(admin);
         orderBook.setDestinationConfig(DEST_CHAIN_ID, true, uint40(10 minutes));
 
         // Deploy mock tokens
