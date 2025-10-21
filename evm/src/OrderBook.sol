@@ -53,13 +53,10 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     /// @notice the chain ID of this chain according to the messaging network used by this contract
     uint32 public immutable chainId; 
 
-    // TODO this messaging setup is unclear, but this is a simple stand-in
-    // sends crosschain messages to report fills on this chain to other chains
-    // receive crosschain messages to report fills on other chains to this chain
+    /// @notice the messenger contract used for cross-chain communication
+    /// @dev sends crosschain messages to report fills on this chain to other chains
+    ///      receive crosschain messages to report fills on other chains to this chain
     address public immutable messenger;
-    // Alternative: chain-specific messengers
-    // mapping(address => uint32) public messengerOriginId;// messenger contract address => this chain's origin ID for that messenger (it can be different for different messaging networks)
-    // mapping(uint32 => address) public chainMessenger; // chain ID => contract to use for sending messages to and receiving messages from that chain
 
     /* ========== Construct and Initialize ========== */
 
