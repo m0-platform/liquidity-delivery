@@ -84,6 +84,7 @@ contract OpenOrderTest is OrderBookTestBase {
                 nonce: 0,
                 destChainId: params.destChainId,
                 fillDeadline: params.fillDeadline,
+                amountIn: params.amountIn,
                 amountOut: params.amountOut,
                 tokenOut: params.tokenOut,
                 recipient: params.recipient,

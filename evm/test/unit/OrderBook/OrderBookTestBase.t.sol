@@ -96,6 +96,7 @@ abstract contract OrderBookTestBase is Test {
             nonce: nonce_,
             destChainId: params_.destChainId,
             fillDeadline: params_.fillDeadline,
+            amountIn: params_.amountIn,
             amountOut: params_.amountOut,
             tokenOut: params_.tokenOut,
             recipient: params_.recipient,
@@ -130,6 +131,7 @@ abstract contract OrderBookTestBase is Test {
                 nonce: order.nonce,
                 destChainId: order.destChainId,
                 fillDeadline: order.fillDeadline,
+                amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
@@ -145,13 +147,15 @@ abstract contract OrderBookTestBase is Test {
     function _reportFill(
         address solver_,
         bytes32 orderId_, 
-        uint128 amountOutFilled_
+        uint128 amountOutFilled_,
+        uint128 amountInToRelease_
     ) internal {
         // Report the fill back to the origin chain
         vm.prank(address(messenger));
         orderBook.reportFill(IOrderBook.FillReport({
             orderId: orderId_,
             amountOutFilled: amountOutFilled_,
+            amountInToRelease: amountInToRelease_,
             originRecipient: solver_.toBytes32()
         }));
     }

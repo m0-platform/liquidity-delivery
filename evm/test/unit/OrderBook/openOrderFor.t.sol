@@ -131,7 +131,30 @@ contract OpenOrderForTest is OrderBookTestBase {
         // Create the order digest and sign it
         bytes memory signature = _signCompactECDSA(sender, gaslessParams);
 
+        // Cache the starting balance of tokenIn
+        uint256 startingBalance = tokens[0].balanceOf(sender.addr);
+
         bytes32 orderId = orderBook.openOrderFor(gaslessParams, signature);
+
+        // Get the order and confirm the data is set correctly
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+
+        assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Created), "status");
+        assertEq(order.version, VERSION, "version");
+        assertEq(order.destChainId, gaslessParams.destChainId, "destChainId");
+        assertEq(order.fillDeadline, gaslessParams.fillDeadline, "fillDeadline");
+        assertEq(order.refundRequestedAt, uint40(0), "refundRequestedAt");
+        assertEq(order.nonce, gaslessParams.nonce, "nonce");
+        assertEq(order.tokenIn, gaslessParams.tokenIn, "tokenIn");
+        assertEq(order.tokenOut, gaslessParams.tokenOut, "tokenOut");
+        assertEq(order.sender, gaslessParams.sender, "sender");
+        assertEq(order.recipient, gaslessParams.recipient, "recipient");
+        assertEq(order.amountIn, gaslessParams.amountIn, "amountIn");
+        assertEq(order.amountOut, gaslessParams.amountOut, "amountOut");
+        assertEq(order.solver, gaslessParams.solver, "solver");
+
+        // Confirm the correct amount was transferred from the sender
+        assertEq(tokens[0].balanceOf(sender.addr), startingBalance - gaslessParams.amountIn);
     }
 
     function test_givenStandardECDSASignature_success() public {

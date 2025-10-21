@@ -55,7 +55,7 @@ contract ClaimRefundTest is OrderBookTestBase {
         bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
 
         // Fill it completely
-        _reportFill(users[2], orderId, params.amountOut);
+        _reportFill(users[2], orderId, params.amountOut, params.amountIn);
 
         // Try to claim refund
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
@@ -127,7 +127,8 @@ contract ClaimRefundTest is OrderBookTestBase {
 
         // Report the order is partially filled (50%) 
         uint128 fillAmount = params.amountOut / 2;
-        _reportFill(users[2], orderId, fillAmount);
+        uint128 expectedAmountIn = uint128((uint256(params.amountIn) * fillAmount) / params.amountOut);
+        _reportFill(users[2], orderId, fillAmount, expectedAmountIn);
 
         // Request cancellation
         vm.prank(users[0]);
@@ -194,7 +195,8 @@ contract ClaimRefundTest is OrderBookTestBase {
 
         // Report the order is partially filled (50%)
         uint128 fillAmount = params.amountOut / 2;
-        _reportFill(users[2], orderId, fillAmount);
+        uint128 expectedAmountIn = uint128((uint256(params.amountIn) * fillAmount) / params.amountOut);
+        _reportFill(users[2], orderId, fillAmount, expectedAmountIn);
 
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
 

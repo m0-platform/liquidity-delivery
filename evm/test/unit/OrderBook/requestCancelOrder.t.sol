@@ -67,7 +67,7 @@ contract RequestCancelOrderTest is OrderBookTestBase {
     function test_givenXchainOrderHasBeenFilled_reverts() public {
         // Report fill from destination chain
         bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
-        _reportFill(users[2], orderId, params.amountOut);
+        _reportFill(users[2], orderId, params.amountOut, params.amountIn);
 
         // Try to cancel the order
         vm.prank(users[0]);

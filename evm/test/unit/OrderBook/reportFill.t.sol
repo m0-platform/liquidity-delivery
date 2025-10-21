@@ -39,6 +39,7 @@ contract ReportFillTest is OrderBookTestBase {
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: params.amountOut,
+                amountInToRelease: params.amountIn,
                 originRecipient: users[2].toBytes32()
             })
         );
@@ -54,6 +55,7 @@ contract ReportFillTest is OrderBookTestBase {
             IOrderBook.FillReport({
                 orderId: fakeOrderId,
                 amountOutFilled: params.amountOut,
+                amountInToRelease: params.amountIn,
                 originRecipient: users[2].toBytes32()
             })
         );
@@ -63,7 +65,7 @@ contract ReportFillTest is OrderBookTestBase {
         bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
 
         // Report full fill to complete the order
-        _reportFill(users[2], orderId, params.amountOut);
+        _reportFill(users[2], orderId, params.amountOut, params.amountIn);
 
         // Try to report another fill on the completed order
         vm.prank(address(messenger));
@@ -72,6 +74,7 @@ contract ReportFillTest is OrderBookTestBase {
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: params.amountOut / 2,
+                amountInToRelease: params.amountIn / 2,
                 originRecipient: users[2].toBytes32()
             })
         );
@@ -94,6 +97,7 @@ contract ReportFillTest is OrderBookTestBase {
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: fillAmount,
+                amountInToRelease: expectedAmountIn,
                 originRecipient: users[2].toBytes32()
             })
         );
@@ -124,6 +128,7 @@ contract ReportFillTest is OrderBookTestBase {
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: params.amountOut,
+                amountInToRelease: params.amountIn,
                 originRecipient: users[2].toBytes32()
             })
         );
@@ -158,6 +163,7 @@ contract ReportFillTest is OrderBookTestBase {
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: fillAmount,
+                amountInToRelease: expectedAmountIn,
                 originRecipient: users[2].toBytes32()
             })
         );
@@ -190,6 +196,7 @@ contract ReportFillTest is OrderBookTestBase {
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: params.amountOut,
+                amountInToRelease: params.amountIn,
                 originRecipient: users[2].toBytes32()
             })
         );

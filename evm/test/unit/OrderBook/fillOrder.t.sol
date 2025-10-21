@@ -84,6 +84,7 @@ contract FillOrderTest is OrderBookTestBase {
                 nonce: order.nonce,
                 destChainId: order.destChainId, // This is DEST_CHAIN_ID (2), not CHAIN_ID (1)
                 fillDeadline: order.fillDeadline,
+                amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
@@ -117,6 +118,7 @@ contract FillOrderTest is OrderBookTestBase {
                 nonce: order.nonce,
                 destChainId: order.destChainId,
                 fillDeadline: order.fillDeadline,
+                amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
@@ -148,6 +150,7 @@ contract FillOrderTest is OrderBookTestBase {
                 nonce: order.nonce,
                 destChainId: order.destChainId,
                 fillDeadline: order.fillDeadline,
+                amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
@@ -180,6 +183,7 @@ contract FillOrderTest is OrderBookTestBase {
                 nonce: order.nonce,
                 destChainId: order.destChainId,
                 fillDeadline: order.fillDeadline,
+                amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
@@ -210,6 +214,7 @@ contract FillOrderTest is OrderBookTestBase {
                 nonce: order.nonce,
                 destChainId: order.destChainId,
                 fillDeadline: order.fillDeadline,
+                amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
@@ -245,6 +250,7 @@ contract FillOrderTest is OrderBookTestBase {
                 nonce: order.nonce,
                 destChainId: order.destChainId,
                 fillDeadline: order.fillDeadline,
+                amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
@@ -275,6 +281,7 @@ contract FillOrderTest is OrderBookTestBase {
                 nonce: order.nonce,
                 destChainId: order.destChainId,
                 fillDeadline: order.fillDeadline,
+                amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
@@ -305,7 +312,7 @@ contract FillOrderTest is OrderBookTestBase {
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.OrderCompleted(orderId);
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.Fill(orderId, users[2], order.amountOut);
+        emit IOrderBook.Fill(orderId, users[2], order.amountOut, order.amountIn);
         orderBook.fillOrder(
             orderId,
             IOrderBook.OrderData({
@@ -315,6 +322,7 @@ contract FillOrderTest is OrderBookTestBase {
                 nonce: order.nonce,
                 destChainId: order.destChainId,
                 fillDeadline: order.fillDeadline,
+                amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
@@ -358,7 +366,7 @@ contract FillOrderTest is OrderBookTestBase {
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.OrderCompleted(orderId);
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.Fill(orderId, users[2], order.amountOut);
+        emit IOrderBook.Fill(orderId, users[2], order.amountOut, order.amountIn);
         orderBook.fillOrder(
             orderId,
             IOrderBook.OrderData({
@@ -368,6 +376,7 @@ contract FillOrderTest is OrderBookTestBase {
                 nonce: order.nonce,
                 destChainId: order.destChainId,
                 fillDeadline: order.fillDeadline,
+                amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
@@ -409,7 +418,7 @@ contract FillOrderTest is OrderBookTestBase {
 
         vm.prank(users[2]);
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.Fill(orderId, users[2], fillAmount);
+        emit IOrderBook.Fill(orderId, users[2], fillAmount, expectedAmountIn);
         orderBook.fillOrder(
             orderId,
             IOrderBook.OrderData({
@@ -419,6 +428,7 @@ contract FillOrderTest is OrderBookTestBase {
                 nonce: order.nonce,
                 destChainId: order.destChainId,
                 fillDeadline: order.fillDeadline,
+                amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
@@ -450,6 +460,7 @@ contract FillOrderTest is OrderBookTestBase {
             nonce: 0,
             destChainId: CHAIN_ID, // To be filled on chain 1 (current chain)
             fillDeadline: uint64(block.timestamp + FILL_DURATION),
+            amountIn: AMOUNT_IN,
             amountOut: AMOUNT_OUT,
             tokenOut: address(tokens[1]).toBytes32(),
             recipient: users[0].toBytes32(),
@@ -465,7 +476,7 @@ contract FillOrderTest is OrderBookTestBase {
         // Fill the order on the destination chain
         vm.prank(users[2]);
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.Fill(orderId, users[2], orderData.amountOut);
+        emit IOrderBook.Fill(orderId, users[2], orderData.amountOut, orderData.amountIn);
         orderBook.fillOrder(
             orderId,
             orderData,
@@ -490,6 +501,7 @@ contract FillOrderTest is OrderBookTestBase {
             nonce: 0,
             destChainId: CHAIN_ID, // To be filled on chain 1 (current chain)
             fillDeadline: uint64(block.timestamp + FILL_DURATION),
+            amountIn: AMOUNT_IN,
             amountOut: AMOUNT_OUT,
             tokenOut: address(tokens[1]).toBytes32(),
             recipient: users[0].toBytes32(),
@@ -508,7 +520,7 @@ contract FillOrderTest is OrderBookTestBase {
         // Fill the order on the destination chain
         vm.prank(users[2]);
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.Fill(orderId, users[2], orderData.amountOut);
+        emit IOrderBook.Fill(orderId, users[2], orderData.amountOut, orderData.amountIn);
         orderBook.fillOrder(
             orderId,
             orderData,
@@ -533,6 +545,7 @@ contract FillOrderTest is OrderBookTestBase {
             nonce: 0,
             destChainId: CHAIN_ID, // To be filled on chain 1 (current chain)
             fillDeadline: uint64(block.timestamp + FILL_DURATION),
+            amountIn: AMOUNT_IN,
             amountOut: AMOUNT_OUT,
             tokenOut: address(tokens[1]).toBytes32(),
             recipient: users[0].toBytes32(),
@@ -543,6 +556,7 @@ contract FillOrderTest is OrderBookTestBase {
 
         // Fill between 1 and the order amount - 1
         fillAmount = fillAmount % (AMOUNT_OUT - 1) + 1;
+        uint128 expectedAmountIn = uint128((uint256(AMOUNT_IN) * fillAmount) / AMOUNT_OUT);
 
         // Record balances before fill
         uint256 solverTokenOutBefore = tokens[1].balanceOf(users[2]);
@@ -550,7 +564,7 @@ contract FillOrderTest is OrderBookTestBase {
 
         vm.prank(users[2]);
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.Fill(orderId, users[2], fillAmount);
+        emit IOrderBook.Fill(orderId, users[2], fillAmount, expectedAmountIn);
         orderBook.fillOrder(
             orderId,
             orderData,
@@ -580,6 +594,7 @@ contract FillOrderTest is OrderBookTestBase {
             nonce: 0,
             destChainId: CHAIN_ID, // To be filled on chain 1 (current chain)
             fillDeadline: uint64(block.timestamp + FILL_DURATION),
+            amountIn: AMOUNT_IN,
             amountOut: AMOUNT_OUT,
             tokenOut: address(tokens[1]).toBytes32(),
             recipient: users[0].toBytes32(),
@@ -591,7 +606,7 @@ contract FillOrderTest is OrderBookTestBase {
         vm.startPrank(solver);
         tokens[1].approve(address(orderBook), type(uint256).max);
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.Fill(orderId, solver, orderData.amountOut);
+        emit IOrderBook.Fill(orderId, solver, orderData.amountOut, orderData.amountIn);
         orderBook.fillOrder(
             orderId,
             orderData,
@@ -601,5 +616,88 @@ contract FillOrderTest is OrderBookTestBase {
             })
         );
         vm.stopPrank();
+    }
+
+    function testFuzz_multiPartFill_success(uint128 fillAmount) public {
+        // Use a local order
+        params.destChainId = CHAIN_ID;
+        bytes32 orderId = _placeOrder(users[0], params);
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+
+        // Set the fill amount for the first fill to be a random value between 1 and amount out - 1
+        fillAmount = (fillAmount % (params.amountOut - 1)) + 1;
+        uint128 expectedAmountIn = uint128((uint256(order.amountIn) * fillAmount) / order.amountOut);
+
+        // Cache the starting balances
+        uint256 orderBookTokenInBefore = tokens[0].balanceOf(address(orderBook));
+        uint256 solverTokenInBefore = tokens[1].balanceOf(users[2]);
+        uint256 recipientTokenOutBefore = tokens[1].balanceOf(users[0]);
+        uint256 solverTokenOutBefore = tokens[1].balanceOf(users[2]);
+
+        // Submit the initial fill
+        vm.prank(params.solver.toAddress());
+        vm.expectEmit(true, false, false, true);
+        emit IOrderBook.Fill(orderId, params.solver.toAddress(), fillAmount, expectedAmountIn);
+        orderBook.fillOrder(
+            orderId,
+            IOrderBook.OrderData({
+                version: order.version,
+                originChainId: CHAIN_ID,
+                sender: order.sender.toBytes32(),
+                nonce: order.nonce,
+                destChainId: order.destChainId,
+                fillDeadline: order.fillDeadline,
+                amountIn: order.amountIn,
+                amountOut: order.amountOut,
+                tokenOut: order.tokenOut,
+                recipient: order.recipient,
+                solver: order.solver                
+            }),
+            IOrderBook.FillParams({
+                amountOutToFill: fillAmount,
+                originRecipient: order.solver
+            })
+        );
+
+        // Check balances after the first fill
+        assertEq(tokens[0].balanceOf(address(orderBook)), orderBookTokenInBefore - expectedAmountIn, "order book should have sent pro-rata tokenIn");
+        assertEq(tokens[0].balanceOf(users[2]), solverTokenInBefore + expectedAmountIn, "solver should have received pro-rata tokenIn");
+        assertEq(tokens[1].balanceOf(users[0]), recipientTokenOutBefore + fillAmount, "recipient should have received partial tokenOut");
+        assertEq(tokens[1].balanceOf(users[2]), solverTokenOutBefore - fillAmount, "solver should have sent partial tokenOut");
+
+        // Submit the second fill to complete the order
+        uint128 remainingAmountOut = order.amountOut - fillAmount;
+        uint128 remainingAmountIn = order.amountIn - expectedAmountIn;
+        vm.prank(params.solver.toAddress());
+        vm.expectEmit(true, false, false, true);
+        emit IOrderBook.OrderCompleted(orderId);
+        vm.expectEmit(true, false, false, true);
+        emit IOrderBook.Fill(orderId, params.solver.toAddress(), remainingAmountOut, remainingAmountIn);
+        orderBook.fillOrder(
+            orderId,
+            IOrderBook.OrderData({
+                version: order.version,
+                originChainId: CHAIN_ID,
+                sender: order.sender.toBytes32(),
+                nonce: order.nonce,
+                destChainId: order.destChainId,
+                fillDeadline: order.fillDeadline,
+                amountIn: order.amountIn,
+                amountOut: order.amountOut,
+                tokenOut: order.tokenOut,
+                recipient: order.recipient,
+                solver: order.solver                
+            }),
+            IOrderBook.FillParams({
+                amountOutToFill: remainingAmountOut,
+                originRecipient: order.solver
+            })
+        );
+
+        // Check final balances
+        assertEq(tokens[0].balanceOf(address(orderBook)), 0, "order book should have sent all tokenIn");
+        assertEq(tokens[0].balanceOf(users[2]), solverTokenInBefore + order.amountIn, "solver should have received all tokenIn");
+        assertEq(tokens[1].balanceOf(users[0]), recipientTokenOutBefore + order.amountOut, "recipient should have received all tokenOut");
+        assertEq(tokens[1].balanceOf(users[2]), solverTokenOutBefore - order.amountOut, "solver should have sent all tokenOut");
     }
 }
