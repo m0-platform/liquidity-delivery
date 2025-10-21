@@ -20,7 +20,7 @@ abstract contract OrderBookStorageLayout {
         mapping(bytes32 orderId => IOrderBook.Order) localOrders;
 
         // store fill amounts for both origin and destination orders
-        mapping(bytes32 orderId => uint128 filledAmount) orderAmountOutFilled;
+        mapping(bytes32 orderId => IOrderBook.FilledAmounts) filledAmounts;
 
         // track nonces for each sender to ensure unique order IDs
         mapping(address sender => uint64 nonce) senderNonces;
@@ -133,6 +133,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
             fillDeadline: uint64(orderParams_.fillDeadline),
             tokenOut: orderParams_.tokenOut,
             recipient: orderParams_.recipient,
+            amountIn: orderParams_.amountIn,
             amountOut: orderParams_.amountOut,
             solver: orderParams_.solver
         }));
@@ -203,25 +204,21 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         }
 
         // Calculate the refund amount
-        uint128 outFilled_ = $.orderAmountOutFilled[orderId_];
-        uint128 outRemaining_ = order.amountOut - outFilled_;
-
-        // TODO need to think about rounding and precision loss with different token decimal values
-        // We can cast to uin256 for multiplication and then cast back after division because order.amountOut >= outRemaining
-        uint128 inRemaining_ = outFilled_ == 0 ? order.amountIn : ((uint256(order.amountIn) * outRemaining_) / order.amountOut).toUint128();
+        uint128 amountOutRemaining_ = order.amountOut - $.filledAmounts[orderId_].amountOutFilled;
+        uint128 amountInRemaining_ = order.amountIn - $.filledAmounts[orderId_].amountInReleased;
 
         // Update the order amountIn and amountOut values to reflect the refund
         // This prevents double refunds if this function is called again
-        order.amountIn -= inRemaining_;
-        order.amountOut -= outRemaining_;
+        order.amountIn -= amountInRemaining_;
+        order.amountOut -= amountOutRemaining_;
 
         // Set the order status to completed
         order.status = OrderStatus.Completed;
 
         // Transfer the remaining amount back to the sender
-        IERC20(order.tokenIn).safeTransfer(order.sender, uint256(inRemaining_));
+        IERC20(order.tokenIn).safeTransfer(order.sender, uint256(amountInRemaining_));
 
-        emit RefundClaimed(orderId_, order.sender, inRemaining_);
+        emit RefundClaimed(orderId_, order.sender, amountInRemaining_);
     }
 
 
@@ -247,14 +244,19 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
 
         // Calculate fill amount as the minimum of the filler provided amount and the remaining unfilled amount
-        uint128 outFilled_ = $.orderAmountOutFilled[orderId_];
-        uint128 outRemaining_ = orderData_.amountOut - outFilled_;
-        if (outRemaining_ == 0) revert OrderFilled();
-        bool fullFill_ = fillerParams_.amountOutToFill >= outRemaining_;
-        uint128 fillAmount_ = fullFill_ ? outRemaining_ : fillerParams_.amountOutToFill;
+        IOrderBook.FilledAmounts storage filledAmounts = $.filledAmounts[orderId_];
+        uint128 amountOutRemaining_ = orderData_.amountOut - filledAmounts.amountOutFilled;
+        if (amountOutRemaining_ == 0) revert OrderFilled();
+        bool fullFill_ = fillerParams_.amountOutToFill >= amountOutRemaining_;
+        uint128 amountOutToFill_ = fullFill_ ? amountOutRemaining_ : fillerParams_.amountOutToFill;
 
-        // Update order fill amount
-        $.orderAmountOutFilled[orderId_] += fillAmount_;
+        // Calculate the corresponding of token in to release to the filler
+        uint128 amountInRemaining_ = orderData_.amountIn - filledAmounts.amountInReleased;
+        uint128 amountInToRelease_ = fullFill_ ? amountInRemaining_ : ((uint256(orderData_.amountIn) * amountOutToFill_) / orderData_.amountOut).toUint128();
+
+        // Update filled amounts
+        filledAmounts.amountOutFilled += amountOutToFill_;
+        filledAmounts.amountInReleased += amountInToRelease_;
 
         // Handle releasing the corresponding amount of origin tokens to the filler
         if (chainId == orderData_.originChainId) {
@@ -266,17 +268,13 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
                 emit OrderCompleted(orderId_);
             }
 
-            // Calculate the amount of origin tokens to release to the filler            
-            // TODO same concerns about rounding and precision loss with different token decimal values
-            uint128 inToRelease_ = order.amountOut == fillAmount_ ? order.amountIn : ((uint256(order.amountIn) * fillAmount_) / order.amountOut).toUint128();
-
-            // If this is a fill on the origin chain, we can immediately release the corresponding amount of origin tokens to the recipient
+            // If this is a fill on the origin chain, we can immediately release the token in to the filler 
             // This is because the origin and destination chains are the same, so no cross-chain messaging is needed
-            IERC20(order.tokenIn).safeTransferExact(fillerParams_.originRecipient.toAddress(), uint256(inToRelease_));
+            IERC20(order.tokenIn).safeTransferExact(fillerParams_.originRecipient.toAddress(), uint256(amountInToRelease_));
         }
         
         // Transfer tokens from the solver to the recipient
-        IERC20(orderData_.tokenOut.toAddress()).safeTransferExactFrom(msg.sender, orderData_.recipient.toAddress(), uint256(fillAmount_));
+        IERC20(orderData_.tokenOut.toAddress()).safeTransferExactFrom(msg.sender, orderData_.recipient.toAddress(), uint256(amountOutToFill_));
 
         // This block is split out to allow the above transfer to happen before any cross-chain messaging
         if (chainId != orderData_.originChainId) {
@@ -288,12 +286,13 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
                 FillReport({
                     orderId: orderId_,
                     originRecipient: fillerParams_.originRecipient,
-                    amountOutFilled: fillAmount_
+                    amountOutFilled: amountOutToFill_,
+                    amountInToRelease: amountInToRelease_
                 })
             );
         }
 
-        emit Fill(orderId_, msg.sender, fillAmount_);
+        emit Fill(orderId_, msg.sender, amountOutToFill_, amountInToRelease_);
     }
 
     /* ========== Receiving Fill Reports ========== */
@@ -306,20 +305,19 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         // Validate the fill report and sender
         if (msg.sender != messenger) revert NotAuthorized();
         if (order.status != OrderStatus.Created && order.status != OrderStatus.CancelRequested) revert InvalidOrderStatus();
-        
-        // Update the fill amount for the order
-        uint128 outFilled = ($.orderAmountOutFilled[report_.orderId] += report_.amountOutFilled);
-        if (outFilled == order.amountOut) {
+
+        // Update the fill amounts for the order
+        IOrderBook.FilledAmounts storage filledAmounts = $.filledAmounts[report_.orderId];
+        filledAmounts.amountOutFilled += report_.amountOutFilled;
+        filledAmounts.amountInReleased += report_.amountInToRelease;
+
+        if (filledAmounts.amountOutFilled == order.amountOut) {
             order.status = OrderStatus.Completed;
             emit OrderCompleted(report_.orderId);
         }
 
-        // Calculate the corresponding amount of origin tokens to release to the solver's designated recipient
-        // TODO same concerns about rounding and precision loss with different token decimal values
-        uint128 inToRelease_ = order.amountOut == report_.amountOutFilled ? order.amountIn : ((uint256(order.amountIn) * report_.amountOutFilled) / order.amountOut).toUint128();
-
-        // Transfer the corresponding amount of origin tokens to the filler
-        IERC20(order.tokenIn).safeTransferExact(report_.originRecipient.toAddress(), uint256(inToRelease_));
+        // Transfer the amount in to release to the recipient specified by the filler
+        IERC20(order.tokenIn).safeTransferExact(report_.originRecipient.toAddress(), uint256(report_.amountInToRelease));
     }
 
     /* ========== Admin Functions ========== */
@@ -346,6 +344,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
             orderData_.nonce,
             orderData_.destChainId,
             orderData_.fillDeadline,
+            orderData_.amountIn,
             orderData_.amountOut,
             orderData_.tokenOut,
             orderData_.recipient,
@@ -358,9 +357,9 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         return $.localOrders[orderId_];
     }
 
-    function getAmountOutFilled(bytes32 orderId_) external view override returns (uint128) {
+    function getFilledAmounts(bytes32 orderId_) external view override returns (FilledAmounts memory) {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-        return $.orderAmountOutFilled[orderId_];
+        return $.filledAmounts[orderId_];
     }
 
     function getSenderNonce(address sender_) external view override returns (uint64) {

@@ -31,11 +31,13 @@ interface IOrderBook {
      * @param orderId The ID of the order being filled
      * @param solver The address of the solver that filled the order
      * @param amountOutFilled The amount of output token that was filled
+     * @param amountInToRelease The amount of input token they will receive on the origin chain
      */
     event Fill(
         bytes32 indexed orderId, 
         address indexed solver, 
-        uint128 amountOutFilled
+        uint128 amountOutFilled,
+        uint128 amountInToRelease
     );
 
     /**
@@ -192,6 +194,7 @@ interface IOrderBook {
      * @param nonce A counter tied to the sender to allow unique orders
      * @param destChainId Destination chain ID where the order is to be filled
      * @param fillDeadline Timestamp by which the order must be filled on the destination chain
+     * @param amountIn Amount of input token provided
      * @param amountOut Amount of output token expected on the destination chain
      * @param tokenOut Address of the output token on the destination chain
      * @param recipient Address to receive the funds on the destination chain
@@ -204,6 +207,7 @@ interface IOrderBook {
         uint64 nonce;
         uint32 destChainId;
         uint64 fillDeadline; 
+        uint128 amountIn;
         uint128 amountOut;
         bytes32 tokenOut;
         bytes32 recipient;
@@ -216,11 +220,13 @@ interface IOrderBook {
      *      on the destination chain back to the origin chain for refund processing.
      * @param orderId The ID of the order being reported
      * @param amountOutFilled The amount of output token that was filled on the destination chain
+     * @param amountInToRelease The amount of input token to release to the filler on the origin chain
      * @param originRecipient The address on the origin chain that should receive released funds
      */
     struct FillReport {
         bytes32 orderId;
         uint128 amountOutFilled;
+        uint128 amountInToRelease;
         bytes32 originRecipient;
     }
 
@@ -245,6 +251,18 @@ interface IOrderBook {
         bool isSupported;
         uint40 finalityBuffer;
     }
+
+    /**
+     * @notice Data structure to track filled amounts for an order on the destination chain
+     * @param amountOutFilled Amount of output token filled
+     * @param amountInReleased Amount of input token released
+     */
+    struct FilledAmounts {
+        uint128 amountOutFilled;
+        uint128 amountInReleased;
+    }
+
+    /* ========== External Functions ========== */
 
     /** 
      * @notice Opens an order
@@ -330,11 +348,12 @@ interface IOrderBook {
     function getOrder(bytes32 orderId_) external view returns (Order memory);
 
     /**
-     * @notice Returns the amount out that has been filled on an order with this chain as the destination
+     * @notice Returns the amount out filled and amount in released for an order with this chain as the destination
      * @dev The order must be settled on this chain (i.e. this chain is its destination) or the information will not be available
      */
-    function getAmountOutFilled(bytes32 orderId_) external view returns (uint128);
+    function getFilledAmounts(bytes32 orderId_) external view returns (FilledAmounts memory);
 
+    /// @notice Returns the next nonce for the provided sender address
     function getSenderNonce(address sender_) external view returns (uint64);
 
     /// @notice Returns whether orders can be created with the provided chain ID as the destination
