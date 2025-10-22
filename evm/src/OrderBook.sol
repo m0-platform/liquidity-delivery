@@ -345,7 +345,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
             );
         }
 
-        emit Fill(orderId_, msg.sender, amountOutToFill_, amountInToRelease_);
+        emit Fill(orderId_, msg.sender, amountInToRelease_, amountOutToFill_);
     }
 
     /* ========== Receiving Fill Reports ========== */

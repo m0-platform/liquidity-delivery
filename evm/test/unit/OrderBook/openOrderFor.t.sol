@@ -198,6 +198,4 @@ contract OpenOrderForTest is OrderBookTestBase {
         // Confirm the correct amount was transferred from the sender
         assertEq(tokens[0].balanceOf(sender.addr), startingBalance - gaslessParams.amountIn);
     }
-
-
 }

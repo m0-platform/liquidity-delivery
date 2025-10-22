@@ -36,8 +36,8 @@ interface IOrderBook {
     event Fill(
         bytes32 indexed orderId, 
         address indexed solver, 
-        uint128 amountOutFilled,
-        uint128 amountInToRelease
+        uint128 amountInToRelease,
+        uint128 amountOutFilled
     );
 
     /**
