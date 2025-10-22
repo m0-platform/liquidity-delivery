@@ -44,8 +44,6 @@ pub struct FillCommon<'info> {
     #[account(mut)]
     pub solver: Signer<'info>,
 
-    pub token_authority: Option<Signer<'info>>,
-
     #[account(
         seeds = [GLOBAL_SEED],
         bump = global_account.bump,
@@ -174,17 +172,12 @@ impl FillNativeOrder<'_> {
         order.amount_out_filled += amount_out_to_fill as u128;
 
         // Transfer the output tokens from the solver to the recipient
-        let auth = match &ctx.accounts.common.token_authority {
-            Some(signer) => signer.to_account_info(),
-            None => ctx.accounts.common.solver.to_account_info(),
-        };
-
         transfer_tokens(
             &ctx.accounts.common.solver_token_out_account,
             &ctx.accounts.common.recipient_token_out_ata,
             amount_out_to_fill,
             &ctx.accounts.common.token_out_mint,
-            &auth,
+            &ctx.accounts.common.solver,
             &ctx.accounts.common.token_out_program,
         )?;
 
@@ -297,17 +290,12 @@ impl FillForeignOrder<'_> {
         order.amount_out_filled += amount_out_to_fill as u128;
 
         // Transfer the output tokens from the solver to the recipient
-        let auth = match &ctx.accounts.common.token_authority {
-            Some(signer) => signer.to_account_info(),
-            None => ctx.accounts.common.solver.to_account_info(),
-        };
-
         transfer_tokens(
             &ctx.accounts.common.solver_token_out_account,
             &ctx.accounts.common.recipient_token_out_ata,
             amount_out_to_fill,
             &ctx.accounts.common.token_out_mint,
-            &auth,
+            &ctx.accounts.common.solver,
             &ctx.accounts.common.token_out_program,
         )?;
 
