@@ -203,16 +203,6 @@ impl FillNativeOrder<'_> {
             &ctx.accounts.token_in_program,
         )?;
 
-                
-        // If the order is fully filled, emit an order completed event
-        if full_fill {
-            emit_cpi!(
-                OrderCompleted {
-                    order_id,
-                }
-            );
-        }
-
         // Emit a fill event regardless
         emit_cpi!(
             Fill {
@@ -222,6 +212,15 @@ impl FillNativeOrder<'_> {
                 amount_out_filled: amount_out_to_fill as u128,
             }
         );
+
+        // If the order is fully filled, emit an order completed event
+        if full_fill {
+            emit_cpi!(
+                OrderCompleted {
+                    order_id,
+                }
+            );
+        }
 
         Ok(())
     }
