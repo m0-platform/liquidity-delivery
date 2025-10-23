@@ -194,7 +194,12 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         bytes calldata signature_
     ) internal returns (bytes32) {
         // Verify signature
-        _revertIfInvalidSignature(orderParams_.sender, getGaslessOrderDigest(orderParams_), signature_);
+        if (signature_.length == 64) {
+            (bytes32 r, bytes32 vs) = abi.decode(signature_, (bytes32, bytes32));
+            _revertIfInvalidSignature(orderParams_.sender, getGaslessOrderDigest(orderParams_), r, vs);
+        } else {
+            _revertIfInvalidSignature(orderParams_.sender, getGaslessOrderDigest(orderParams_), signature_);
+        }
 
         // Verify origin chain and sender nonce
         if (orderParams_.originChainId != chainId) revert InvalidOriginChain();
