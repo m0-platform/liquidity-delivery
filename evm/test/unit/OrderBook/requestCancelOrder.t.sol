@@ -19,14 +19,20 @@ contract RequestCancelOrderTest is OrderBookTestBase {
     // [X] given the caller is not the order sender
     //   [X] it reverts with an NotAuthorized error
     // [X] given the order can be cancelled
-    //   [X] it updates the order status to CancelRequested
-    //   [X] it sets the refund requested at timestamp to the current block timestamp
-    //   [X] it emits an CancelRequest event
+    //   [X] given the destination chain is different to the current chain (i.e. cross-chain order)
+    //     [X] it updates the order status to CancelRequested
+    //     [X] it sets the refund requested at timestamp to the current block timestamp
+    //     [X] it emits an CancelRequest event
+    //   [ ] given the destination chain is the current chain (i.e. local order)
+    //     [ ] it immediately refunds the order amount in to the order sender
+    //     [ ] it sets the order status to Completed
+    //     [ ] it emits a CancelRequested event
+    //     [ ] it emits a RefundClaimed event
 
     function setUp() public override {
         super.setUp();
 
-        // open an order for user 0
+        // open an order for alice
         _placeOrder(users["alice"], params);
     }
 
@@ -51,7 +57,7 @@ contract RequestCancelOrderTest is OrderBookTestBase {
     }
 
     function test_givenLocalOrderHasBeenFilled_reverts() public {
-        // Open a local order for user 0
+        // Open a local order for alice
         params.destChainId = CHAIN_ID;
         bytes32 orderId = _placeOrder(users["alice"], params);
 
@@ -64,7 +70,7 @@ contract RequestCancelOrderTest is OrderBookTestBase {
         orderBook.requestCancelOrder(orderId);
     }
 
-    function test_givenXchainOrderHasBeenFilled_reverts() public {
+    function test_givenCrosschainOrderHasBeenFilled_reverts() public {
         // Report fill from destination chain
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
         _reportFill(users["solver"], orderId, params.amountOut, params.amountIn);
@@ -84,7 +90,7 @@ contract RequestCancelOrderTest is OrderBookTestBase {
     }
 
 
-    function test_success() public {
+    function test_givenCrosschainOrder_success() public {
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
         vm.warp(block.timestamp + 1 minutes); // make the timestamp non-zero
@@ -96,5 +102,25 @@ contract RequestCancelOrderTest is OrderBookTestBase {
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
         assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.CancelRequested), "order status should be CancelRequested");
         assertEq(order.refundRequestedAt, uint32(block.timestamp), "refundRequestedAt should be updated to current block timestamp");
+    }
+
+    function test_givenLocalOrder_success() public {
+        // Open a local order for alice
+        params.destChainId = CHAIN_ID;
+        bytes32 orderId = _placeOrder(users["alice"], params);
+
+        uint256 aliceStartingBalance = tokenIn.balanceOf(users["alice"]);
+
+        vm.warp(block.timestamp + 1 minutes); // make the timestamp non-zero
+        vm.prank(users["alice"]);
+        vm.expectEmit(true, false, false, true);
+        emit IOrderBook.CancelRequested(orderId, uint32(block.timestamp));
+        vm.expectEmit(true, false, false, true);
+        emit IOrderBook.RefundClaimed(orderId, users["alice"], params.amountIn);
+        orderBook.requestCancelOrder(orderId);
+        
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Completed), "order status should be Completed");
+        assertEq(tokenIn.balanceOf(users["alice"]), aliceStartingBalance + params.amountIn, "alice should be refunded the amountIn");
     }
 }
