@@ -15,10 +15,10 @@ contract ReportFillTest is OrderBookTestBase {
     //   [X] it reverts with an InvalidOrderStatus error
     // [X] given the order is completed
     //   [X] it reverts with an InvalidOrderStatus error
-    // [ ] given the reported amount out filled would exceed the order amount out
-    //   [ ] it reverts with an InvalidReport error
-    // [ ] given the reported amount in to release would exceed the order amount in
-    //   [ ] it reverts with an InvalidReport error
+    // [X] given the reported amount out filled would exceed the order amount out
+    //   [X] it reverts with an InvalidReport error
+    // [X] given the reported amount in to release would exceed the order amount in
+    //   [X] it reverts with an InvalidReport error
     // [X] given the order is active or cancelled
     //   [X] it updates the filled amount for the order
     //   [X] it transfers the pro-rata amount of the token in to the specified recipient
@@ -29,22 +29,22 @@ contract ReportFillTest is OrderBookTestBase {
     function setUp() public override {
         super.setUp();
 
-        // open a crosschain order for user 0
-        _placeOrder(users[0], params);
+        // open a crosschain order for alice (nonce 0)
+        _placeOrder(users["alice"], params);
     }
 
     function test_messengerIsNotCaller_reverts() public {
-        bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
         // Try to report fill as a regular user (not messenger)
-        vm.prank(users[1]);
+        vm.prank(users["bob"]);
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.NotAuthorized.selector));
         orderBook.reportFill(
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: params.amountOut,
                 amountInToRelease: params.amountIn,
-                originRecipient: users[2].toBytes32()
+                originRecipient: users["solver"].toBytes32()
             })
         );
     }
@@ -60,16 +60,16 @@ contract ReportFillTest is OrderBookTestBase {
                 orderId: fakeOrderId,
                 amountOutFilled: params.amountOut,
                 amountInToRelease: params.amountIn,
-                originRecipient: users[2].toBytes32()
+                originRecipient: users["solver"].toBytes32()
             })
         );
     }
 
     function test_orderIsCompleted_reverts() public {
-        bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
         // Report full fill to complete the order
-        _reportFill(users[2], orderId, params.amountOut, params.amountIn);
+        _reportFill(users["solver"], orderId, params.amountOut, params.amountIn);
 
         // Try to report another fill on the completed order
         vm.prank(address(messenger));
@@ -79,13 +79,13 @@ contract ReportFillTest is OrderBookTestBase {
                 orderId: orderId,
                 amountOutFilled: params.amountOut / 2,
                 amountInToRelease: params.amountIn / 2,
-                originRecipient: users[2].toBytes32()
+                originRecipient: users["solver"].toBytes32()
             })
         );
     }
 
     function test_overReportAmountOut_reverts() public {
-        bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
         // Try to report fill with amountOutFilled exceeding order amountOut
         vm.prank(address(messenger));
@@ -95,13 +95,13 @@ contract ReportFillTest is OrderBookTestBase {
                 orderId: orderId,
                 amountOutFilled: params.amountOut + 1,
                 amountInToRelease: params.amountIn,
-                originRecipient: users[2].toBytes32()
+                originRecipient: users["solver"].toBytes32()
             })
         );
     }
 
     function test_overReportAmountIn_reverts() public {
-        bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
         // Try to report fill with amountInToRelease exceeding order amountIn
         vm.prank(address(messenger));
@@ -111,21 +111,21 @@ contract ReportFillTest is OrderBookTestBase {
                 orderId: orderId,
                 amountOutFilled: params.amountOut,
                 amountInToRelease: params.amountIn + 1,
-                originRecipient: users[2].toBytes32()
+                originRecipient: users["solver"].toBytes32()
             })
         );
     }
 
-    function test_activeOrderPartialFill_success() public {
-        bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
+    function _test_activeOrderPartialFill_success() internal {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 1, params);
 
         // Report partial fill (50%)
         uint128 fillAmount = params.amountOut / 2;
         uint128 expectedAmountIn = uint128((uint256(params.amountIn) * fillAmount) / params.amountOut);
 
         // Record balances before
-        uint256 recipientBalanceBefore = tokens[0].balanceOf(users[2]);
-        uint256 orderBookBalanceBefore = tokens[0].balanceOf(address(orderBook));
+        uint256 recipientBalanceBefore = tokenIn.balanceOf(users["solver"]);
+        uint256 orderBookBalanceBefore = tokenIn.balanceOf(address(orderBook));
 
         // Report fill via messenger
         vm.prank(address(messenger));
@@ -134,7 +134,7 @@ contract ReportFillTest is OrderBookTestBase {
                 orderId: orderId,
                 amountOutFilled: fillAmount,
                 amountInToRelease: expectedAmountIn,
-                originRecipient: users[2].toBytes32()
+                originRecipient: users["solver"].toBytes32()
             })
         );
 
@@ -142,19 +142,39 @@ contract ReportFillTest is OrderBookTestBase {
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
 
         // Verify tokenIn transferred to originRecipient
-        assertEq(tokens[0].balanceOf(users[2]), recipientBalanceBefore + expectedAmountIn, "recipient should receive pro-rata tokenIn");
-        assertEq(tokens[0].balanceOf(address(orderBook)), orderBookBalanceBefore - expectedAmountIn, "orderBook should release pro-rata tokenIn");
+        assertEq(tokenIn.balanceOf(users["solver"]), recipientBalanceBefore + expectedAmountIn, "recipient should receive pro-rata tokenIn");
+        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookBalanceBefore - expectedAmountIn, "orderBook should release pro-rata tokenIn");
 
         // Verify order status remains Created (not Completed)
         assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Created), "order should still be Created");
     }
 
-    function test_activeOrderFullFill_success() public {
-        bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
+    function test_bothSixDecimals_activeOrderPartialFill_success() public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+        _placeOrder(users["alice"], params);
+        _test_activeOrderPartialFill_success();
+    }
+
+    function test_tokenInSmallerDecimals_activeOrderPartialFill_success() public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+        _placeOrder(users["alice"], params);
+        _test_activeOrderPartialFill_success();
+    }
+
+    function test_tokenInLargerDecimals_activeOrderPartialFill_success() public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+        _placeOrder(users["alice"], params);
+        _test_activeOrderPartialFill_success();
+    }
+
+    function test_bothEighteenDecimals_activeOrderPartialFill_success() public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+        _placeOrder(users["alice"], params);
+        _test_activeOrderPartialFill_success();
+    }
+
+    function _test_activeOrderFullFill_success() internal {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 1, params);
 
         // Record balances before
-        uint256 recipientBalanceBefore = tokens[0].balanceOf(users[2]);
-        uint256 orderBookBalanceBefore = tokens[0].balanceOf(address(orderBook));
+        uint256 recipientBalanceBefore = tokenIn.balanceOf(users["solver"]);
+        uint256 orderBookBalanceBefore = tokenIn.balanceOf(address(orderBook));
 
         // Report full fill via messenger
         vm.prank(address(messenger));
@@ -165,24 +185,44 @@ contract ReportFillTest is OrderBookTestBase {
                 orderId: orderId,
                 amountOutFilled: params.amountOut,
                 amountInToRelease: params.amountIn,
-                originRecipient: users[2].toBytes32()
+                originRecipient: users["solver"].toBytes32()
             })
         );
 
         // Verify tokenIn transferred
-        assertEq(tokens[0].balanceOf(users[2]), recipientBalanceBefore + params.amountIn, "recipient should receive full tokenIn");
-        assertEq(tokens[0].balanceOf(address(orderBook)), orderBookBalanceBefore - params.amountIn, "orderBook should release full tokenIn");
+        assertEq(tokenIn.balanceOf(users["solver"]), recipientBalanceBefore + params.amountIn, "recipient should receive full tokenIn");
+        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookBalanceBefore - params.amountIn, "orderBook should release full tokenIn");
 
         // Verify order status changed to Completed
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
         assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Completed), "order should be Completed");
     }
 
-    function test_cancelledOrderPartialFill_success() public {
-        bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
+    function test_bothSixDecimals_activeOrderFullFill_success() public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+        _placeOrder(users["alice"], params);
+        _test_activeOrderFullFill_success();
+    }
+
+    function test_tokenInSmallerDecimals_activeOrderFullFill_success() public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+        _placeOrder(users["alice"], params);
+        _test_activeOrderFullFill_success();
+    }
+
+    function test_tokenInLargerDecimals_activeOrderFullFill_success() public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+        _placeOrder(users["alice"], params);
+        _test_activeOrderFullFill_success();
+    }
+
+    function test_bothEighteenDecimals_activeOrderFullFill_success() public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+        _placeOrder(users["alice"], params);
+        _test_activeOrderFullFill_success();
+    }
+
+    function _test_cancelledOrderPartialFill_success() internal {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 1, params);
 
         // Request cancellation
-        vm.prank(users[0]);
+        vm.prank(users["alice"]);
         orderBook.requestCancelOrder(orderId);
 
         // Report partial fill (50%)
@@ -190,8 +230,8 @@ contract ReportFillTest is OrderBookTestBase {
         uint128 expectedAmountIn = uint128((uint256(params.amountIn) * fillAmount) / params.amountOut);
 
         // Record balances before
-        uint256 recipientBalanceBefore = tokens[0].balanceOf(users[2]);
-        uint256 orderBookBalanceBefore = tokens[0].balanceOf(address(orderBook));
+        uint256 recipientBalanceBefore = tokenIn.balanceOf(users["solver"]);
+        uint256 orderBookBalanceBefore = tokenIn.balanceOf(address(orderBook));
 
         // Report fill via messenger
         vm.prank(address(messenger));
@@ -200,29 +240,49 @@ contract ReportFillTest is OrderBookTestBase {
                 orderId: orderId,
                 amountOutFilled: fillAmount,
                 amountInToRelease: expectedAmountIn,
-                originRecipient: users[2].toBytes32()
+                originRecipient: users["solver"].toBytes32()
             })
         );
 
         // Verify tokenIn transferred
-        assertEq(tokens[0].balanceOf(users[2]), recipientBalanceBefore + expectedAmountIn, "recipient should receive pro-rata tokenIn");
-        assertEq(tokens[0].balanceOf(address(orderBook)), orderBookBalanceBefore - expectedAmountIn, "orderBook should release pro-rata tokenIn");
+        assertEq(tokenIn.balanceOf(users["solver"]), recipientBalanceBefore + expectedAmountIn, "recipient should receive pro-rata tokenIn");
+        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookBalanceBefore - expectedAmountIn, "orderBook should release pro-rata tokenIn");
 
         // Verify order status remains CancelRequested (not Completed)
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
         assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.CancelRequested), "order should still be CancelRequested");
     }
 
-    function test_cancelledOrderFullFill_success() public {
-        bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
+    function test_bothSixDecimals_cancelledOrderPartialFill_success() public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+        _placeOrder(users["alice"], params);
+        _test_cancelledOrderPartialFill_success();
+    }
+
+    function test_tokenInSmallerDecimals_cancelledOrderPartialFill_success() public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+        _placeOrder(users["alice"], params);
+        _test_cancelledOrderPartialFill_success();
+    }
+
+    function test_tokenInLargerDecimals_cancelledOrderPartialFill_success() public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+        _placeOrder(users["alice"], params);
+        _test_cancelledOrderPartialFill_success();
+    }
+
+    function test_bothEighteenDecimals_cancelledOrderPartialFill_success() public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+        _placeOrder(users["alice"], params);
+        _test_cancelledOrderPartialFill_success();
+    }
+
+    function _test_cancelledOrderFullFill_success() internal {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 1, params);
 
         // Request cancellation
-        vm.prank(users[0]);
+        vm.prank(users["alice"]);
         orderBook.requestCancelOrder(orderId);
 
         // Record balances before
-        uint256 recipientBalanceBefore = tokens[0].balanceOf(users[2]);
-        uint256 orderBookBalanceBefore = tokens[0].balanceOf(address(orderBook));
+        uint256 recipientBalanceBefore = tokenIn.balanceOf(users["solver"]);
+        uint256 orderBookBalanceBefore = tokenIn.balanceOf(address(orderBook));
 
         // Report full fill via messenger
         vm.prank(address(messenger));
@@ -233,16 +293,36 @@ contract ReportFillTest is OrderBookTestBase {
                 orderId: orderId,
                 amountOutFilled: params.amountOut,
                 amountInToRelease: params.amountIn,
-                originRecipient: users[2].toBytes32()
+                originRecipient: users["solver"].toBytes32()
             })
         );
 
         // Verify tokenIn transferred
-        assertEq(tokens[0].balanceOf(users[2]), recipientBalanceBefore + params.amountIn, "recipient should receive full tokenIn");
-        assertEq(tokens[0].balanceOf(address(orderBook)), orderBookBalanceBefore - params.amountIn, "orderBook should release full tokenIn");
+        assertEq(tokenIn.balanceOf(users["solver"]), recipientBalanceBefore + params.amountIn, "recipient should receive full tokenIn");
+        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookBalanceBefore - params.amountIn, "orderBook should release full tokenIn");
 
         // Verify order status changed to Completed
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
         assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Completed), "order should be Completed");
+    }
+
+    function test_bothSixDecimals_cancelledOrderFullFill_success() public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+        _placeOrder(users["alice"], params);
+        _test_cancelledOrderFullFill_success();
+    }
+
+    function test_tokenInSmallerDecimals_cancelledOrderFullFill_success() public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+        _placeOrder(users["alice"], params);
+        _test_cancelledOrderFullFill_success();
+    }
+
+    function test_tokenInLargerDecimals_cancelledOrderFullFill_success() public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+        _placeOrder(users["alice"], params);
+        _test_cancelledOrderFullFill_success();
+    }
+
+    function test_bothEighteenDecimals_cancelledOrderFullFill_success() public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+        _placeOrder(users["alice"], params);
+        _test_cancelledOrderFullFill_success();
     }
 }

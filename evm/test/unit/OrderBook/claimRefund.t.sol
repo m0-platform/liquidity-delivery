@@ -39,8 +39,8 @@ contract ClaimRefundTest is OrderBookTestBase {
     function setUp() public override {
         super.setUp();
 
-        // open an order for user 0
-        _placeOrder(users[0], params);
+        // open an order for alice
+        _placeOrder(users["alice"], params);
     }
 
     function test_givenOrderDoesNotExist_reverts() public {
@@ -52,10 +52,10 @@ contract ClaimRefundTest is OrderBookTestBase {
 
     function test_givenOrderCompleted_reverts() public {
         // Get the order ID
-        bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
         // Fill it completely
-        _reportFill(users[2], orderId, params.amountOut, params.amountIn);
+        _reportFill(users["solver"], orderId, params.amountOut, params.amountIn);
 
         // Try to claim refund
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
@@ -64,10 +64,10 @@ contract ClaimRefundTest is OrderBookTestBase {
 
     function test_givenCancelledOrderFinalityNotPassed_reverts() public {
         // Get the order ID
-        bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
         // Request cancellation
-        vm.prank(users[0]);
+        vm.prank(users["alice"]);
         orderBook.requestCancelOrder(orderId);
 
         // Try to claim refund immediately (finality buffer is 10 minutes)
@@ -77,7 +77,7 @@ contract ClaimRefundTest is OrderBookTestBase {
 
     function test_givenOrderExistsFinalityNotPassed_reverts() public {
         // Get the order
-        bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
 
         // Warp to just before fillDeadline + finalityBuffer
@@ -89,12 +89,12 @@ contract ClaimRefundTest is OrderBookTestBase {
         orderBook.claimRefund(orderId);
     }
 
-    function test_givenCancelledOrderNoFills_success() public {
+    function _test_givenCancelledOrderNoFills_success() internal {
         // Get the order ID
-        bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 1, params);
 
         // Request cancellation
-        vm.prank(users[0]);
+        vm.prank(users["alice"]);
         orderBook.requestCancelOrder(orderId);
 
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
@@ -104,34 +104,54 @@ contract ClaimRefundTest is OrderBookTestBase {
         vm.warp(order.refundRequestedAt + finalityBuffer + 1);
 
         // Record balances
-        uint256 senderBalanceBefore = tokens[0].balanceOf(users[0]);
-        uint256 orderBookBalanceBefore = tokens[0].balanceOf(address(orderBook));
+        uint256 senderBalanceBefore = tokenIn.balanceOf(users["alice"]);
+        uint256 orderBookBalanceBefore = tokenIn.balanceOf(address(orderBook));
 
         // Claim refund
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.RefundClaimed(orderId, users[0], order.amountIn);
+        emit IOrderBook.RefundClaimed(orderId, users["alice"], order.amountIn);
         orderBook.claimRefund(orderId);
 
         // Verify refund
-        assertEq(tokens[0].balanceOf(users[0]), senderBalanceBefore + order.amountIn, "sender should receive full refund");
-        assertEq(tokens[0].balanceOf(address(orderBook)), orderBookBalanceBefore - order.amountIn, "orderBook should release full amount");
+        assertEq(tokenIn.balanceOf(users["alice"]), senderBalanceBefore + order.amountIn, "sender should receive full refund");
+        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookBalanceBefore - order.amountIn, "orderBook should release full amount");
 
         // Verify order status
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Completed), "order should be completed");
     }
 
-    function test_givenCancelledOrderPartialFills_success() public {
+    function test_bothSixDecimals_givenCancelledOrderNoFills_success() public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+        _placeOrder(users["alice"], params);
+        _test_givenCancelledOrderNoFills_success();
+    }
+
+    function test_tokenInSmallerDecimals_givenCancelledOrderNoFills_success() public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+        _placeOrder(users["alice"], params);
+        _test_givenCancelledOrderNoFills_success();
+    }
+
+    function test_tokenInLargerDecimals_givenCancelledOrderNoFills_success() public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+        _placeOrder(users["alice"], params);
+        _test_givenCancelledOrderNoFills_success();
+    }
+
+    function test_bothEighteenDecimals_givenCancelledOrderNoFills_success() public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+        _placeOrder(users["alice"], params);
+        _test_givenCancelledOrderNoFills_success();
+    }
+
+    function _test_givenCancelledOrderPartialFills_success() internal {
         // Get the order ID
-        bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 1, params);
 
         // Report the order is partially filled (50%) 
         uint128 fillAmount = params.amountOut / 2;
         uint128 expectedAmountIn = uint128((uint256(params.amountIn) * fillAmount) / params.amountOut);
-        _reportFill(users[2], orderId, fillAmount, expectedAmountIn);
+        _reportFill(users["solver"], orderId, fillAmount, expectedAmountIn);
 
         // Request cancellation
-        vm.prank(users[0]);
+        vm.prank(users["alice"]);
         orderBook.requestCancelOrder(orderId);
 
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
@@ -144,26 +164,46 @@ contract ClaimRefundTest is OrderBookTestBase {
         vm.warp(order.refundRequestedAt + finalityBuffer + 1);
 
         // Record balances
-        uint256 senderBalanceBefore = tokens[0].balanceOf(users[0]);
-        uint256 orderBookBalanceBefore = tokens[0].balanceOf(address(orderBook));
+        uint256 senderBalanceBefore = tokenIn.balanceOf(users["alice"]);
+        uint256 orderBookBalanceBefore = tokenIn.balanceOf(address(orderBook));
 
         // Claim refund
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.RefundClaimed(orderId, users[0], expectedRefund);
+        emit IOrderBook.RefundClaimed(orderId, users["alice"], expectedRefund);
         orderBook.claimRefund(orderId);
 
         // Verify refund
-        assertEq(tokens[0].balanceOf(users[0]), senderBalanceBefore + expectedRefund, "sender should receive partial refund");
-        assertEq(tokens[0].balanceOf(address(orderBook)), orderBookBalanceBefore - expectedRefund, "orderBook should release partial amount");
+        assertEq(tokenIn.balanceOf(users["alice"]), senderBalanceBefore + expectedRefund, "sender should receive partial refund");
+        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookBalanceBefore - expectedRefund, "orderBook should release partial amount");
 
         // Verify order status
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Completed), "order should be completed");
     }
 
-    function test_givenOrderExistsNoFills_success() public {
+    function test_bothSixDecimals_givenCancelledOrderPartialFills_success() public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+        _placeOrder(users["alice"], params);
+        _test_givenCancelledOrderPartialFills_success();
+    }
+
+    function test_tokenInSmallerDecimals_givenCancelledOrderPartialFills_success() public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+        _placeOrder(users["alice"], params);
+        _test_givenCancelledOrderPartialFills_success();
+    }
+
+    function test_tokenInLargerDecimals_givenCancelledOrderPartialFills_success() public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+        _placeOrder(users["alice"], params);
+        _test_givenCancelledOrderPartialFills_success();
+    }
+
+    function test_bothEighteenDecimals_givenCancelledOrderPartialFills_success() public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+        _placeOrder(users["alice"], params);
+        _test_givenCancelledOrderPartialFills_success();
+    }
+
+    function _test_givenOrderExistsNoFills_success() internal {
         // Get the order ID
-        bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 1, params);
 
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
 
@@ -172,31 +212,51 @@ contract ClaimRefundTest is OrderBookTestBase {
         vm.warp(order.fillDeadline + finalityBuffer + 1);
 
         // Record balances
-        uint256 senderBalanceBefore = tokens[0].balanceOf(users[0]);
-        uint256 orderBookBalanceBefore = tokens[0].balanceOf(address(orderBook));
+        uint256 senderBalanceBefore = tokenIn.balanceOf(users["alice"]);
+        uint256 orderBookBalanceBefore = tokenIn.balanceOf(address(orderBook));
 
         // Claim refund
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.RefundClaimed(orderId, users[0], order.amountIn);
+        emit IOrderBook.RefundClaimed(orderId, users["alice"], order.amountIn);
         orderBook.claimRefund(orderId);
 
         // Verify refund
-        assertEq(tokens[0].balanceOf(users[0]), senderBalanceBefore + order.amountIn, "sender should receive full refund");
-        assertEq(tokens[0].balanceOf(address(orderBook)), orderBookBalanceBefore - order.amountIn, "orderBook should release full amount");
+        assertEq(tokenIn.balanceOf(users["alice"]), senderBalanceBefore + order.amountIn, "sender should receive full refund");
+        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookBalanceBefore - order.amountIn, "orderBook should release full amount");
 
         // Verify order status
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Completed), "order should be completed");
     }
 
-    function test_givenOrderExistsPartialFills_success() public {
+    function test_bothSixDecimals_givenOrderExistsNoFills_success() public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+        _placeOrder(users["alice"], params);
+        _test_givenOrderExistsNoFills_success();
+    }
+
+    function test_tokenInSmallerDecimals_givenOrderExistsNoFills_success() public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+        _placeOrder(users["alice"], params);
+        _test_givenOrderExistsNoFills_success();
+    }
+
+    function test_tokenInLargerDecimals_givenOrderExistsNoFills_success() public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+        _placeOrder(users["alice"], params);
+        _test_givenOrderExistsNoFills_success();
+    }
+
+    function test_bothEighteenDecimals_givenOrderExistsNoFills_success() public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+        _placeOrder(users["alice"], params);
+        _test_givenOrderExistsNoFills_success();
+    }
+
+    function _test_givenOrderExistsPartialFills_success() internal {
         // Get the order ID
-        bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 1, params);
 
         // Report the order is partially filled (50%)
         uint128 fillAmount = params.amountOut / 2;
         uint128 expectedAmountIn = uint128((uint256(params.amountIn) * fillAmount) / params.amountOut);
-        _reportFill(users[2], orderId, fillAmount, expectedAmountIn);
+        _reportFill(users["solver"], orderId, fillAmount, expectedAmountIn);
 
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
 
@@ -208,21 +268,41 @@ contract ClaimRefundTest is OrderBookTestBase {
         vm.warp(order.fillDeadline + finalityBuffer + 1);
 
         // Record balances
-        uint256 senderBalanceBefore = tokens[0].balanceOf(users[0]);
-        uint256 orderBookBalanceBefore = tokens[0].balanceOf(address(orderBook));
+        uint256 senderBalanceBefore = tokenIn.balanceOf(users["alice"]);
+        uint256 orderBookBalanceBefore = tokenIn.balanceOf(address(orderBook));
 
         // Claim refund
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.RefundClaimed(orderId, users[0], expectedRefund);
+        emit IOrderBook.RefundClaimed(orderId, users["alice"], expectedRefund);
         orderBook.claimRefund(orderId);
 
         // Verify refund
-        assertEq(tokens[0].balanceOf(users[0]), senderBalanceBefore + expectedRefund, "sender should receive partial refund");
-        assertEq(tokens[0].balanceOf(address(orderBook)), orderBookBalanceBefore - expectedRefund, "orderBook should release partial amount");
+        assertEq(tokenIn.balanceOf(users["alice"]), senderBalanceBefore + expectedRefund, "sender should receive partial refund");
+        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookBalanceBefore - expectedRefund, "orderBook should release partial amount");
 
         // Verify order status
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Completed), "order should be completed");
+    }
+
+    function test_bothSixDecimals_givenOrderExistsPartialFills_success() public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+        _placeOrder(users["alice"], params);
+        _test_givenOrderExistsPartialFills_success();
+    }
+
+    function test_tokenInSmallerDecimals_givenOrderExistsPartialFills_success() public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+        _placeOrder(users["alice"], params);
+        _test_givenOrderExistsPartialFills_success();
+    }
+
+    function test_tokenInLargerDecimals_givenOrderExistsPartialFills_success() public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+        _placeOrder(users["alice"], params);
+        _test_givenOrderExistsPartialFills_success();
+    }
+
+    function test_bothEighteenDecimals_givenOrderExistsPartialFills_success() public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+        _placeOrder(users["alice"], params);
+        _test_givenOrderExistsPartialFills_success();
     }
 
     function test_claimRefundCanBeCalledByAnyone_success(address caller) public {
@@ -230,7 +310,7 @@ contract ClaimRefundTest is OrderBookTestBase {
         vm.deal(caller, 1 ether); // ensure caller has some ETH in case it's needed for gas
 
         // Get the order ID
-        bytes32 orderId = _getOrderIdFromParams(users[0], 0, params);
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
 
@@ -239,18 +319,18 @@ contract ClaimRefundTest is OrderBookTestBase {
         vm.warp(order.fillDeadline + finalityBuffer + 1);
 
         // Record balances
-        uint256 senderBalanceBefore = tokens[0].balanceOf(users[0]);
-        uint256 orderBookBalanceBefore = tokens[0].balanceOf(address(orderBook));
+        uint256 senderBalanceBefore = tokenIn.balanceOf(users["alice"]);
+        uint256 orderBookBalanceBefore = tokenIn.balanceOf(address(orderBook));
 
         // Claim refund
         vm.prank(caller);
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.RefundClaimed(orderId, users[0], order.amountIn);
+        emit IOrderBook.RefundClaimed(orderId, users["alice"], order.amountIn);
         orderBook.claimRefund(orderId);
 
-        // Verify refund still goes to original sender (users[0])
-        assertEq(tokens[0].balanceOf(users[0]), senderBalanceBefore + order.amountIn, "sender should receive full refund");
-        assertEq(tokens[0].balanceOf(address(orderBook)), orderBookBalanceBefore - order.amountIn, "orderBook should release full amount");
+        // Verify refund still goes to original sender (users["alice"])
+        assertEq(tokenIn.balanceOf(users["alice"]), senderBalanceBefore + order.amountIn, "sender should receive full refund");
+        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookBalanceBefore - order.amountIn, "orderBook should release full amount");
 
         // Verify order status
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);

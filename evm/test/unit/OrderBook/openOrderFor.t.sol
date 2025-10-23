@@ -37,9 +37,7 @@ contract OpenOrderForTest is OrderBookTestBase {
 
         sender = vm.createWallet("sender");
         vm.deal(sender.addr, 1 ether);
-        for (uint256 i; i < TOKEN_COUNT; i++) {
-            tokens[i].mint(sender.addr, MINT_AMOUNT);
-        }
+        tokenIn.mint(sender.addr, MINT_AMOUNT * (10 **  tokenIn.decimals()));
 
         gaslessParams = IOrderBook.GaslessOrderParams({
             version: VERSION,
@@ -58,7 +56,7 @@ contract OpenOrderForTest is OrderBookTestBase {
 
         // This is not optimal
         vm.prank(sender.addr);
-        tokens[0].approve(address(orderBook), type(uint256).max);
+        tokenIn.approve(address(orderBook), type(uint256).max);
     }
 
     function _signStandardECDSA(VmSafe.Wallet memory wallet_, IOrderBook.GaslessOrderParams memory params_) internal returns (bytes memory) {
@@ -129,7 +127,7 @@ contract OpenOrderForTest is OrderBookTestBase {
 
     function test_noApproval_reverts() public {
         vm.prank(sender.addr);
-        tokens[0].approve(address(orderBook), 0);
+        tokenIn.approve(address(orderBook), 0);
 
         bytes memory signature = _signStandardECDSA(sender, gaslessParams);
         vm.expectRevert();
@@ -144,7 +142,7 @@ contract OpenOrderForTest is OrderBookTestBase {
         bytes memory signature = _signCompactECDSA(sender, gaslessParams);
 
         // Cache the starting balance of tokenIn
-        uint256 startingBalance = tokens[0].balanceOf(sender.addr);
+        uint256 startingBalance = tokenIn.balanceOf(sender.addr);
 
         bytes32 orderId = orderBook.openOrderFor(gaslessParams, signature);
 
@@ -166,7 +164,7 @@ contract OpenOrderForTest is OrderBookTestBase {
         assertEq(order.solver, gaslessParams.solver, "solver");
 
         // Confirm the correct amount was transferred from the sender
-        assertEq(tokens[0].balanceOf(sender.addr), startingBalance - gaslessParams.amountIn);
+        assertEq(tokenIn.balanceOf(sender.addr), startingBalance - gaslessParams.amountIn);
     }
 
     function test_givenStandardECDSASignature_success() public {
@@ -174,7 +172,7 @@ contract OpenOrderForTest is OrderBookTestBase {
         bytes memory signature = _signStandardECDSA(sender, gaslessParams);
 
         // Cache the starting balance of tokenIn
-        uint256 startingBalance = tokens[0].balanceOf(sender.addr);
+        uint256 startingBalance = tokenIn.balanceOf(sender.addr);
 
         bytes32 orderId = orderBook.openOrderFor(gaslessParams, signature);
 
@@ -196,6 +194,6 @@ contract OpenOrderForTest is OrderBookTestBase {
         assertEq(order.solver, gaslessParams.solver, "solver");
 
         // Confirm the correct amount was transferred from the sender
-        assertEq(tokens[0].balanceOf(sender.addr), startingBalance - gaslessParams.amountIn);
+        assertEq(tokenIn.balanceOf(sender.addr), startingBalance - gaslessParams.amountIn);
     }
 }
