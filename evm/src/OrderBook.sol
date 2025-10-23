@@ -240,10 +240,19 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         order.refundRequestedAt = uint32(block.timestamp); // can't overflow until year 2106 (80 years)
 
         emit CancelRequested(orderId_, order.refundRequestedAt);
+
+        if (order.destChainId == chainId) {
+            // Local orders can be immediately refunded
+            _claimRefund(orderId_);
+        }
     }
 
     /// @inheritdoc IOrderBook
     function claimRefund(bytes32 orderId_) external override {
+        _claimRefund(orderId_);
+    }
+
+    function _claimRefund(bytes32 orderId_) internal {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         Order storage order = $.localOrders[orderId_];
 
@@ -252,10 +261,10 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         uint32 finalityBuffer_ = order.destChainId == chainId ? 0 : $.destinations[order.destChainId].finalityBuffer;
         if (order.status == OrderStatus.Created) {
             // If the order is still in Created status, it can only be refunded if the fill deadline + finality buffer has passed
-            if (uint256(order.fillDeadline) + finalityBuffer_ >= block.timestamp) revert FinalityPending();
+            if (uint256(order.fillDeadline) + finalityBuffer_ > block.timestamp) revert FinalityPending();
         } else if (order.status == OrderStatus.CancelRequested) {
             // If the order is in CancelRequested status, it can only be refunded if the refund was requested at least finality buffer ago
-            if (uint256(order.refundRequestedAt) + finalityBuffer_ >= block.timestamp) revert FinalityPending();
+            if (uint256(order.refundRequestedAt) + finalityBuffer_ > block.timestamp) revert FinalityPending();
         } else {
             // If the order is in any other status, it cannot be refunded
             revert InvalidOrderStatus();
