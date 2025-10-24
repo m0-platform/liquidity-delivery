@@ -99,9 +99,9 @@ contract ClaimRefundTest is OrderBookTestBase {
 
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
 
-        // Warp past refundRequestedAt + finalityBuffer
+        // Warp past cancelRequestedAt + finalityBuffer
         uint32 finalityBuffer = orderBook.getDestinationFinalityBuffer(order.destChainId);
-        vm.warp(order.refundRequestedAt + finalityBuffer + 1);
+        vm.warp(order.cancelRequestedAt + finalityBuffer + 1);
 
         // Record balances
         uint256 senderBalanceBefore = tokenIn.balanceOf(users["alice"]);
@@ -159,9 +159,9 @@ contract ClaimRefundTest is OrderBookTestBase {
         // Calculate expected refund (pro-rata)
         uint128 expectedRefund = uint128((uint256(params.amountIn) * (params.amountOut - fillAmount)) / params.amountOut);
 
-        // Warp past refundRequestedAt + finalityBuffer
+        // Warp past cancelRequestedAt + finalityBuffer
         uint32 finalityBuffer = orderBook.getDestinationFinalityBuffer(order.destChainId);
-        vm.warp(order.refundRequestedAt + finalityBuffer + 1);
+        vm.warp(order.cancelRequestedAt + finalityBuffer + 1);
 
         // Record balances
         uint256 senderBalanceBefore = tokenIn.balanceOf(users["alice"]);

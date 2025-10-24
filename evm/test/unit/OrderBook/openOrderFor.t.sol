@@ -153,7 +153,7 @@ contract OpenOrderForTest is OrderBookTestBase {
         assertEq(order.version, VERSION, "version");
         assertEq(order.destChainId, gaslessParams.destChainId, "destChainId");
         assertEq(order.fillDeadline, gaslessParams.fillDeadline, "fillDeadline");
-        assertEq(order.refundRequestedAt, uint32(0), "refundRequestedAt");
+        assertEq(order.cancelRequestedAt, uint32(0), "cancelRequestedAt");
         assertEq(order.nonce, gaslessParams.nonce, "nonce");
         assertEq(order.tokenIn, gaslessParams.tokenIn, "tokenIn");
         assertEq(order.tokenOut, gaslessParams.tokenOut, "tokenOut");
@@ -183,7 +183,7 @@ contract OpenOrderForTest is OrderBookTestBase {
         assertEq(order.version, VERSION, "version");
         assertEq(order.destChainId, gaslessParams.destChainId, "destChainId");
         assertEq(order.fillDeadline, gaslessParams.fillDeadline, "fillDeadline");
-        assertEq(order.refundRequestedAt, uint32(0), "refundRequestedAt");
+        assertEq(order.cancelRequestedAt, uint32(0), "cancelRequestedAt");
         assertEq(order.nonce, gaslessParams.nonce, "nonce");
         assertEq(order.tokenIn, gaslessParams.tokenIn, "tokenIn");
         assertEq(order.tokenOut, gaslessParams.tokenOut, "tokenOut");

@@ -101,7 +101,7 @@ contract RequestCancelOrderTest is OrderBookTestBase {
         
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
         assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.CancelRequested), "order status should be CancelRequested");
-        assertEq(order.refundRequestedAt, uint32(block.timestamp), "refundRequestedAt should be updated to current block timestamp");
+        assertEq(order.cancelRequestedAt, uint32(block.timestamp), "cancelRequestedAt should be updated to current block timestamp");
     }
 
     function test_givenLocalOrder_success() public {

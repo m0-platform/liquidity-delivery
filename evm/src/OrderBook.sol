@@ -169,7 +169,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
             version: VERSION, // origin contract version
             status: OrderStatus.Created,
             destChainId: orderParams_.destChainId,
-            refundRequestedAt: uint32(0),
+            cancelRequestedAt: uint32(0),
             fillDeadline: orderParams_.fillDeadline,
             nonce: nonce_,
             tokenIn: orderParams_.tokenIn,
@@ -235,11 +235,11 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         // Mark the order as cancel requested
         order.status = OrderStatus.CancelRequested;
 
-        // Set the refundRequestedAt timestamp to the current time
+        // Set the cancelRequestedAt timestamp to the current time
         // This will allow the caller to claim a refund after the finality buffer has passed
-        order.refundRequestedAt = uint32(block.timestamp); // can't overflow until year 2106 (80 years)
+        order.cancelRequestedAt = uint32(block.timestamp); // can't overflow until year 2106 (80 years)
 
-        emit CancelRequested(orderId_, order.refundRequestedAt);
+        emit CancelRequested(orderId_, order.cancelRequestedAt);
 
         if (order.destChainId == chainId) {
             // Local orders can be immediately refunded
@@ -264,7 +264,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
             if (uint256(order.fillDeadline) + finalityBuffer_ > block.timestamp) revert FinalityPending();
         } else if (order.status == OrderStatus.CancelRequested) {
             // If the order is in CancelRequested status, it can only be refunded if the refund was requested at least finality buffer ago
-            if (uint256(order.refundRequestedAt) + finalityBuffer_ > block.timestamp) revert FinalityPending();
+            if (uint256(order.cancelRequestedAt) + finalityBuffer_ > block.timestamp) revert FinalityPending();
         } else {
             // If the order is in any other status, it cannot be refunded
             revert InvalidOrderStatus();

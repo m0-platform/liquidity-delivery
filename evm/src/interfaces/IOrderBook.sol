@@ -162,7 +162,7 @@ interface IOrderBook {
      * @param nonce A counter tied to the sender to allow unique orders
      * @param destChainId Destination chain ID where the order is to be filled
      * @param fillDeadline Timestamp by which the order must be filled on the destination chain
-     * @param refundRequestedAt Timestamp when the refund was requested, 0 if no refund requested
+     * @param cancelRequestedAt Timestamp when the refund was requested, 0 if no refund requested
      * @param tokenIn Address of the input token on this chain
      * @param tokenOut Address of the output token on the destination chain
      * @param amountIn Amount of input token provided
@@ -177,7 +177,7 @@ interface IOrderBook {
         uint64 nonce;               //         8 = 31 bytes
         uint32 destChainId;         // slot 2: 4 +
         uint32 fillDeadline;        //         4 +
-        uint32 refundRequestedAt;   //         4 +
+        uint32 cancelRequestedAt;   //         4 +
         address tokenIn;            //         20 = 32 bytes
         bytes32 tokenOut;           // slot 3
         uint128 amountIn;           // slot 4: 16 +
