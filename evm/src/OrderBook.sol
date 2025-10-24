@@ -287,6 +287,11 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
     /// @inheritdoc IOrderBook
     function fillOrder(bytes32 orderId_, OrderData calldata orderData_, FillParams calldata fillerParams_) external override {
+        // Ensure the provided order ID matches the computed order ID from the order data
+        // This check is not strictly required, but it is a useful sanity check for solvers
+        // to ensure they have the order data correct
+        if (orderId_ != getOrderId(orderData_)) revert OrderIdMismatch();
+
         // Validate fill data
         if (chainId != orderData_.destChainId) revert InvalidDestinationChain();
         if (uint256(orderData_.fillDeadline) < block.timestamp) revert OrderExpired();
@@ -296,11 +301,6 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         // If the solver is specified, ensure that the caller is the designated solver
         address solver_ = orderData_.solver.toAddress();
         if (solver_ != address(0) && solver_ != msg.sender) revert NotAuthorized();
-
-        // Ensure the provided order ID matches the computed order ID from the order data
-        // This check is not strictly required, but it is a useful sanity check for solvers
-        // to ensure they have the order data correct
-        if (orderId_ != getOrderId(orderData_)) revert OrderIdMismatch();
 
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
 

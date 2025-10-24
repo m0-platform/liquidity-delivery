@@ -154,24 +154,28 @@ contract FillOrderTest is OrderBookTestBase {
 
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
 
+        // Calculate order ID with wrong version to check version mismatch
+        IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
+            version: 999, // Wrong version
+            sender: order.sender.toBytes32(),
+            nonce: order.nonce,
+            originChainId: CHAIN_ID,
+            destChainId: order.destChainId,
+            fillDeadline: order.fillDeadline,
+            tokenOut: order.tokenOut,
+            amountIn: order.amountIn,
+            amountOut: order.amountOut,
+            recipient: order.recipient,
+            solver: order.solver
+        });
+        orderId = orderBook.getOrderId(orderData);
+
         vm.prank(params.solver.toAddress());
         tokenOut.approve(address(orderBook), type(uint256).max);
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderVersion.selector));
         orderBook.fillOrder(
             orderId,
-            IOrderBook.OrderData({
-                version: 999, // Wrong version
-                originChainId: CHAIN_ID,
-                sender: order.sender.toBytes32(),
-                nonce: order.nonce,
-                destChainId: order.destChainId,
-                fillDeadline: order.fillDeadline,
-                amountIn: order.amountIn,
-                amountOut: order.amountOut,
-                tokenOut: order.tokenOut,
-                recipient: order.recipient,
-                solver: order.solver
-            }),
+            orderData,
             IOrderBook.FillParams({
                 amountOutToFill: order.amountOut,
                 originRecipient: params.solver
