@@ -172,16 +172,16 @@ interface IOrderBook {
      */
     struct Order {
         OrderStatus status;         // slot 1: 1 +
-        uint16 version;             // 2 + 
-        address sender;             // 20 +
-        uint64 nonce;               // 8 = 31 bytes
+        uint16 version;             //         2 + 
+        address sender;             //         20 +
+        uint64 nonce;               //         8 = 31 bytes
         uint32 destChainId;         // slot 2: 4 +
-        uint32 fillDeadline;        // 4 +
-        uint32 refundRequestedAt;   // 4 +
-        address tokenIn;            // 20 = 32 bytes
+        uint32 fillDeadline;        //         4 +
+        uint32 refundRequestedAt;   //         4 +
+        address tokenIn;            //         20 = 32 bytes
         bytes32 tokenOut;           // slot 3
         uint128 amountIn;           // slot 4: 16 +
-        uint128 amountOut;          // 16 = 32 bytes
+        uint128 amountOut;          //         16 = 32 bytes
         bytes32 recipient;          // slot 5
         bytes32 solver;             // slot 6
     }
