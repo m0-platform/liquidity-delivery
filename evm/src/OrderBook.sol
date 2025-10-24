@@ -404,14 +404,14 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     function getOrderId(OrderData memory orderData_) public pure override returns (bytes32) {
         return keccak256(abi.encodePacked(
             orderData_.version,
-            orderData_.originChainId,
             orderData_.sender,
             orderData_.nonce,
+            orderData_.originChainId,
             orderData_.destChainId,
             orderData_.fillDeadline,
+            orderData_.tokenOut,
             orderData_.amountIn,
             orderData_.amountOut,
-            orderData_.tokenOut,
             orderData_.recipient,
             orderData_.solver
         ));
