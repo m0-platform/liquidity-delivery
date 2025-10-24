@@ -271,13 +271,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         }
 
         // Calculate the refund amount
-        uint128 amountOutRemaining_ = order.amountOut - $.filledAmounts[orderId_].amountOutFilled;
         uint128 amountInRemaining_ = order.amountIn - $.filledAmounts[orderId_].amountInReleased;
-
-        // Update the order amountIn and amountOut values to reflect the refund
-        // This prevents double refunds if this function is called again
-        order.amountIn -= amountInRemaining_;
-        order.amountOut -= amountOutRemaining_;
 
         // Set the order status to completed
         order.status = OrderStatus.Completed;
