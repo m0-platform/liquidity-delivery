@@ -162,7 +162,7 @@ interface IOrderBook {
      * @param nonce A counter tied to the sender to allow unique orders
      * @param destChainId Destination chain ID where the order is to be filled
      * @param fillDeadline Timestamp by which the order must be filled on the destination chain
-     * @param cancelRequestedAt Timestamp when the refund was requested, 0 if no refund requested
+     * @param cancelRequestedAt Timestamp when the cancel was requested, 0 if no cancel requested
      * @param tokenIn Address of the input token on this chain
      * @param tokenOut Address of the output token on the destination chain
      * @param amountIn Amount of input token provided
