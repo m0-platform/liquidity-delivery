@@ -260,13 +260,13 @@ contract FillOrderTest is OrderBookTestBase {
 
         // Try to fill it again
         vm.prank(users["solver"]);
-        vm.expectRevert(abi.encodeWithSelector(IOrderBook.OrderFilled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.OrderAlreadyFilled.selector));
         orderBook.fillOrder(
             orderId,
             IOrderBook.OrderData({
                 version: order.version,
                 originChainId: CHAIN_ID,
-                sender: order.sender.toBytes32(),
+                sender: order.sender.toBytes32(),   
                 nonce: order.nonce,
                 destChainId: order.destChainId,
                 fillDeadline: order.fillDeadline,
@@ -332,7 +332,7 @@ contract FillOrderTest is OrderBookTestBase {
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.OrderCompleted(orderId);
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.Fill(orderId, params.solver.toAddress(), order.amountIn, order.amountOut);
+        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), order.amountIn, order.amountOut);
         orderBook.fillOrder(
             orderId,
             IOrderBook.OrderData({
@@ -401,7 +401,7 @@ contract FillOrderTest is OrderBookTestBase {
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.OrderCompleted(orderId);
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.Fill(orderId, params.solver.toAddress(), order.amountIn, order.amountOut);
+        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), order.amountIn, order.amountOut);
         orderBook.fillOrder(
             orderId,
             IOrderBook.OrderData({
@@ -469,7 +469,7 @@ contract FillOrderTest is OrderBookTestBase {
 
         vm.prank(params.solver.toAddress());
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.Fill(orderId, params.solver.toAddress(), expectedAmountIn, fillAmount);
+        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), expectedAmountIn, fillAmount);
         orderBook.fillOrder(
             orderId,
             IOrderBook.OrderData({
@@ -543,7 +543,7 @@ contract FillOrderTest is OrderBookTestBase {
         // Fill the order on the destination chain
         vm.prank(params.solver.toAddress());
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.Fill(orderId, params.solver.toAddress(), orderData.amountIn, orderData.amountOut);
+        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), orderData.amountIn, orderData.amountOut);
         orderBook.fillOrder(
             orderId,
             orderData,
@@ -603,7 +603,7 @@ contract FillOrderTest is OrderBookTestBase {
         // Fill the order on the destination chain
         vm.prank(params.solver.toAddress());
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.Fill(orderId, params.solver.toAddress(), orderData.amountIn, orderData.amountOut);
+        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), orderData.amountIn, orderData.amountOut);
         orderBook.fillOrder(
             orderId,
             orderData,
@@ -663,7 +663,7 @@ contract FillOrderTest is OrderBookTestBase {
 
         vm.prank(params.solver.toAddress());
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.Fill(orderId, params.solver.toAddress(), expectedAmountIn, fillAmount);
+        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), expectedAmountIn, fillAmount);
         orderBook.fillOrder(
             orderId,
             orderData,
@@ -721,7 +721,7 @@ contract FillOrderTest is OrderBookTestBase {
         vm.startPrank(solver);
         tokenOut.approve(address(orderBook), type(uint256).max);
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.Fill(orderId, solver, orderData.amountIn, orderData.amountOut);
+        emit IOrderBook.OrderFilled(orderId, solver, orderData.amountIn, orderData.amountOut);
         orderBook.fillOrder(
             orderId,
             orderData,
@@ -752,7 +752,7 @@ contract FillOrderTest is OrderBookTestBase {
         // Submit the initial fill
         vm.prank(params.solver.toAddress());
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.Fill(orderId, params.solver.toAddress(), expectedAmountIn, fillAmount);
+        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), expectedAmountIn, fillAmount);
         orderBook.fillOrder(
             orderId,
             IOrderBook.OrderData({
@@ -787,7 +787,7 @@ contract FillOrderTest is OrderBookTestBase {
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.OrderCompleted(orderId);
         vm.expectEmit(true, false, false, true);
-        emit IOrderBook.Fill(orderId, params.solver.toAddress(), remainingAmountIn, remainingAmountOut);
+        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), remainingAmountIn, remainingAmountOut);
         orderBook.fillOrder(
             orderId,
             IOrderBook.OrderData({

@@ -101,7 +101,7 @@ contract OpenOrderTest is OrderBookTestBase {
 
         vm.prank(users["alice"]);
         vm.expectEmit(true, true, true, true);
-        emit IOrderBook.OrderOpen(expOrderId, params.tokenIn, params.amountIn, params.destChainId, params.tokenOut, params.amountOut, params.solver);
+        emit IOrderBook.OrderOpened(expOrderId, params.tokenIn, params.amountIn, params.destChainId, params.tokenOut, params.amountOut, params.solver);
         bytes32 orderId = orderBook.openOrder(params);
 
         assertEq(orderId, expOrderId);

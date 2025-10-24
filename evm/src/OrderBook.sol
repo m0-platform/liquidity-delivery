@@ -185,7 +185,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         // Transfer tokens in from the sender, ensuring the required amount is received
         IERC20(orderParams_.tokenIn).safeTransferExactFrom(sender_, address(this), uint256(orderParams_.amountIn));
 
-        emit OrderOpen(orderId_, orderParams_.tokenIn, orderParams_.amountIn, orderParams_.destChainId, orderParams_.tokenOut, orderParams_.amountOut, orderParams_.solver);
+        emit OrderOpened(orderId_, orderParams_.tokenIn, orderParams_.amountIn, orderParams_.destChainId, orderParams_.tokenOut, orderParams_.amountOut, orderParams_.solver);
 
         return orderId_;
     }
@@ -308,7 +308,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         // Calculate fill amount as the minimum of the filler provided amount and the remaining unfilled amount
         IOrderBook.FilledAmounts storage filledAmounts = $.filledAmounts[orderId_];
         uint128 amountOutRemaining_ = orderData_.amountOut - filledAmounts.amountOutFilled;
-        if (amountOutRemaining_ == 0) revert OrderFilled();
+        if (amountOutRemaining_ == 0) revert OrderAlreadyFilled();
         bool fullFill_ = fillerParams_.amountOutToFill >= amountOutRemaining_;
         uint128 amountOutToFill_ = fullFill_ ? amountOutRemaining_ : fillerParams_.amountOutToFill;
 
@@ -354,7 +354,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
             );
         }
 
-        emit Fill(orderId_, msg.sender, amountInToRelease_, amountOutToFill_);
+        emit OrderFilled(orderId_, msg.sender, amountInToRelease_, amountOutToFill_);
     }
 
     /* ========== Receiving Fill Reports ========== */

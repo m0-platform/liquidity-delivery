@@ -20,14 +20,16 @@ contract OpenOrderForTest is OrderBookTestBase {
     //   [X] it reverts with an InvalidOriginChain error
     // [X] given the nonce does not match the current nonce for the sender
     //   [X] it reverts with an InvalidNonce error
-    // [ ] given the sender has not approved the orderbook contract for the tokenIn
-    //   [ ] it reverts with an insufficient allowance error
+    // [X] given the sender has not approved the orderbook contract for the tokenIn
+    //   [X] it reverts with an insufficient allowance error
     // [X] given the signature is a valid standard ECDSA signature
     //   [X] it creates the order successfully
     //   [X] it transfers the amount in from the "sender" to the orderbook contract
-    //   [X] it emits an OrderCreated event 
-    // [ ] given the signature is a valid compact ECDSA signature
-    // [ ] 
+    //   [X] it emits an OrderOpened event 
+    // [X] given the signature is a valid compact ECDSA signature
+    //   [X] it creates the order successfully
+    //   [X] it transfers the amount in from the "sender" to the orderbook
+    //   [X] it emits an OrderOpened event
 
     IOrderBook.GaslessOrderParams internal gaslessParams;
     VmSafe.Wallet internal sender;
@@ -71,6 +73,25 @@ contract OpenOrderForTest is OrderBookTestBase {
         return abi.encodePacked(r, vs);
     }
 
+    function _getOrderIdFromGaslessParams(IOrderBook.GaslessOrderParams memory params_) internal view returns (bytes32) {
+        return _getOrderIdFromParams(
+            params_.sender,
+            params_.nonce,
+            IOrderBook.OrderParams({
+                destChainId: params_.destChainId,
+                fillDeadline: params_.fillDeadline,
+                tokenIn: params_.tokenIn,
+                tokenOut: params_.tokenOut,
+                amountIn: params_.amountIn,
+                amountOut: params_.amountOut,
+                recipient: params_.recipient,
+                solver: params_.solver
+            })
+        );
+    }
+
+    /* ========== Tests ========== */
+
     function test_givenSignatureNotFromSender_reverts() public {
         // Create a different wallet
         VmSafe.Wallet memory notSender = vm.createWallet("not-sender");
@@ -86,7 +107,6 @@ contract OpenOrderForTest is OrderBookTestBase {
         orderBook.openOrderFor(gaslessParams, signature);
     }
 
-
     function test_givenOriginChainIdInvalid_reverts() public {
         // Set the chain ID to a different value than the current one
         gaslessParams.originChainId = DEST_CHAIN_ID;
@@ -99,8 +119,6 @@ contract OpenOrderForTest is OrderBookTestBase {
         vm.expectRevert(IOrderBook.InvalidOriginChain.selector);
         orderBook.openOrderFor(gaslessParams, signature);
     }
-
-
 
     function test_invalidNonce_reverts() public {
         // Set the nonce to a value that hasn't been reached yet
@@ -134,9 +152,6 @@ contract OpenOrderForTest is OrderBookTestBase {
         orderBook.openOrderFor(gaslessParams, signature);
     }
 
-    // TODO: this should pass, but the EIP712 base contract that is being
-    // inherited here only accepts standard 65 byte length ECDSA signatures
-    // Need to make a PR to common
     function test_givenCompactECDSASignature_success() public {
         // Create the order digest and sign it
         bytes memory signature = _signCompactECDSA(sender, gaslessParams);
@@ -144,11 +159,16 @@ contract OpenOrderForTest is OrderBookTestBase {
         // Cache the starting balance of tokenIn
         uint256 startingBalance = tokenIn.balanceOf(sender.addr);
 
+        bytes32 expOrderId = _getOrderIdFromGaslessParams(gaslessParams);
+
+        vm.expectEmit(true, true, true, true);
+        emit IOrderBook.OrderOpened(expOrderId, gaslessParams.tokenIn, gaslessParams.amountIn, gaslessParams.destChainId, gaslessParams.tokenOut, gaslessParams.amountOut, gaslessParams.solver);
         bytes32 orderId = orderBook.openOrderFor(gaslessParams, signature);
 
         // Get the order and confirm the data is set correctly
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
 
+        assertEq(orderId, expOrderId);
         assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Created), "status");
         assertEq(order.version, VERSION, "version");
         assertEq(order.destChainId, gaslessParams.destChainId, "destChainId");
@@ -174,11 +194,16 @@ contract OpenOrderForTest is OrderBookTestBase {
         // Cache the starting balance of tokenIn
         uint256 startingBalance = tokenIn.balanceOf(sender.addr);
 
+        bytes32 expOrderId = _getOrderIdFromGaslessParams(gaslessParams);
+
+        vm.expectEmit(true, true, true, true);
+        emit IOrderBook.OrderOpened(expOrderId, gaslessParams.tokenIn, gaslessParams.amountIn, gaslessParams.destChainId, gaslessParams.tokenOut, gaslessParams.amountOut, gaslessParams.solver);
         bytes32 orderId = orderBook.openOrderFor(gaslessParams, signature);
 
         // Get the order and confirm the data is set correctly
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
 
+        assertEq(orderId, expOrderId);
         assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Created), "status");
         assertEq(order.version, VERSION, "version");
         assertEq(order.destChainId, gaslessParams.destChainId, "destChainId");

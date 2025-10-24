@@ -15,12 +15,12 @@ interface IOrderBook {
      * @param amountOut The amount of output token expected
      * @param solver The address of the solver that will fill the order, or zero address if any approved solver can fill
      */
-    event OrderOpen(
-        bytes32 orderId,
+    event OrderOpened(
+        bytes32 indexed orderId,
         address tokenIn,
         uint128 amountIn,
         uint32 indexed destChainId,
-        bytes32 indexed tokenOut,
+        bytes32 tokenOut,
         uint128 amountOut,
         bytes32 indexed solver
     );
@@ -33,7 +33,7 @@ interface IOrderBook {
      * @param amountOutFilled The amount of output token that was filled
      * @param amountInToRelease The amount of input token they will receive on the origin chain
      */
-    event Fill(
+    event OrderFilled(
         bytes32 indexed orderId, 
         address indexed solver, 
         uint128 amountInToRelease,
@@ -46,7 +46,7 @@ interface IOrderBook {
      * @param orderId The ID of the order being cancelled
      * @param cancelRequestedAt The timestamp when the cancellation was requested
      */
-    event CancelRequested(bytes32 orderId, uint32 cancelRequestedAt);
+    event CancelRequested(bytes32 indexed orderId, uint32 cancelRequestedAt);
 
     /**
      * @notice Emitted when a refund is claimed for an order
@@ -56,7 +56,7 @@ interface IOrderBook {
      * @param amountInRefunded The amount of input token that was refunded
      */
     event RefundClaimed(
-        bytes32 orderId, 
+        bytes32 indexed orderId, 
         address indexed sender, 
         uint128 amountInRefunded
     );
@@ -84,7 +84,7 @@ interface IOrderBook {
     error InvalidReport();
     error NotAuthorized();
     error OrderExpired();
-    error OrderFilled();
+    error OrderAlreadyFilled();
     error OrderIdMismatch();
 
     /* ========== Structs and Enums ========== */
