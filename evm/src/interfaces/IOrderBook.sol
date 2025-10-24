@@ -80,6 +80,7 @@ interface IOrderBook {
     error InvalidOrderStatus();
     error InvalidOrderVersion();
     error InvalidOriginChain();
+    error InvalidRecipient();
     error InvalidReport();
     error NotAuthorized();
     error OrderExpired();

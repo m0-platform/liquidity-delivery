@@ -142,6 +142,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         if (uint256(orderParams_.fillDeadline) < block.timestamp) revert InvalidDeadline();
         if (orderParams_.amountIn == 0) revert AmountInZero();
         if (orderParams_.amountOut == 0) revert AmountOutZero();
+        if (orderParams_.recipient == bytes32(0)) revert InvalidRecipient();
 
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
 
@@ -341,7 +342,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         if (chainId != orderData_.originChainId) {
             // If this is a fill on a different chain than the origin chain, 
             // we need to send a message back to the origin chain to release 
-            // the corresponding amount of origin tokens to the recipient
+            // the corresponding amount of tokenIn to the solver's recipient
             IMessenger(messenger).sendFillReport(
                 orderData_.originChainId,
                 FillReport({
