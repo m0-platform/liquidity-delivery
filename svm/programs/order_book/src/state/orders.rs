@@ -56,7 +56,7 @@ pub struct ForeignOrder {
 
 // Note: this must match the EVM version exactly
 // We derive the Order ID from the hash of this struct
-#[derive(AnchorDeserialize, AnchorSerialize, Clone)]
+#[derive(AnchorDeserialize, AnchorSerialize, Clone, Debug)]
 pub struct OrderData {
     pub version: u16,
     pub sender: [u8; 32],

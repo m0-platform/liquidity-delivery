@@ -96,6 +96,7 @@ impl SvmEventListener {
                 .on::<OrderOpened>(move |_ctx, event| {
                     let order = OrderData {
                         version: 0, // TODO: Get from contract or config
+                        amount_in: event.amount_in as u128,
                         origin_chain_id: chain_id_clone.clone(),
                         sender: [0u8; 32], // TODO: Extract from event
                         nonce: 0,          // TODO: Extract from event

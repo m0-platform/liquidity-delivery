@@ -59,7 +59,7 @@ pub struct Config {
     pub liquidity_api_url: String,
     pub log_level: LevelFilter,
     pub signers: Signers,
-    pub rate_limit: RateLimitConfig,
+    pub rate_limit: RateLimitConfig, // TODO: should be per chain
 }
 
 #[derive(Clone, Debug)]

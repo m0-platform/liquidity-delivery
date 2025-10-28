@@ -31,6 +31,6 @@ gasreport.ansi
 
 # Anchor/Rust files
 .anchor
+target
 **/*.rs.bk
 test-ledger
-target
