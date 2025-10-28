@@ -1,5 +1,9 @@
+[workspace]
+members = ["svm/programs/*"]
+
 [toolchain]
 package_manager = "pnpm"
+anchor_version = "0.31.1"
 
 [features]
 resolution = true

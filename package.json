@@ -2,10 +2,13 @@
   "name": "@m0-foundation/liquidity-delivery",
   "version": "1.0.0",
   "description": "Limit order protocol for liquidity delivery within the M0 ecosystem.",
-  "author": "M^0 Labs <contact@m0.xyz>",
+  "author": "M0 Labs <contact@m0.xyz>",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/m0-foundation/liquidity-delivery.git"
+  },
+  "scripts": {
+    "test-solver": "RUSTFLAGS='-Awarnings' cargo test --package solver --test integration_test"
   },
   "devDependencies": {
     "@coral-xyz/anchor": "^0.31.1",
