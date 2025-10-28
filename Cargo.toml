@@ -1,7 +1,5 @@
 [workspace]
-members = [
-    "programs/*"
-]
+members = ["svm/programs/*", "solver"]
 resolver = "2"
 
 [profile.release]
