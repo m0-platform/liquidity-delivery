@@ -11,7 +11,7 @@ contract FillOrderTest is OrderBookTestBase {
     // Test cases
     // [X] given the destination chain ID of the order is not the current chain ID
     //   [X] it reverts with an InvalidDestinationChain error
-    // [X] given the fill deadline has passed
+    // [X] given the current timestamp is > fill deadline
     //   [X] it reverts with an OrderExpired error
     // [X] given the order version does not match the version of the order stored
     //   [X] it reverts with an InvalidOrderVersion error

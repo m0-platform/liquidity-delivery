@@ -14,7 +14,7 @@ contract RequestCancelOrderTest is OrderBookTestBase {
     //   [X] it reverts with an InvalidOrderStatus error
     // [X] given the order exists but has already filled (cross-chain)
     //   [X] it reverts with an InvalidOrderStatus error
-    // [X] given the fill deadline has passed
+    // [X] given the current timestamp is > the fill deadline
     //   [X] it reverts with an OrderExpired error
     // [X] given the caller is not the order sender
     //   [X] it reverts with an NotAuthorized error
@@ -23,11 +23,11 @@ contract RequestCancelOrderTest is OrderBookTestBase {
     //     [X] it updates the order status to CancelRequested
     //     [X] it sets the refund requested at timestamp to the current block timestamp
     //     [X] it emits an CancelRequest event
-    //   [ ] given the destination chain is the current chain (i.e. local order)
-    //     [ ] it immediately refunds the order amount in to the order sender
-    //     [ ] it sets the order status to Completed
-    //     [ ] it emits a CancelRequested event
-    //     [ ] it emits a RefundClaimed event
+    //   [X] given the destination chain is the current chain (i.e. local order)
+    //     [X] it immediately refunds the order amount in to the order sender
+    //     [X] it sets the order status to Completed
+    //     [X] it emits a CancelRequested event
+    //     [X] it emits a RefundClaimed event
 
     function setUp() public override {
         super.setUp();
@@ -41,6 +41,18 @@ contract RequestCancelOrderTest is OrderBookTestBase {
         vm.prank(users["alice"]);
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
         orderBook.requestCancelOrder(fakeOrderId);
+    }
+
+    function test_givenFillDeadlineHasPassed_reverts() public {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+
+        // Warp past the fill deadline
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        vm.warp(order.fillDeadline + 1);
+
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.OrderExpired.selector));
+        orderBook.requestCancelOrder(orderId);
     }
     
     function test_givenOrderIsAlreadyCancelled_reverts() public {
