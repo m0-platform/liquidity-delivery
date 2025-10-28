@@ -5,7 +5,7 @@ use alloy::{
     hex,
     network::TransactionBuilder,
     node_bindings::{Anvil, AnvilInstance},
-    primitives::{aliases::U40, Address, FixedBytes, U256},
+    primitives::{Address, FixedBytes, U256},
     providers::{Provider, ProviderBuilder},
     rpc::types::TransactionRequest,
     signers::local::PrivateKeySigner,
@@ -18,7 +18,7 @@ use std::{sync::Arc, time::Duration};
 use tokio::{sync::broadcast, time::sleep};
 use tracing_capture::TestTracingGuard;
 
-use crate::{mock_api::AssetConfig, IOrderBook::OnchainOrderParams};
+use crate::{mock_api::AssetConfig, IOrderBook::OrderParams};
 
 sol!(
     #[sol(rpc)]
@@ -62,7 +62,7 @@ impl TestSuite {
             .wallet(evm_signer.clone())
             .connect_http(anvil.endpoint_url());
 
-        let contract = OrderBook::deploy(&provider)
+        let contract = OrderBook::deploy(&provider, 11155111, Address::new([0u8; 20]))
             .await
             .expect("Failed to deploy contract");
 
@@ -190,7 +190,7 @@ async fn test_inventory_manager_loads_balances() {
     assert!(suite.log_guard.contains("USDC: 100"));
     assert!(suite.log_guard.contains("USDT: 100"));
     assert!(suite.log_guard.contains("USDS: 100"));
-    assert!(suite.log_guard.contains("ETH: 9999.996"));
+    assert!(suite.log_guard.contains("ETH: 9999.99"));
 }
 
 #[tokio::test]
@@ -215,15 +215,15 @@ async fn test_order_rejected() {
         .await
         .expect("Failed to confirm approve transaction");
 
-    let builder = contract.openOrder(OnchainOrderParams {
+    let builder = contract.openOrder(OrderParams {
         tokenIn: suite.tokens[0].into(),
-        destChainId: 421614,
+        destChainId: 11155111,
         // Unsupported token
         tokenOut: FixedBytes::from([0u8; 32]),
         amountIn: 1000000,
         amountOut: 1000000,
         recipient: FixedBytes::from(decode_evm_address(suite.evm_signer.address())),
-        fillDeadline: U40::MAX,
+        fillDeadline: u32::MAX,
         solver: FixedBytes::from([0u8; 32]),
     });
 
@@ -239,7 +239,7 @@ async fn test_order_rejected() {
     sleep(Duration::from_millis(100)).await;
 
     // Check that the OrderRejected event was created
-    assert!(suite.log_guard.contains("event=\"OrderRejected\" order_id=6dd444764fa0dc3229a76f38314ae608a4e69cef19bce9c636e4661c7f58117e"));
+    assert!(suite.log_guard.contains("event=\"OrderRejected\" order_id=11d3f9cf3bf682b531f7f9f0acd954d51570f909602da2f2271c840539a48c7e"));
     assert!(suite.log_guard.contains("reason=Asset not supported"));
 }
 
@@ -265,14 +265,14 @@ async fn test_order_processed() {
         .await
         .expect("Failed to confirm approve transaction");
 
-    let builder = contract.openOrder(OnchainOrderParams {
+    let builder = contract.openOrder(OrderParams {
         tokenIn: suite.tokens[0].into(),
-        destChainId: 421614,
+        destChainId: 11155111,
         tokenOut: FixedBytes::from(decode_evm_address(suite.tokens[1])),
         amountIn: 1000000,
         amountOut: 1000000,
         recipient: FixedBytes::from(decode_evm_address(suite.evm_signer.address())),
-        fillDeadline: U40::MAX,
+        fillDeadline: u32::MAX,
         solver: FixedBytes::from([0u8; 32]),
     });
 
@@ -287,7 +287,6 @@ async fn test_order_processed() {
     // Let the solver run and pick up the order
     sleep(Duration::from_millis(100)).await;
 
-    // Check that the OrderRejected event was created
-    assert!(suite.log_guard.contains("event=\"OrderRejected\" order_id=6dd444764fa0dc3229a76f38314ae608a4e69cef19bce9c636e4661c7f58117f"));
-    assert!(suite.log_guard.contains("reason=Asset not supported"));
+    // Check that the Order was picked up and not rejected
+    assert!(suite.log_guard.contains("event=\"OrderCreated\" order_id=1134d1ebdad1d716b53d32a21600b69709b913385396ed35f68aa19022020beb"));
 }

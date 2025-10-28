@@ -14,9 +14,9 @@ use tokio::task::JoinHandle;
 use crate::config::ChainConfig;
 use crate::error::{Result, SolverError};
 use crate::events::{
-    CancelRequest, EventBus, EventHandler, EventProcessor, Fill, OrderCancelRequestEvent,
-    OrderCompleted, OrderCompletedEvent, OrderCreatedEvent, OrderFillEvent, OrderOpen,
-    OrderRefundClaimedEvent, RefundClaimed, SolverEvent,
+    CancelRequested, EventBus, EventHandler, EventProcessor, OrderCancelRequestEvent,
+    OrderCompleted, OrderCompletedEvent, OrderCreatedEvent, OrderFillEvent, OrderFilled,
+    OrderOpened, OrderRefundClaimedEvent, RefundClaimed, SolverEvent,
 };
 use crate::stores::OrderStore;
 use crate::utils::{chain_runtime, decode_evm_address};
@@ -99,9 +99,9 @@ impl EvmEventListener {
         let filter = Filter::new()
             .address(contract_address)
             .event_signature(vec![
-                OrderOpen::SIGNATURE_HASH,
-                Fill::SIGNATURE_HASH,
-                CancelRequest::SIGNATURE_HASH,
+                OrderOpened::SIGNATURE_HASH,
+                OrderFilled::SIGNATURE_HASH,
+                CancelRequested::SIGNATURE_HASH,
                 RefundClaimed::SIGNATURE_HASH,
                 OrderCompleted::SIGNATURE_HASH,
             ]);
@@ -174,11 +174,11 @@ impl EvmEventListener {
         };
 
         // Match on event signature and decode
-        if event_signature == OrderOpen::SIGNATURE_HASH {
+        if event_signature == OrderOpened::SIGNATURE_HASH {
             return Ok(Some(Self::handle_order_open(chain_id, &log_data)?));
-        } else if event_signature == Fill::SIGNATURE_HASH {
+        } else if event_signature == OrderFilled::SIGNATURE_HASH {
             return Ok(Some(Self::handle_fill(&log_data)?));
-        } else if event_signature == CancelRequest::SIGNATURE_HASH {
+        } else if event_signature == CancelRequested::SIGNATURE_HASH {
             return Ok(Some(Self::handle_cancel_request(&log_data)?));
         } else if event_signature == RefundClaimed::SIGNATURE_HASH {
             return Ok(Some(Self::handle_refund_claimed(&log_data)?));
@@ -190,7 +190,7 @@ impl EvmEventListener {
     }
 
     fn handle_order_open(chain_id: u32, log: &Log) -> Result<SolverEvent> {
-        let event = OrderOpen::decode_log(log)
+        let event = OrderOpened::decode_log(log)
             .map_err(|e| SolverError::Component(format!("Failed to decode OrderOpen: {}", e)))?;
 
         let order = OrderData {
@@ -214,7 +214,7 @@ impl EvmEventListener {
     }
 
     fn handle_fill(log: &Log) -> Result<SolverEvent> {
-        let event = Fill::decode_log(log)
+        let event = OrderFilled::decode_log(log)
             .map_err(|e| SolverError::Component(format!("Failed to decode Fill: {}", e)))?;
 
         let order_id = format!("{:x}", event.orderId);
@@ -224,13 +224,12 @@ impl EvmEventListener {
     }
 
     fn handle_cancel_request(log: &Log) -> Result<SolverEvent> {
-        let event = CancelRequest::decode_log(log).map_err(|e| {
+        let event = CancelRequested::decode_log(log).map_err(|e| {
             SolverError::Component(format!("Failed to decode CancelRequest: {}", e))
         })?;
 
         let order_id = format!("{:x}", event.orderId);
-        let cancel_event =
-            OrderCancelRequestEvent::new(order_id, event.newFillDeadline.to::<u64>());
+        let cancel_event = OrderCancelRequestEvent::new(order_id, event.cancelRequestedAt as u64);
 
         Ok(SolverEvent::OrderCancelRequest(cancel_event))
     }

@@ -58,7 +58,7 @@ impl EventHandler for EventLogger {
                     event = "OrderCancelRequest",
                     order_id = %e.order_id,
                     timestamp = e.timestamp,
-                    new_fill_deadline = e.new_fill_deadline,
+                    requested_at = e.requested_at,
                 );
             }
             SolverEvent::OrderRefundClaimed(e) => {

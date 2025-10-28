@@ -5,28 +5,26 @@ sol! {
     #![sol(rpc, alloy_sol_types = alloy::sol_types)]
 
     #[derive(Debug)]
-    event OrderOpen(
+    event OrderOpened(
         bytes32 indexed orderId,
         address tokenIn,
         uint128 amountIn,
         uint32 indexed destChainId,
-        bytes32 indexed tokenOut,
+        bytes32 tokenOut,
         uint128 amountOut,
-        bytes32 solver
+        bytes32 indexed solver
     );
 
     #[derive(Debug)]
-    event Fill(
+    event OrderFilled(
         bytes32 indexed orderId,
         address indexed solver,
+        uint128 amountInToRelease,
         uint128 amountOutFilled
     );
 
     #[derive(Debug)]
-    event CancelRequest(
-        bytes32 indexed orderId,
-        uint40 newFillDeadline
-    );
+    event CancelRequested(bytes32 indexed orderId, uint32 cancelRequestedAt);
 
     #[derive(Debug)]
     event RefundClaimed(
@@ -35,8 +33,7 @@ sol! {
         uint128 amountInRefunded
     );
 
+
     #[derive(Debug)]
-    event OrderCompleted(
-        bytes32 indexed orderId
-    );
+    event OrderCompleted(bytes32 orderId);
 }

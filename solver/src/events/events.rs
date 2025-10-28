@@ -91,14 +91,14 @@ impl OrderRejectEvent {
 pub struct OrderCancelRequestEvent {
     pub order_id: String,
     pub timestamp: u64,
-    pub new_fill_deadline: u64,
+    pub requested_at: u64,
 }
 
 impl OrderCancelRequestEvent {
-    pub fn new(order_id: String, new_fill_deadline: u64) -> Self {
+    pub fn new(order_id: String, requested_at: u64) -> Self {
         Self {
             order_id,
-            new_fill_deadline,
+            requested_at,
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
