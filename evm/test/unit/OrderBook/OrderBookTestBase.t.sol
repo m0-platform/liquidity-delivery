@@ -60,11 +60,7 @@ abstract contract OrderBookTestBase is Test {
         uint256 tokenCount = TOKENS.length;
         for (uint256 i = 0; i < tokenCount; i++) {
             Token memory tokenInfo = TOKENS[i];
-            MockERC20 token = new MockERC20(
-                tokenInfo.name,
-                tokenInfo.symbol,
-                tokenInfo.decimals
-            );
+            MockERC20 token = new MockERC20(tokenInfo.name, tokenInfo.symbol, tokenInfo.decimals);
             tokens[tokenInfo.name] = token;
         }
 
@@ -90,20 +86,13 @@ abstract contract OrderBookTestBase is Test {
         vm.deal(admin, 1 ether);
         address implementation = address(new OrderBook(CHAIN_ID, address(messenger)));
         orderBook = OrderBook(
-            address(new ERC1967Proxy(
-                implementation,
-                abi.encodeWithSelector(
-                    OrderBook.initialize.selector,
-                    admin
-                )
-            ))
+            address(new ERC1967Proxy(implementation, abi.encodeWithSelector(OrderBook.initialize.selector, admin)))
         );
 
         // Configure
         messenger.setOrderBook(address(orderBook));
         vm.prank(admin);
         orderBook.setDestinationConfig(DEST_CHAIN_ID, true, uint32(10 minutes));
-
 
         // Setup the standard order params used in tests
         params = IOrderBook.OrderParams({
@@ -122,20 +111,27 @@ abstract contract OrderBookTestBase is Test {
 
     // =========== Helper Functions ========== //
 
-    function _getOrderIdFromParams(address sender_, uint64 nonce_, IOrderBook.OrderParams memory params_) internal view returns (bytes32) {
-        return orderBook.getOrderId(IOrderBook.OrderData({
-            version: 1,
-            originChainId: CHAIN_ID,
-            sender: sender_.toBytes32(),
-            nonce: nonce_,
-            destChainId: params_.destChainId,
-            fillDeadline: params_.fillDeadline,
-            amountIn: params_.amountIn,
-            amountOut: params_.amountOut,
-            tokenOut: params_.tokenOut,
-            recipient: params_.recipient,
-            solver: params_.solver
-        }));
+    function _getOrderIdFromParams(
+        address sender_,
+        uint64 nonce_,
+        IOrderBook.OrderParams memory params_
+    ) internal view returns (bytes32) {
+        return
+            orderBook.getOrderId(
+                IOrderBook.OrderData({
+                    version: 1,
+                    originChainId: CHAIN_ID,
+                    sender: sender_.toBytes32(),
+                    nonce: nonce_,
+                    destChainId: params_.destChainId,
+                    fillDeadline: params_.fillDeadline,
+                    amountIn: params_.amountIn,
+                    amountOut: params_.amountOut,
+                    tokenOut: params_.tokenOut,
+                    recipient: params_.recipient,
+                    solver: params_.solver
+                })
+            );
     }
 
     modifier from(address user_) {
@@ -144,7 +140,10 @@ abstract contract OrderBookTestBase is Test {
         vm.stopPrank();
     }
 
-    function _placeOrder(address sender_, IOrderBook.OrderParams memory params_) internal from(sender_) returns (bytes32) {
+    function _placeOrder(
+        address sender_,
+        IOrderBook.OrderParams memory params_
+    ) internal from(sender_) returns (bytes32) {
         tokenIn.approve(address(orderBook), uint256(params_.amountIn));
         bytes32 orderId_ = orderBook.openOrder(params_);
 
@@ -157,7 +156,7 @@ abstract contract OrderBookTestBase is Test {
         MockERC20(order.tokenOut.toAddress()).approve(address(orderBook), fillAmount_);
 
         orderBook.fillOrder(
-            orderId_, 
+            orderId_,
             IOrderBook.OrderData({
                 version: order.version,
                 originChainId: CHAIN_ID,
@@ -171,27 +170,26 @@ abstract contract OrderBookTestBase is Test {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({
-                amountOutToFill: fillAmount_,
-                originRecipient: order.solver
-            })
+            IOrderBook.FillParams({ amountOutToFill: fillAmount_, originRecipient: order.solver })
         );
     }
 
     function _reportFill(
         address solver_,
-        bytes32 orderId_, 
+        bytes32 orderId_,
         uint128 amountOutFilled_,
         uint128 amountInToRelease_
     ) internal {
         // Report the fill back to the origin chain
         vm.prank(address(messenger));
-        orderBook.reportFill(IOrderBook.FillReport({
-            orderId: orderId_,
-            amountOutFilled: amountOutFilled_,
-            amountInToRelease: amountInToRelease_,
-            originRecipient: solver_.toBytes32()
-        }));
+        orderBook.reportFill(
+            IOrderBook.FillReport({
+                orderId: orderId_,
+                amountOutFilled: amountOutFilled_,
+                amountInToRelease: amountInToRelease_,
+                originRecipient: solver_.toBytes32()
+            })
+        );
     }
 
     // =========== Test Modifiers ========== //

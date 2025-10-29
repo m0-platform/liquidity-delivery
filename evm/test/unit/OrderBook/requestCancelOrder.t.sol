@@ -54,7 +54,7 @@ contract RequestCancelOrderTest is OrderBookTestBase {
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.OrderExpired.selector));
         orderBook.requestCancelOrder(orderId);
     }
-    
+
     function test_givenOrderIsAlreadyCancelled_reverts() public {
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
@@ -101,7 +101,6 @@ contract RequestCancelOrderTest is OrderBookTestBase {
         orderBook.requestCancelOrder(orderId);
     }
 
-
     function test_givenCrosschainOrder_success() public {
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
@@ -110,10 +109,18 @@ contract RequestCancelOrderTest is OrderBookTestBase {
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.CancelRequested(orderId, uint32(block.timestamp));
         orderBook.requestCancelOrder(orderId);
-        
+
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
-        assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.CancelRequested), "order status should be CancelRequested");
-        assertEq(order.cancelRequestedAt, uint32(block.timestamp), "cancelRequestedAt should be updated to current block timestamp");
+        assertEq(
+            uint8(order.status),
+            uint8(IOrderBook.OrderStatus.CancelRequested),
+            "order status should be CancelRequested"
+        );
+        assertEq(
+            order.cancelRequestedAt,
+            uint32(block.timestamp),
+            "cancelRequestedAt should be updated to current block timestamp"
+        );
     }
 
     function test_givenLocalOrder_success() public {
@@ -130,9 +137,13 @@ contract RequestCancelOrderTest is OrderBookTestBase {
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.RefundClaimed(orderId, users["alice"], params.amountIn);
         orderBook.requestCancelOrder(orderId);
-        
+
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
         assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Completed), "order status should be Completed");
-        assertEq(tokenIn.balanceOf(users["alice"]), aliceStartingBalance + params.amountIn, "alice should be refunded the amountIn");
+        assertEq(
+            tokenIn.balanceOf(users["alice"]),
+            aliceStartingBalance + params.amountIn,
+            "alice should be refunded the amountIn"
+        );
     }
 }

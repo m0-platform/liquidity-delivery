@@ -126,30 +126,54 @@ contract ClaimRefundTest is OrderBookTestBase {
         orderBook.claimRefund(orderId);
 
         // Verify refund
-        assertEq(tokenIn.balanceOf(users["alice"]), senderBalanceBefore + order.amountIn, "sender should receive full refund");
-        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookBalanceBefore - order.amountIn, "orderBook should release full amount");
+        assertEq(
+            tokenIn.balanceOf(users["alice"]),
+            senderBalanceBefore + order.amountIn,
+            "sender should receive full refund"
+        );
+        assertEq(
+            tokenIn.balanceOf(address(orderBook)),
+            orderBookBalanceBefore - order.amountIn,
+            "orderBook should release full amount"
+        );
 
         // Verify order status
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Completed), "order should be completed");
     }
 
-    function test_bothSixDecimals_givenCancelledOrderNoFills_success() public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+    function test_bothSixDecimals_givenCancelledOrderNoFills_success()
+        public
+        givenTokenInDecimals(6)
+        givenTokenOutDecimals(6)
+    {
         _placeOrder(users["alice"], params);
         _test_givenCancelledOrderNoFills_success();
     }
 
-    function test_tokenInSmallerDecimals_givenCancelledOrderNoFills_success() public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+    function test_tokenInSmallerDecimals_givenCancelledOrderNoFills_success()
+        public
+        givenTokenInDecimals(6)
+        givenTokenOutDecimals(18)
+    {
         _placeOrder(users["alice"], params);
         _test_givenCancelledOrderNoFills_success();
     }
 
-    function test_tokenInLargerDecimals_givenCancelledOrderNoFills_success() public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+    function test_tokenInLargerDecimals_givenCancelledOrderNoFills_success()
+        public
+        givenTokenInDecimals(18)
+        givenTokenOutDecimals(6)
+    {
         _placeOrder(users["alice"], params);
         _test_givenCancelledOrderNoFills_success();
     }
 
-    function test_bothEighteenDecimals_givenCancelledOrderNoFills_success() public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+    function test_bothEighteenDecimals_givenCancelledOrderNoFills_success()
+        public
+        givenTokenInDecimals(18)
+        givenTokenOutDecimals(18)
+    {
         _placeOrder(users["alice"], params);
         _test_givenCancelledOrderNoFills_success();
     }
@@ -158,7 +182,7 @@ contract ClaimRefundTest is OrderBookTestBase {
         // Get the order ID
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 1, params);
 
-        // Report the order is partially filled (50%) 
+        // Report the order is partially filled (50%)
         uint128 fillAmount = params.amountOut / 2;
         uint128 expectedAmountIn = uint128((uint256(params.amountIn) * fillAmount) / params.amountOut);
         _reportFill(users["solver"], orderId, fillAmount, expectedAmountIn);
@@ -170,7 +194,9 @@ contract ClaimRefundTest is OrderBookTestBase {
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
 
         // Calculate expected refund (pro-rata)
-        uint128 expectedRefund = uint128((uint256(params.amountIn) * (params.amountOut - fillAmount)) / params.amountOut);
+        uint128 expectedRefund = uint128(
+            (uint256(params.amountIn) * (params.amountOut - fillAmount)) / params.amountOut
+        );
 
         // Warp past cancelRequestedAt + finalityBuffer
         uint32 finalityBuffer = orderBook.getDestinationFinalityBuffer(order.destChainId);
@@ -186,30 +212,54 @@ contract ClaimRefundTest is OrderBookTestBase {
         orderBook.claimRefund(orderId);
 
         // Verify refund
-        assertEq(tokenIn.balanceOf(users["alice"]), senderBalanceBefore + expectedRefund, "sender should receive partial refund");
-        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookBalanceBefore - expectedRefund, "orderBook should release partial amount");
+        assertEq(
+            tokenIn.balanceOf(users["alice"]),
+            senderBalanceBefore + expectedRefund,
+            "sender should receive partial refund"
+        );
+        assertEq(
+            tokenIn.balanceOf(address(orderBook)),
+            orderBookBalanceBefore - expectedRefund,
+            "orderBook should release partial amount"
+        );
 
         // Verify order status
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Completed), "order should be completed");
     }
 
-    function test_bothSixDecimals_givenCancelledOrderPartialFills_success() public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+    function test_bothSixDecimals_givenCancelledOrderPartialFills_success()
+        public
+        givenTokenInDecimals(6)
+        givenTokenOutDecimals(6)
+    {
         _placeOrder(users["alice"], params);
         _test_givenCancelledOrderPartialFills_success();
     }
 
-    function test_tokenInSmallerDecimals_givenCancelledOrderPartialFills_success() public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+    function test_tokenInSmallerDecimals_givenCancelledOrderPartialFills_success()
+        public
+        givenTokenInDecimals(6)
+        givenTokenOutDecimals(18)
+    {
         _placeOrder(users["alice"], params);
         _test_givenCancelledOrderPartialFills_success();
     }
 
-    function test_tokenInLargerDecimals_givenCancelledOrderPartialFills_success() public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+    function test_tokenInLargerDecimals_givenCancelledOrderPartialFills_success()
+        public
+        givenTokenInDecimals(18)
+        givenTokenOutDecimals(6)
+    {
         _placeOrder(users["alice"], params);
         _test_givenCancelledOrderPartialFills_success();
     }
 
-    function test_bothEighteenDecimals_givenCancelledOrderPartialFills_success() public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+    function test_bothEighteenDecimals_givenCancelledOrderPartialFills_success()
+        public
+        givenTokenInDecimals(18)
+        givenTokenOutDecimals(18)
+    {
         _placeOrder(users["alice"], params);
         _test_givenCancelledOrderPartialFills_success();
     }
@@ -234,30 +284,54 @@ contract ClaimRefundTest is OrderBookTestBase {
         orderBook.claimRefund(orderId);
 
         // Verify refund
-        assertEq(tokenIn.balanceOf(users["alice"]), senderBalanceBefore + order.amountIn, "sender should receive full refund");
-        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookBalanceBefore - order.amountIn, "orderBook should release full amount");
+        assertEq(
+            tokenIn.balanceOf(users["alice"]),
+            senderBalanceBefore + order.amountIn,
+            "sender should receive full refund"
+        );
+        assertEq(
+            tokenIn.balanceOf(address(orderBook)),
+            orderBookBalanceBefore - order.amountIn,
+            "orderBook should release full amount"
+        );
 
         // Verify order status
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Completed), "order should be completed");
     }
 
-    function test_bothSixDecimals_givenOrderExistsNoFills_success() public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+    function test_bothSixDecimals_givenOrderExistsNoFills_success()
+        public
+        givenTokenInDecimals(6)
+        givenTokenOutDecimals(6)
+    {
         _placeOrder(users["alice"], params);
         _test_givenOrderExistsNoFills_success();
     }
 
-    function test_tokenInSmallerDecimals_givenOrderExistsNoFills_success() public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+    function test_tokenInSmallerDecimals_givenOrderExistsNoFills_success()
+        public
+        givenTokenInDecimals(6)
+        givenTokenOutDecimals(18)
+    {
         _placeOrder(users["alice"], params);
         _test_givenOrderExistsNoFills_success();
     }
 
-    function test_tokenInLargerDecimals_givenOrderExistsNoFills_success() public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+    function test_tokenInLargerDecimals_givenOrderExistsNoFills_success()
+        public
+        givenTokenInDecimals(18)
+        givenTokenOutDecimals(6)
+    {
         _placeOrder(users["alice"], params);
         _test_givenOrderExistsNoFills_success();
     }
 
-    function test_bothEighteenDecimals_givenOrderExistsNoFills_success() public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+    function test_bothEighteenDecimals_givenOrderExistsNoFills_success()
+        public
+        givenTokenInDecimals(18)
+        givenTokenOutDecimals(18)
+    {
         _placeOrder(users["alice"], params);
         _test_givenOrderExistsNoFills_success();
     }
@@ -274,7 +348,9 @@ contract ClaimRefundTest is OrderBookTestBase {
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
 
         // Calculate expected refund (pro-rata)
-        uint128 expectedRefund = uint128((uint256(params.amountIn) * (params.amountOut - fillAmount)) / params.amountOut);
+        uint128 expectedRefund = uint128(
+            (uint256(params.amountIn) * (params.amountOut - fillAmount)) / params.amountOut
+        );
 
         // Warp past fillDeadline + finalityBuffer
         uint32 finalityBuffer = orderBook.getDestinationFinalityBuffer(order.destChainId);
@@ -290,30 +366,54 @@ contract ClaimRefundTest is OrderBookTestBase {
         orderBook.claimRefund(orderId);
 
         // Verify refund
-        assertEq(tokenIn.balanceOf(users["alice"]), senderBalanceBefore + expectedRefund, "sender should receive partial refund");
-        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookBalanceBefore - expectedRefund, "orderBook should release partial amount");
+        assertEq(
+            tokenIn.balanceOf(users["alice"]),
+            senderBalanceBefore + expectedRefund,
+            "sender should receive partial refund"
+        );
+        assertEq(
+            tokenIn.balanceOf(address(orderBook)),
+            orderBookBalanceBefore - expectedRefund,
+            "orderBook should release partial amount"
+        );
 
         // Verify order status
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Completed), "order should be completed");
     }
 
-    function test_bothSixDecimals_givenOrderExistsPartialFills_success() public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+    function test_bothSixDecimals_givenOrderExistsPartialFills_success()
+        public
+        givenTokenInDecimals(6)
+        givenTokenOutDecimals(6)
+    {
         _placeOrder(users["alice"], params);
         _test_givenOrderExistsPartialFills_success();
     }
 
-    function test_tokenInSmallerDecimals_givenOrderExistsPartialFills_success() public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+    function test_tokenInSmallerDecimals_givenOrderExistsPartialFills_success()
+        public
+        givenTokenInDecimals(6)
+        givenTokenOutDecimals(18)
+    {
         _placeOrder(users["alice"], params);
         _test_givenOrderExistsPartialFills_success();
     }
 
-    function test_tokenInLargerDecimals_givenOrderExistsPartialFills_success() public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+    function test_tokenInLargerDecimals_givenOrderExistsPartialFills_success()
+        public
+        givenTokenInDecimals(18)
+        givenTokenOutDecimals(6)
+    {
         _placeOrder(users["alice"], params);
         _test_givenOrderExistsPartialFills_success();
     }
 
-    function test_bothEighteenDecimals_givenOrderExistsPartialFills_success() public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+    function test_bothEighteenDecimals_givenOrderExistsPartialFills_success()
+        public
+        givenTokenInDecimals(18)
+        givenTokenOutDecimals(18)
+    {
         _placeOrder(users["alice"], params);
         _test_givenOrderExistsPartialFills_success();
     }
@@ -342,8 +442,16 @@ contract ClaimRefundTest is OrderBookTestBase {
         orderBook.claimRefund(orderId);
 
         // Verify refund still goes to original sender (users["alice"])
-        assertEq(tokenIn.balanceOf(users["alice"]), senderBalanceBefore + order.amountIn, "sender should receive full refund");
-        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookBalanceBefore - order.amountIn, "orderBook should release full amount");
+        assertEq(
+            tokenIn.balanceOf(users["alice"]),
+            senderBalanceBefore + order.amountIn,
+            "sender should receive full refund"
+        );
+        assertEq(
+            tokenIn.balanceOf(address(orderBook)),
+            orderBookBalanceBefore - order.amountIn,
+            "orderBook should release full amount"
+        );
 
         // Verify order status
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
@@ -388,15 +496,27 @@ contract ClaimRefundTest is OrderBookTestBase {
         orderBook.claimRefund(orderId);
 
         // Verify refund
-        assertEq(tokenIn.balanceOf(users["alice"]), senderBalanceBefore + order.amountIn, "sender should receive full refund");
-        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookBalanceBefore - order.amountIn, "orderBook should release full amount");
+        assertEq(
+            tokenIn.balanceOf(users["alice"]),
+            senderBalanceBefore + order.amountIn,
+            "sender should receive full refund"
+        );
+        assertEq(
+            tokenIn.balanceOf(address(orderBook)),
+            orderBookBalanceBefore - order.amountIn,
+            "orderBook should release full amount"
+        );
 
         // Verify order status
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Completed), "order should be completed");
     }
 
-    function test_givenLocalOrder_givenNoFills_bothSixDecimals_success() public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+    function test_givenLocalOrder_givenNoFills_bothSixDecimals_success()
+        public
+        givenTokenInDecimals(6)
+        givenTokenOutDecimals(6)
+    {
         // Open a local order for alice
         params.destChainId = CHAIN_ID;
         _placeOrder(users["alice"], params);
@@ -404,7 +524,11 @@ contract ClaimRefundTest is OrderBookTestBase {
         _test_givenLocalOrder_givenNoFills_success();
     }
 
-    function test_givenLocalOrder_givenNoFills_tokenInSmallerDecimals_success() public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+    function test_givenLocalOrder_givenNoFills_tokenInSmallerDecimals_success()
+        public
+        givenTokenInDecimals(6)
+        givenTokenOutDecimals(18)
+    {
         // Open a local order for alice
         params.destChainId = CHAIN_ID;
         _placeOrder(users["alice"], params);
@@ -412,7 +536,11 @@ contract ClaimRefundTest is OrderBookTestBase {
         _test_givenLocalOrder_givenNoFills_success();
     }
 
-    function test_givenLocalOrder_givenNoFills_tokenInLargerDecimals_success() public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+    function test_givenLocalOrder_givenNoFills_tokenInLargerDecimals_success()
+        public
+        givenTokenInDecimals(18)
+        givenTokenOutDecimals(6)
+    {
         // Open a local order for alice
         params.destChainId = CHAIN_ID;
         _placeOrder(users["alice"], params);
@@ -420,7 +548,11 @@ contract ClaimRefundTest is OrderBookTestBase {
         _test_givenLocalOrder_givenNoFills_success();
     }
 
-    function test_givenLocalOrder_givenNoFills_bothEighteenDecimals_success() public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+    function test_givenLocalOrder_givenNoFills_bothEighteenDecimals_success()
+        public
+        givenTokenInDecimals(18)
+        givenTokenOutDecimals(18)
+    {
         // Open a local order for alice
         params.destChainId = CHAIN_ID;
         _placeOrder(users["alice"], params);
@@ -437,10 +569,12 @@ contract ClaimRefundTest is OrderBookTestBase {
         _fillOrder(users["solver"], orderId, fillAmount);
 
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
-        
+
         // Calculate expected refund (pro-rata)
-        uint128 expectedRefund = uint128((uint256(params.amountIn) * (params.amountOut - fillAmount)) / params.amountOut);
-        
+        uint128 expectedRefund = uint128(
+            (uint256(params.amountIn) * (params.amountOut - fillAmount)) / params.amountOut
+        );
+
         // Warp past fillDeadline
         vm.warp(order.fillDeadline + 1);
 
@@ -454,14 +588,26 @@ contract ClaimRefundTest is OrderBookTestBase {
         orderBook.claimRefund(orderId);
 
         // Verify refund
-        assertEq(tokenIn.balanceOf(users["alice"]), senderBalanceBefore + expectedRefund, "sender should receive partial refund");
-        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookBalanceBefore - expectedRefund, "orderBook should release partial amount");
+        assertEq(
+            tokenIn.balanceOf(users["alice"]),
+            senderBalanceBefore + expectedRefund,
+            "sender should receive partial refund"
+        );
+        assertEq(
+            tokenIn.balanceOf(address(orderBook)),
+            orderBookBalanceBefore - expectedRefund,
+            "orderBook should release partial amount"
+        );
         // Verify order status
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Completed), "order should be completed");
     }
 
-    function test_givenLocalOrder_givenPartialFill_bothSixDecimals_success() public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+    function test_givenLocalOrder_givenPartialFill_bothSixDecimals_success()
+        public
+        givenTokenInDecimals(6)
+        givenTokenOutDecimals(6)
+    {
         // Open a local order for alice
         params.destChainId = CHAIN_ID;
         _placeOrder(users["alice"], params);
@@ -469,7 +615,11 @@ contract ClaimRefundTest is OrderBookTestBase {
         _test_givenLocalOrder_givenPartialFill_success();
     }
 
-    function test_givenLocalOrder_givenPartialFill_tokenInSmallerDecimals_success() public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+    function test_givenLocalOrder_givenPartialFill_tokenInSmallerDecimals_success()
+        public
+        givenTokenInDecimals(6)
+        givenTokenOutDecimals(18)
+    {
         // Open a local order for alice
         params.destChainId = CHAIN_ID;
         _placeOrder(users["alice"], params);
@@ -477,7 +627,11 @@ contract ClaimRefundTest is OrderBookTestBase {
         _test_givenLocalOrder_givenPartialFill_success();
     }
 
-    function test_givenLocalOrder_givenPartialFill_tokenInLargerDecimals_success() public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+    function test_givenLocalOrder_givenPartialFill_tokenInLargerDecimals_success()
+        public
+        givenTokenInDecimals(18)
+        givenTokenOutDecimals(6)
+    {
         // Open a local order for alice
         params.destChainId = CHAIN_ID;
         _placeOrder(users["alice"], params);
@@ -485,7 +639,11 @@ contract ClaimRefundTest is OrderBookTestBase {
         _test_givenLocalOrder_givenPartialFill_success();
     }
 
-    function test_givenLocalOrder_givenPartialFill_bothEighteenDecimals_success() public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+    function test_givenLocalOrder_givenPartialFill_bothEighteenDecimals_success()
+        public
+        givenTokenInDecimals(18)
+        givenTokenOutDecimals(18)
+    {
         // Open a local order for alice
         params.destChainId = CHAIN_ID;
         _placeOrder(users["alice"], params);

@@ -9,12 +9,11 @@ import { TypeConverter } from "../../../src/libs/TypeConverter.sol";
 
 import { OrderBookTestBase } from "./OrderBookTestBase.t.sol";
 
-
 contract OpenOrderForTest is OrderBookTestBase {
     using TypeConverter for *;
 
     // Test cases
-    // [X] given the signature is invalid 
+    // [X] given the signature is invalid
     //   [X] it reverts
     // [X] given the origin chain ID is not the current internal chain ID
     //   [X] it reverts with an InvalidOriginChain error
@@ -25,7 +24,7 @@ contract OpenOrderForTest is OrderBookTestBase {
     // [X] given the signature is a valid standard ECDSA signature
     //   [X] it creates the order successfully
     //   [X] it transfers the amount in from the "sender" to the orderbook contract
-    //   [X] it emits an OrderOpened event 
+    //   [X] it emits an OrderOpened event
     // [X] given the signature is a valid compact ECDSA signature
     //   [X] it creates the order successfully
     //   [X] it transfers the amount in from the "sender" to the orderbook
@@ -39,7 +38,7 @@ contract OpenOrderForTest is OrderBookTestBase {
 
         sender = vm.createWallet("sender");
         vm.deal(sender.addr, 1 ether);
-        tokenIn.mint(sender.addr, MINT_AMOUNT * (10 **  tokenIn.decimals()));
+        tokenIn.mint(sender.addr, MINT_AMOUNT * (10 ** tokenIn.decimals()));
 
         gaslessParams = IOrderBook.GaslessOrderParams({
             version: VERSION,
@@ -53,7 +52,7 @@ contract OpenOrderForTest is OrderBookTestBase {
             amountIn: params.amountIn,
             amountOut: params.amountOut,
             recipient: sender.addr.toBytes32(),
-            solver: params.solver 
+            solver: params.solver
         });
 
         // This is not optimal
@@ -61,33 +60,42 @@ contract OpenOrderForTest is OrderBookTestBase {
         tokenIn.approve(address(orderBook), type(uint256).max);
     }
 
-    function _signStandardECDSA(VmSafe.Wallet memory wallet_, IOrderBook.GaslessOrderParams memory params_) internal returns (bytes memory) {
+    function _signStandardECDSA(
+        VmSafe.Wallet memory wallet_,
+        IOrderBook.GaslessOrderParams memory params_
+    ) internal returns (bytes memory) {
         bytes32 digest = orderBook.getGaslessOrderDigest(params_);
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(wallet_, digest);
         return abi.encodePacked(r, s, v);
     }
 
-    function _signCompactECDSA(VmSafe.Wallet memory wallet_, IOrderBook.GaslessOrderParams memory params_) internal returns (bytes memory) {
+    function _signCompactECDSA(
+        VmSafe.Wallet memory wallet_,
+        IOrderBook.GaslessOrderParams memory params_
+    ) internal returns (bytes memory) {
         bytes32 digest = orderBook.getGaslessOrderDigest(params_);
         (bytes32 r, bytes32 vs) = vm.signCompact(wallet_, digest);
         return abi.encodePacked(r, vs);
     }
 
-    function _getOrderIdFromGaslessParams(IOrderBook.GaslessOrderParams memory params_) internal view returns (bytes32) {
-        return _getOrderIdFromParams(
-            params_.sender,
-            params_.nonce,
-            IOrderBook.OrderParams({
-                destChainId: params_.destChainId,
-                fillDeadline: params_.fillDeadline,
-                tokenIn: params_.tokenIn,
-                tokenOut: params_.tokenOut,
-                amountIn: params_.amountIn,
-                amountOut: params_.amountOut,
-                recipient: params_.recipient,
-                solver: params_.solver
-            })
-        );
+    function _getOrderIdFromGaslessParams(
+        IOrderBook.GaslessOrderParams memory params_
+    ) internal view returns (bytes32) {
+        return
+            _getOrderIdFromParams(
+                params_.sender,
+                params_.nonce,
+                IOrderBook.OrderParams({
+                    destChainId: params_.destChainId,
+                    fillDeadline: params_.fillDeadline,
+                    tokenIn: params_.tokenIn,
+                    tokenOut: params_.tokenOut,
+                    amountIn: params_.amountIn,
+                    amountOut: params_.amountOut,
+                    recipient: params_.recipient,
+                    solver: params_.solver
+                })
+            );
     }
 
     /* ========== Tests ========== */
@@ -162,7 +170,15 @@ contract OpenOrderForTest is OrderBookTestBase {
         bytes32 expOrderId = _getOrderIdFromGaslessParams(gaslessParams);
 
         vm.expectEmit(true, true, true, true);
-        emit IOrderBook.OrderOpened(expOrderId, gaslessParams.tokenIn, gaslessParams.amountIn, gaslessParams.destChainId, gaslessParams.tokenOut, gaslessParams.amountOut, gaslessParams.solver);
+        emit IOrderBook.OrderOpened(
+            expOrderId,
+            gaslessParams.tokenIn,
+            gaslessParams.amountIn,
+            gaslessParams.destChainId,
+            gaslessParams.tokenOut,
+            gaslessParams.amountOut,
+            gaslessParams.solver
+        );
         bytes32 orderId = orderBook.openOrderFor(gaslessParams, signature);
 
         // Get the order and confirm the data is set correctly
@@ -188,7 +204,7 @@ contract OpenOrderForTest is OrderBookTestBase {
     }
 
     function test_givenStandardECDSASignature_success() public {
-        // Create the order digest and sign it 
+        // Create the order digest and sign it
         bytes memory signature = _signStandardECDSA(sender, gaslessParams);
 
         // Cache the starting balance of tokenIn
@@ -197,7 +213,15 @@ contract OpenOrderForTest is OrderBookTestBase {
         bytes32 expOrderId = _getOrderIdFromGaslessParams(gaslessParams);
 
         vm.expectEmit(true, true, true, true);
-        emit IOrderBook.OrderOpened(expOrderId, gaslessParams.tokenIn, gaslessParams.amountIn, gaslessParams.destChainId, gaslessParams.tokenOut, gaslessParams.amountOut, gaslessParams.solver);
+        emit IOrderBook.OrderOpened(
+            expOrderId,
+            gaslessParams.tokenIn,
+            gaslessParams.amountIn,
+            gaslessParams.destChainId,
+            gaslessParams.tokenOut,
+            gaslessParams.amountOut,
+            gaslessParams.solver
+        );
         bytes32 orderId = orderBook.openOrderFor(gaslessParams, signature);
 
         // Get the order and confirm the data is set correctly

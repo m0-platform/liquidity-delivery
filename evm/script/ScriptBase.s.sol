@@ -5,13 +5,9 @@ pragma solidity 0.8.26;
 import { console } from "../lib/forge-std/src/console.sol";
 import { Script } from "../lib/forge-std/src/Script.sol";
 
-import {
-    ERC1967Proxy
-} from "../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { ERC1967Proxy } from "../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
-import {
-    TransparentUpgradeableProxy
-} from "../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import { TransparentUpgradeableProxy } from "../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 import { ICreateXLike } from "./deploy/interfaces/ICreateXLike.sol";
 
@@ -98,14 +94,7 @@ contract ScriptBase is Script {
         return string.concat(vm.projectRoot(), "/deployments/", vm.toString(chainId_), ".json");
     }
 
-    function _readDeployment(
-        uint256 chainId_
-    )
-        internal view
-        returns (
-            address orderBook_
-        )
-    {
+    function _readDeployment(uint256 chainId_) internal view returns (address orderBook_) {
         if (!vm.isFile(_deployOutputPath(chainId_))) {
             revert("Deployment artifacts not found");
         }

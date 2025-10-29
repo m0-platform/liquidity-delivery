@@ -34,8 +34,8 @@ interface IOrderBook {
      * @param amountInToRelease The amount of input token they will receive on the origin chain
      */
     event OrderFilled(
-        bytes32 indexed orderId, 
-        address indexed solver, 
+        bytes32 indexed orderId,
+        address indexed solver,
         uint128 amountInToRelease,
         uint128 amountOutFilled
     );
@@ -55,11 +55,7 @@ interface IOrderBook {
      * @param sender The address that the refund is sent to
      * @param amountInRefunded The amount of input token that was refunded
      */
-    event RefundClaimed(
-        bytes32 indexed orderId, 
-        address indexed sender, 
-        uint128 amountInRefunded
-    );
+    event RefundClaimed(bytes32 indexed orderId, address indexed sender, uint128 amountInRefunded);
 
     /**
      * @notice Emitted when an order is completed (fully filled)
@@ -108,7 +104,7 @@ interface IOrderBook {
         bytes32 tokenOut; // 32 bytes used for addresses to accomodate SVM chains in the network
         uint128 amountIn;
         uint128 amountOut;
-        bytes32 recipient;	
+        bytes32 recipient;
         bytes32 solver; // may be the zero address, in which case the order can be filled by any approved solver
     }
 
@@ -172,19 +168,19 @@ interface IOrderBook {
      * @param solver Address of the solver that will fill the order, or zero address if any approved solver can fill
      */
     struct Order {
-        OrderStatus status;         // slot 1: 1 +
-        uint16 version;             //         2 + 
-        address sender;             //         20 +
-        uint64 nonce;               //         8 = 31 bytes
-        uint32 destChainId;         // slot 2: 4 +
-        uint32 fillDeadline;        //         4 +
-        uint32 cancelRequestedAt;   //         4 +
-        address tokenIn;            //         20 = 32 bytes
-        bytes32 tokenOut;           // slot 3
-        uint128 amountIn;           // slot 4: 16 +
-        uint128 amountOut;          //         16 = 32 bytes
-        bytes32 recipient;          // slot 5
-        bytes32 solver;             // slot 6
+        OrderStatus status; // slot 1: 1 +
+        uint16 version; //         2 +
+        address sender; //         20 +
+        uint64 nonce; //         8 = 31 bytes
+        uint32 destChainId; // slot 2: 4 +
+        uint32 fillDeadline; //         4 +
+        uint32 cancelRequestedAt; //         4 +
+        address tokenIn; //         20 = 32 bytes
+        bytes32 tokenOut; // slot 3
+        uint128 amountIn; // slot 4: 16 +
+        uint128 amountOut; //         16 = 32 bytes
+        bytes32 recipient; // slot 5
+        bytes32 solver; // slot 6
     }
 
     /**
@@ -210,7 +206,7 @@ interface IOrderBook {
         uint64 nonce;
         uint32 originChainId;
         uint32 destChainId;
-        uint64 fillDeadline; 
+        uint64 fillDeadline;
         bytes32 tokenOut;
         uint128 amountIn;
         uint128 amountOut;
@@ -268,13 +264,13 @@ interface IOrderBook {
 
     /* ========== Creating Orders ========== */
 
-    /** 
+    /**
      * @notice Opens an order
-	 * @dev Must be called by the user providing the input funds
-	 * @param orderParams_ order creation parameters (see OrderParams definition)
+     * @dev Must be called by the user providing the input funds
+     * @param orderParams_ order creation parameters (see OrderParams definition)
      * @return The unique ID of the opened order
      */
-	function openOrder(OrderParams calldata orderParams_) external returns (bytes32);
+    function openOrder(OrderParams calldata orderParams_) external returns (bytes32);
 
     /**
      * @notice Opens an order with an EIP-2612 permit signature for token approval
@@ -310,12 +306,15 @@ interface IOrderBook {
 
     /**
      * @notice Opens a gasless order on behalf of a user.
-	 * @dev More flexible method relying on an offchain signature to authorize order creation
-	 * @param orderParams_ gasless order creation parameters (see GaslessOrderParams definition)
-	 * @param orderSignature_ Order sender's signature of the EIP-712 payload containing the orderParams (see getGaslessOrderDigest)
+     * @dev More flexible method relying on an offchain signature to authorize order creation
+     * @param orderParams_ gasless order creation parameters (see GaslessOrderParams definition)
+     * @param orderSignature_ Order sender's signature of the EIP-712 payload containing the orderParams (see getGaslessOrderDigest)
      * @return The unique ID of the opened order
-	 */
-	function openOrderFor(GaslessOrderParams calldata orderParams_, bytes calldata orderSignature_) external returns (bytes32);
+     */
+    function openOrderFor(
+        GaslessOrderParams calldata orderParams_,
+        bytes calldata orderSignature_
+    ) external returns (bytes32);
 
     /**
      * @notice Opens a gasless order on behalf of a user with an EIP-2612 permit signature for token approval
