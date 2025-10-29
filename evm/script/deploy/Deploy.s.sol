@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.26;
 
+import { DeployHelpers } from "../../lib/common/script/deploy/DeployHelpers.sol";
+
 import { ScriptBase } from "../ScriptBase.s.sol";
 import { OrderBook } from "../../src/OrderBook.sol";
 
-contract Deploy is ScriptBase {
+contract Deploy is ScriptBase, DeployHelpers {
     /// @dev Contract name used for deterministic deployment.
     string internal constant _ORDER_BOOK_CONTRACT_NAME = "OrderBook";
 
@@ -47,12 +49,12 @@ contract Deploy is ScriptBase {
         proxy_ = _deployCreate3TransparentProxy(
             implementation_,
             admin_,
-            "",
+            abi.encodeWithSelector(
+                OrderBook.initialize.selector,
+                admin_
+            ),
             _computeSalt(deployer_, _ORDER_BOOK_CONTRACT_NAME)
         );
-
-        // Initialize the proxy after deploying
-        OrderBook(proxy_).initialize(admin_);
     }
 
     function _serializeDeployment(uint32 chainId_, address orderBook_) internal {
