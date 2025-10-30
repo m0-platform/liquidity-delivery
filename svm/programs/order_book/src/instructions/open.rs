@@ -18,7 +18,7 @@ use std::ops::Deref;
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct OrderParams {
     pub dest_chain_id: u32,
-    pub fill_deadline: u32,
+    pub fill_deadline: u64,
     pub token_out: [u8; 32],
     pub amount_in: u64,
     pub amount_out: u128,
@@ -118,7 +118,7 @@ impl OpenOrder<'_> {
         // Validate params
         require!(params.amount_in > 0, OrderBookError::InvalidAmountIn);
         require!(params.amount_out > 0, OrderBookError::InvalidAmountOut);
-        require!(params.fill_deadline > Clock::get()?.unix_timestamp as u32, OrderBookError::InvalidFillDeadline);
+        require!(params.fill_deadline > Clock::get()?.unix_timestamp as u64, OrderBookError::InvalidFillDeadline);
 
         Ok(())
     }

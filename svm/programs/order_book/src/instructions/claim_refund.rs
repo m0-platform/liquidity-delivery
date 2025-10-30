@@ -76,7 +76,7 @@ impl ClaimRefund<'_> {
         let order = &self.order.data;
 
         // Validate the order has not been completed and that the finality buffer has passed based on the status
-        let current_timestamp = Clock::get()?.unix_timestamp as u32;
+        let current_timestamp = Clock::get()?.unix_timestamp as u64;
         if order.status == OrderStatus::Created {
             require!(
                 order.fill_deadline + finality_buffer <= current_timestamp,
