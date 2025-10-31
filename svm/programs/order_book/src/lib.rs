@@ -18,6 +18,16 @@ declare_id!("4Qgxc6VkBGaAQAikirnkApYNyy1W6asQgMHZxKgRcSL8");
 pub mod order_book {
     use super::*;
 
+    // Admin actions
+
+    pub fn initialize(ctx: Context<Initialize>, chain_id: u32) -> Result<()> {
+        Initialize::handler(ctx, chain_id)
+    }
+
+    pub fn configure_destination(ctx: Context<ConfigureDestination>, dest_chain_id: u32, is_supported: bool, finality_buffer: Option<u64>) -> Result<()> {
+        ConfigureDestination::handler(ctx, dest_chain_id, is_supported, finality_buffer)
+    }
+
     // User actions
 
     pub fn open_order(ctx: Context<OpenOrder>, params: OrderParams) -> Result<()> {

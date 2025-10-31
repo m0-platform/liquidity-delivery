@@ -30,6 +30,8 @@ pub enum OrderBookError {
     InvalidAmountOut,
     #[msg("Invalid fill deadline")]
     InvalidFillDeadline,
+    #[msg("Invalid finality buffer")]
+    InvalidFinalityBuffer,
     #[msg("Not authorized")]
     NotAuthorized,
     #[msg("Invalid token mint")]
