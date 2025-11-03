@@ -3,9 +3,9 @@ pragma solidity 0.8.26;
 
 import { VmSafe } from "../../../lib/forge-std/src/Vm.sol";
 import { console } from "../../../lib/forge-std/src/console.sol";
+import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
 
 import { IOrderBook } from "../../../src/interfaces/IOrderBook.sol";
-import { TypeConverter } from "../../../src/libs/TypeConverter.sol";
 
 import { OrderBookTestBase } from "./OrderBookTestBase.t.sol";
 
