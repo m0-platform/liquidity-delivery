@@ -43,7 +43,6 @@ contract OpenOrderTest is OrderBookTestBase {
     //     [X] it emits an OrderOpened event
     //     [X] it returns the order ID
 
-
     function test_fillDeadlineBeforeCurrentTime_reverts() public {
         params.fillDeadline = uint32(block.timestamp - 1);
         vm.prank(users["alice"]);
@@ -101,7 +100,15 @@ contract OpenOrderTest is OrderBookTestBase {
 
         vm.prank(users["alice"]);
         vm.expectEmit(true, true, true, true);
-        emit IOrderBook.OrderOpened(expOrderId, params.tokenIn, params.amountIn, params.destChainId, params.tokenOut, params.amountOut, params.solver);
+        emit IOrderBook.OrderOpened(
+            expOrderId,
+            params.tokenIn,
+            params.amountIn,
+            params.destChainId,
+            params.tokenOut,
+            params.amountOut,
+            params.solver
+        );
         bytes32 orderId = orderBook.openOrder(params);
 
         assertEq(orderId, expOrderId);
@@ -130,18 +137,27 @@ contract OpenOrderTest is OrderBookTestBase {
         _test_success();
     }
 
-    function test_givenTokenInDecimalsSmallerThanTokenOut_success() public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+    function test_givenTokenInDecimalsSmallerThanTokenOut_success()
+        public
+        givenTokenInDecimals(6)
+        givenTokenOutDecimals(18)
+    {
         _test_success();
     }
 
-    function test_givenTokenInDecimalsLargerThanTokenOut_success() public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+    function test_givenTokenInDecimalsLargerThanTokenOut_success()
+        public
+        givenTokenInDecimals(18)
+        givenTokenOutDecimals(6)
+    {
         _test_success();
     }
 
-    function test_givenBothTokensHaveEighteenDecimals_success() public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+    function test_givenBothTokensHaveEighteenDecimals_success()
+        public
+        givenTokenInDecimals(18)
+        givenTokenOutDecimals(18)
+    {
         _test_success();
     }
-
-
 }
-

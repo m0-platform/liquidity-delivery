@@ -33,6 +33,6 @@ pub const DESTINATION_SEED_PREFIX: &[u8] = b"destination";
 #[derive(InitSpace)]
 pub struct Destination {
     pub is_supported: bool,
-    pub finality_buffer: u32,
+    pub finality_buffer: u64,
     pub bump: u8,
 }

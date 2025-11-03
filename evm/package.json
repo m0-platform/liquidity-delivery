@@ -14,7 +14,7 @@
     "lint-staged": "lint-staged",
     "prepack": "npm run clean && npm run build",
     "prepare": "husky",
-    "prettier": "prettier --write 'script/**/*.sol' 'contracts/**/*.sol' 'test/**/*.sol'",
+    "prettier": "prettier --write 'script/**/*.sol' 'src/**/*.sol' 'test/**/*.sol'",
     "slither": "forge build --build-info --skip '*/test/**' --skip '*/script/**' --force && slither --compile-force-framework foundry --ignore-compile --config-file slither.config.json --fail-high .",
     "solhint": "solhint -f stylish 'src/**/*.sol'",
     "solhint-fix": "solhint --fix 'src/**/*.sol'",
@@ -23,6 +23,15 @@
     "test-fuzz": "make -B fuzz",
     "test-integration": "make -B integration",
     "test-invariant": "make -B invariant"
+  },
+  "devDependencies": {
+    "husky": "catalog:",
+    "lint-staged": "catalog:",
+    "prettier": "catalog:",
+    "prettier-plugin-solidity": "catalog:",
+    "solhint": "catalog:",
+    "solhint-plugin-prettier": "catalog:",
+    "typescript": "catalog:"
   },
   "files": [
     "src/**",

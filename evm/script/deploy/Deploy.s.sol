@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity 0.8.26;
 
+import { DeployHelpers } from "../../lib/common/script/deploy/DeployHelpers.sol";
+
 import { ScriptBase } from "../ScriptBase.s.sol";
 import { OrderBook } from "../../src/OrderBook.sol";
 
-contract Deploy is ScriptBase {
-
+contract Deploy is ScriptBase, DeployHelpers {
     /// @dev Contract name used for deterministic deployment.
     string internal constant _ORDER_BOOK_CONTRACT_NAME = "OrderBook";
-    
+
     function run() external {
         // TODO update to use foundry keystore
         address deployer_ = vm.rememberKey(vm.envUint("PRIVATE_KEY"));
@@ -18,10 +19,7 @@ contract Deploy is ScriptBase {
         vm.startBroadcast(deployer_);
 
         // TODO use defined configuration and chain definitions to handle inputs
-        (
-            ,
-            address orderBook_
-        ) = _deployOrderBook(
+        (, address orderBook_) = _deployOrderBook(
             deployer_,
             vm.envAddress("ADMIN_ADDRESS"),
             m0ChainId_,
@@ -31,7 +29,6 @@ contract Deploy is ScriptBase {
         vm.stopBroadcast();
 
         _serializeDeployment(m0ChainId_, orderBook_);
-
     }
 
     /**
@@ -52,18 +49,12 @@ contract Deploy is ScriptBase {
         proxy_ = _deployCreate3TransparentProxy(
             implementation_,
             admin_,
-            "",
+            abi.encodeWithSelector(OrderBook.initialize.selector, admin_),
             _computeSalt(deployer_, _ORDER_BOOK_CONTRACT_NAME)
         );
-
-        // Initialize the proxy after deploying
-        OrderBook(proxy_).initialize(admin_);
     }
 
-    function _serializeDeployment(
-        uint32 chainId_,
-        address orderBook_
-    ) internal {
+    function _serializeDeployment(uint32 chainId_, address orderBook_) internal {
         string memory root = "";
         vm.writeJson(vm.serializeAddress(root, "orderBook", orderBook_), _deployOutputPath(chainId_));
     }

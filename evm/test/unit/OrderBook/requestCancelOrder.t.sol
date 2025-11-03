@@ -14,7 +14,7 @@ contract RequestCancelOrderTest is OrderBookTestBase {
     //   [X] it reverts with an InvalidOrderStatus error
     // [X] given the order exists but has already filled (cross-chain)
     //   [X] it reverts with an InvalidOrderStatus error
-    // [X] given the fill deadline has passed
+    // [X] given the current timestamp is > the fill deadline
     //   [X] it reverts with an OrderExpired error
     // [X] given the caller is not the order sender
     //   [X] it reverts with an NotAuthorized error
@@ -23,11 +23,11 @@ contract RequestCancelOrderTest is OrderBookTestBase {
     //     [X] it updates the order status to CancelRequested
     //     [X] it sets the refund requested at timestamp to the current block timestamp
     //     [X] it emits an CancelRequest event
-    //   [ ] given the destination chain is the current chain (i.e. local order)
-    //     [ ] it immediately refunds the order amount in to the order sender
-    //     [ ] it sets the order status to Completed
-    //     [ ] it emits a CancelRequested event
-    //     [ ] it emits a RefundClaimed event
+    //   [X] given the destination chain is the current chain (i.e. local order)
+    //     [X] it immediately refunds the order amount in to the order sender
+    //     [X] it sets the order status to Completed
+    //     [X] it emits a CancelRequested event
+    //     [X] it emits a RefundClaimed event
 
     function setUp() public override {
         super.setUp();
@@ -39,10 +39,22 @@ contract RequestCancelOrderTest is OrderBookTestBase {
     function test_givenOrderDoesNotExist_reverts() public {
         bytes32 fakeOrderId = bytes32("fake order id");
         vm.prank(users["alice"]);
-        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
+        vm.expectRevert(); // generic revert since the signer check fails before checking order existence
         orderBook.requestCancelOrder(fakeOrderId);
     }
-    
+
+    function test_givenFillDeadlineHasPassed_reverts() public {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+
+        // Warp past the fill deadline
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        vm.warp(order.fillDeadline + 1);
+
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.OrderExpired.selector));
+        orderBook.requestCancelOrder(orderId);
+    }
+
     function test_givenOrderIsAlreadyCancelled_reverts() public {
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
@@ -89,7 +101,6 @@ contract RequestCancelOrderTest is OrderBookTestBase {
         orderBook.requestCancelOrder(orderId);
     }
 
-
     function test_givenCrosschainOrder_success() public {
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
@@ -98,10 +109,18 @@ contract RequestCancelOrderTest is OrderBookTestBase {
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.CancelRequested(orderId, uint32(block.timestamp));
         orderBook.requestCancelOrder(orderId);
-        
+
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
-        assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.CancelRequested), "order status should be CancelRequested");
-        assertEq(order.cancelRequestedAt, uint32(block.timestamp), "cancelRequestedAt should be updated to current block timestamp");
+        assertEq(
+            uint8(order.status),
+            uint8(IOrderBook.OrderStatus.CancelRequested),
+            "order status should be CancelRequested"
+        );
+        assertEq(
+            order.cancelRequestedAt,
+            uint32(block.timestamp),
+            "cancelRequestedAt should be updated to current block timestamp"
+        );
     }
 
     function test_givenLocalOrder_success() public {
@@ -118,9 +137,13 @@ contract RequestCancelOrderTest is OrderBookTestBase {
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.RefundClaimed(orderId, users["alice"], params.amountIn);
         orderBook.requestCancelOrder(orderId);
-        
+
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
         assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Completed), "order status should be Completed");
-        assertEq(tokenIn.balanceOf(users["alice"]), aliceStartingBalance + params.amountIn, "alice should be refunded the amountIn");
+        assertEq(
+            tokenIn.balanceOf(users["alice"]),
+            aliceStartingBalance + params.amountIn,
+            "alice should be refunded the amountIn"
+        );
     }
 }

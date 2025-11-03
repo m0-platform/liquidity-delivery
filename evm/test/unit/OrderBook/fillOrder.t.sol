@@ -11,7 +11,7 @@ contract FillOrderTest is OrderBookTestBase {
     // Test cases
     // [X] given the destination chain ID of the order is not the current chain ID
     //   [X] it reverts with an InvalidDestinationChain error
-    // [X] given the fill deadline has passed
+    // [X] given the current timestamp is > fill deadline
     //   [X] it reverts with an OrderExpired error
     // [X] given the order version does not match the version of the order stored
     //   [X] it reverts with an InvalidOrderVersion error
@@ -106,10 +106,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({
-                amountOutToFill: order.amountOut,
-                originRecipient: params.solver
-            })
+            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
         );
     }
 
@@ -140,10 +137,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({
-                amountOutToFill: order.amountOut,
-                originRecipient: params.solver
-            })
+            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
         );
     }
 
@@ -176,10 +170,7 @@ contract FillOrderTest is OrderBookTestBase {
         orderBook.fillOrder(
             orderId,
             orderData,
-            IOrderBook.FillParams({
-                amountOutToFill: order.amountOut,
-                originRecipient: params.solver
-            })
+            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
         );
     }
 
@@ -209,10 +200,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({
-                amountOutToFill: order.amountOut,
-                originRecipient: users["bob"].toBytes32()
-            })
+            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: users["bob"].toBytes32() })
         );
     }
 
@@ -240,10 +228,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({
-                amountOutToFill: order.amountOut,
-                originRecipient: params.solver
-            })
+            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
         );
     }
 
@@ -266,7 +251,7 @@ contract FillOrderTest is OrderBookTestBase {
             IOrderBook.OrderData({
                 version: order.version,
                 originChainId: CHAIN_ID,
-                sender: order.sender.toBytes32(),   
+                sender: order.sender.toBytes32(),
                 nonce: order.nonce,
                 destChainId: order.destChainId,
                 fillDeadline: order.fillDeadline,
@@ -276,10 +261,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({
-                amountOutToFill: order.amountOut,
-                originRecipient: params.solver
-            })
+            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
         );
     }
 
@@ -307,11 +289,8 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({
-                amountOutToFill: 0,
-                originRecipient: params.solver
-            })
-        );        
+            IOrderBook.FillParams({ amountOutToFill: 0, originRecipient: params.solver })
+        );
     }
 
     function _test_localOrderFullFill_success() internal {
@@ -348,10 +327,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({
-                amountOutToFill: order.amountOut,
-                originRecipient: params.solver
-            })
+            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
         );
 
         // Check order status
@@ -359,25 +335,53 @@ contract FillOrderTest is OrderBookTestBase {
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Completed), "order should be completed");
 
         // Check token transfers
-        assertEq(tokenOut.balanceOf(params.solver.toAddress()), solverTokenOutBefore - order.amountOut, "solver should have sent tokenOut");
-        assertEq(tokenOut.balanceOf(users["alice"]), recipientTokenOutBefore + order.amountOut, "recipient should have received tokenOut");
-        assertEq(tokenIn.balanceOf(params.solver.toAddress()), solverTokenInBefore + order.amountIn, "solver should have received tokenIn");
-        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookTokenInBefore - order.amountIn, "orderBook should have released tokenIn");
+        assertEq(
+            tokenOut.balanceOf(params.solver.toAddress()),
+            solverTokenOutBefore - order.amountOut,
+            "solver should have sent tokenOut"
+        );
+        assertEq(
+            tokenOut.balanceOf(users["alice"]),
+            recipientTokenOutBefore + order.amountOut,
+            "recipient should have received tokenOut"
+        );
+        assertEq(
+            tokenIn.balanceOf(params.solver.toAddress()),
+            solverTokenInBefore + order.amountIn,
+            "solver should have received tokenIn"
+        );
+        assertEq(
+            tokenIn.balanceOf(address(orderBook)),
+            orderBookTokenInBefore - order.amountIn,
+            "orderBook should have released tokenIn"
+        );
     }
 
     function test_bothSixDecimals_localOrderFullFill_success() public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
         _test_localOrderFullFill_success();
     }
 
-    function test_tokenInSmallerDecimals_localOrderFullFill_success() public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+    function test_tokenInSmallerDecimals_localOrderFullFill_success()
+        public
+        givenTokenInDecimals(6)
+        givenTokenOutDecimals(18)
+    {
         _test_localOrderFullFill_success();
     }
 
-    function test_tokenInLargerDecimals_localOrderFullFill_success() public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+    function test_tokenInLargerDecimals_localOrderFullFill_success()
+        public
+        givenTokenInDecimals(18)
+        givenTokenOutDecimals(6)
+    {
         _test_localOrderFullFill_success();
     }
 
-    function test_bothEighteenDecimals_localOrderFullFill_success() public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+    function test_bothEighteenDecimals_localOrderFullFill_success()
+        public
+        givenTokenInDecimals(18)
+        givenTokenOutDecimals(18)
+    {
         _test_localOrderFullFill_success();
     }
 
@@ -417,10 +421,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({
-                amountOutToFill: fillAmount,
-                originRecipient: params.solver
-            })
+            IOrderBook.FillParams({ amountOutToFill: fillAmount, originRecipient: params.solver })
         );
 
         // Check order status
@@ -428,25 +429,49 @@ contract FillOrderTest is OrderBookTestBase {
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Completed), "order should be completed");
 
         // Check token transfers
-        assertEq(tokenOut.balanceOf(params.solver.toAddress()), solverTokenOutBefore - order.amountOut, "solver should have sent tokenOut");
-        assertEq(tokenOut.balanceOf(users["alice"]), recipientTokenOutBefore + order.amountOut, "recipient should have received tokenOut");
-        assertEq(tokenIn.balanceOf(params.solver.toAddress()), solverTokenInBefore + order.amountIn, "solver should have received tokenIn");
-        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookTokenInBefore - order.amountIn, "order book should have sent tokenIn");
+        assertEq(
+            tokenOut.balanceOf(params.solver.toAddress()),
+            solverTokenOutBefore - order.amountOut,
+            "solver should have sent tokenOut"
+        );
+        assertEq(
+            tokenOut.balanceOf(users["alice"]),
+            recipientTokenOutBefore + order.amountOut,
+            "recipient should have received tokenOut"
+        );
+        assertEq(
+            tokenIn.balanceOf(params.solver.toAddress()),
+            solverTokenInBefore + order.amountIn,
+            "solver should have received tokenIn"
+        );
+        assertEq(
+            tokenIn.balanceOf(address(orderBook)),
+            orderBookTokenInBefore - order.amountIn,
+            "order book should have sent tokenIn"
+        );
     }
 
-    function testFuzz_bothSixDecimals_localOrderOverfill_success(uint128 fillAmount) public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+    function testFuzz_bothSixDecimals_localOrderOverfill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
         _testFuzz_localOrderOverfill_success(fillAmount);
     }
 
-    function testFuzz_tokenInSmallerDecimals_localOrderOverfill_success(uint128 fillAmount) public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+    function testFuzz_tokenInSmallerDecimals_localOrderOverfill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
         _testFuzz_localOrderOverfill_success(fillAmount);
     }
 
-    function testFuzz_tokenInLargerDecimals_localOrderOverfill_success(uint128 fillAmount) public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+    function testFuzz_tokenInLargerDecimals_localOrderOverfill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
         _testFuzz_localOrderOverfill_success(fillAmount);
     }
 
-    function testFuzz_bothEighteenDecimals_localOrderOverfill_success(uint128 fillAmount) public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+    function testFuzz_bothEighteenDecimals_localOrderOverfill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
         _testFuzz_localOrderOverfill_success(fillAmount);
     }
 
@@ -485,10 +510,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({
-                amountOutToFill: fillAmount,
-                originRecipient: params.solver
-            })
+            IOrderBook.FillParams({ amountOutToFill: fillAmount, originRecipient: params.solver })
         );
 
         // Check order status - should still be Created, not Completed
@@ -496,25 +518,49 @@ contract FillOrderTest is OrderBookTestBase {
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Created), "order should still be Created");
 
         // Check token transfers
-        assertEq(tokenOut.balanceOf(params.solver.toAddress()), solverTokenOutBefore - fillAmount, "solver should have sent partial tokenOut");
-        assertEq(tokenOut.balanceOf(users["alice"]), recipientTokenOutBefore + fillAmount, "recipient should have received partial tokenOut");
-        assertEq(tokenIn.balanceOf(params.solver.toAddress()), solverTokenInBefore + expectedAmountIn, "solver should have received pro-rata tokenIn");
-        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookTokenInBefore - expectedAmountIn, "orderBook should have released pro-rata tokenIn");
+        assertEq(
+            tokenOut.balanceOf(params.solver.toAddress()),
+            solverTokenOutBefore - fillAmount,
+            "solver should have sent partial tokenOut"
+        );
+        assertEq(
+            tokenOut.balanceOf(users["alice"]),
+            recipientTokenOutBefore + fillAmount,
+            "recipient should have received partial tokenOut"
+        );
+        assertEq(
+            tokenIn.balanceOf(params.solver.toAddress()),
+            solverTokenInBefore + expectedAmountIn,
+            "solver should have received pro-rata tokenIn"
+        );
+        assertEq(
+            tokenIn.balanceOf(address(orderBook)),
+            orderBookTokenInBefore - expectedAmountIn,
+            "orderBook should have released pro-rata tokenIn"
+        );
     }
 
-    function testFuzz_bothSixDecimals_localOrderPartialFill_success(uint128 fillAmount) public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+    function testFuzz_bothSixDecimals_localOrderPartialFill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
         _testFuzz_localOrderPartialFill_success(fillAmount);
     }
 
-    function testFuzz_tokenInSmallerDecimals_localOrderPartialFill_success(uint128 fillAmount) public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+    function testFuzz_tokenInSmallerDecimals_localOrderPartialFill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
         _testFuzz_localOrderPartialFill_success(fillAmount);
     }
 
-    function testFuzz_tokenInLargerDecimals_localOrderPartialFill_success(uint128 fillAmount) public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+    function testFuzz_tokenInLargerDecimals_localOrderPartialFill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
         _testFuzz_localOrderPartialFill_success(fillAmount);
     }
 
-    function testFuzz_bothEighteenDecimals_localOrderPartialFill_success(uint128 fillAmount) public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+    function testFuzz_bothEighteenDecimals_localOrderPartialFill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
         _testFuzz_localOrderPartialFill_success(fillAmount);
     }
 
@@ -547,31 +593,52 @@ contract FillOrderTest is OrderBookTestBase {
         orderBook.fillOrder(
             orderId,
             orderData,
-            IOrderBook.FillParams({
-                amountOutToFill: orderData.amountOut,
-                originRecipient: params.solver
-            })
+            IOrderBook.FillParams({ amountOutToFill: orderData.amountOut, originRecipient: params.solver })
         );
 
         // Check token transfers on destination chain
-        assertEq(tokenOut.balanceOf(params.solver.toAddress()), solverTokenOutBefore - orderData.amountOut, "solver should have sent tokenOut");
-        assertEq(tokenOut.balanceOf(users["alice"]), recipientTokenOutBefore + orderData.amountOut, "recipient should have received tokenOut");
+        assertEq(
+            tokenOut.balanceOf(params.solver.toAddress()),
+            solverTokenOutBefore - orderData.amountOut,
+            "solver should have sent tokenOut"
+        );
+        assertEq(
+            tokenOut.balanceOf(users["alice"]),
+            recipientTokenOutBefore + orderData.amountOut,
+            "recipient should have received tokenOut"
+        );
         assertTrue(messenger.isFillReported(orderId), "fill report should have been sent to origin chain");
     }
 
-    function test_bothSixDecimals_crossChainOrderFullFill_success() public givenTokenOutDecimals(6) givenTokenOutDecimals(6) {
+    function test_bothSixDecimals_crossChainOrderFullFill_success()
+        public
+        givenTokenOutDecimals(6)
+        givenTokenOutDecimals(6)
+    {
         _test_crossChainOrderFullFill_success();
     }
 
-    function test_tokenInSmallerDecimals_crossChainOrderFullFill_success() public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+    function test_tokenInSmallerDecimals_crossChainOrderFullFill_success()
+        public
+        givenTokenInDecimals(6)
+        givenTokenOutDecimals(18)
+    {
         _test_crossChainOrderFullFill_success();
     }
 
-    function test_tokenInLargerDecimals_crossChainOrderFullFill_success() public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+    function test_tokenInLargerDecimals_crossChainOrderFullFill_success()
+        public
+        givenTokenInDecimals(18)
+        givenTokenOutDecimals(6)
+    {
         _test_crossChainOrderFullFill_success();
     }
 
-    function test_bothEighteenDecimals_crossChainOrderFullFill_success() public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+    function test_bothEighteenDecimals_crossChainOrderFullFill_success()
+        public
+        givenTokenInDecimals(18)
+        givenTokenOutDecimals(18)
+    {
         _test_crossChainOrderFullFill_success();
     }
 
@@ -607,31 +674,44 @@ contract FillOrderTest is OrderBookTestBase {
         orderBook.fillOrder(
             orderId,
             orderData,
-            IOrderBook.FillParams({
-                amountOutToFill: fillAmount,
-                originRecipient: params.solver
-            })
+            IOrderBook.FillParams({ amountOutToFill: fillAmount, originRecipient: params.solver })
         );
 
         // Check token transfers on destination chain
-        assertEq(tokenOut.balanceOf(params.solver.toAddress()), solverTokenOutBefore - orderData.amountOut, "solver should have sent tokenOut");
-        assertEq(tokenOut.balanceOf(users["alice"]), recipientTokenOutBefore + orderData.amountOut, "recipient should have received tokenOut");
-        assertTrue(messenger.isFillReported(orderId), "fill report should have been sent to origin chain");                
+        assertEq(
+            tokenOut.balanceOf(params.solver.toAddress()),
+            solverTokenOutBefore - orderData.amountOut,
+            "solver should have sent tokenOut"
+        );
+        assertEq(
+            tokenOut.balanceOf(users["alice"]),
+            recipientTokenOutBefore + orderData.amountOut,
+            "recipient should have received tokenOut"
+        );
+        assertTrue(messenger.isFillReported(orderId), "fill report should have been sent to origin chain");
     }
 
-    function test_fuzz_bothSixDecimals_crossChainOrderOverfill_success(uint128 fillAmount) public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+    function test_fuzz_bothSixDecimals_crossChainOrderOverfill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
         _testFuzz_crossChainOrderOverfill_success(fillAmount);
     }
 
-    function testFuzz_tokenInSmallerDecimals_crossChainOrderOverfill_success(uint128 fillAmount) public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+    function testFuzz_tokenInSmallerDecimals_crossChainOrderOverfill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
         _testFuzz_crossChainOrderOverfill_success(fillAmount);
     }
 
-    function testFuzz_tokenInLargerDecimals_crossChainOrderOverfill_success(uint128 fillAmount) public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+    function testFuzz_tokenInLargerDecimals_crossChainOrderOverfill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
         _testFuzz_crossChainOrderOverfill_success(fillAmount);
     }
 
-    function test_fuzz_bothEighteenDecimals_crossChainOrderOverfill_success(uint128 fillAmount) public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+    function test_fuzz_bothEighteenDecimals_crossChainOrderOverfill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
         _testFuzz_crossChainOrderOverfill_success(fillAmount);
     }
 
@@ -654,7 +734,7 @@ contract FillOrderTest is OrderBookTestBase {
         bytes32 orderId = orderBook.getOrderId(orderData);
 
         // Fill between 1 and the order amount - 1
-        fillAmount = fillAmount % (AMOUNT_OUT - 1) + 1;
+        fillAmount = (fillAmount % (AMOUNT_OUT - 1)) + 1;
         uint128 expectedAmountIn = uint128((uint256(AMOUNT_IN) * fillAmount) / AMOUNT_OUT);
 
         // Record balances before fill
@@ -667,31 +747,44 @@ contract FillOrderTest is OrderBookTestBase {
         orderBook.fillOrder(
             orderId,
             orderData,
-            IOrderBook.FillParams({
-                amountOutToFill: fillAmount,
-                originRecipient: params.solver
-            })
+            IOrderBook.FillParams({ amountOutToFill: fillAmount, originRecipient: params.solver })
         );
 
         // Check token transfers on destination chain
-        assertEq(tokenOut.balanceOf(params.solver.toAddress()), solverTokenOutBefore - fillAmount, "solver should have sent partial tokenOut");
-        assertEq(tokenOut.balanceOf(users["alice"]), recipientTokenOutBefore + fillAmount, "recipient should have received partial tokenOut");
+        assertEq(
+            tokenOut.balanceOf(params.solver.toAddress()),
+            solverTokenOutBefore - fillAmount,
+            "solver should have sent partial tokenOut"
+        );
+        assertEq(
+            tokenOut.balanceOf(users["alice"]),
+            recipientTokenOutBefore + fillAmount,
+            "recipient should have received partial tokenOut"
+        );
         assertTrue(messenger.isFillReported(orderId), "fill report should have been sent to origin chain");
     }
 
-    function testFuzz_bothSixDecimals_crossChainOrderPartialFill_success(uint128 fillAmount) public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+    function testFuzz_bothSixDecimals_crossChainOrderPartialFill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
         _testFuzz_crossChainOrderPartialFill_success(fillAmount);
     }
 
-    function testFuzz_tokenInSmallerDecimals_crossChainOrderPartialFill_success(uint128 fillAmount) public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+    function testFuzz_tokenInSmallerDecimals_crossChainOrderPartialFill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
         _testFuzz_crossChainOrderPartialFill_success(fillAmount);
     }
 
-    function testFuzz_tokenInLargerDecimals_crossChainOrderPartialFill_success(uint128 fillAmount) public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+    function testFuzz_tokenInLargerDecimals_crossChainOrderPartialFill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
         _testFuzz_crossChainOrderPartialFill_success(fillAmount);
     }
 
-    function testFuzz_bothEighteenDecimals_crossChainOrderPartialFill_success(uint128 fillAmount) public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+    function testFuzz_bothEighteenDecimals_crossChainOrderPartialFill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
         _testFuzz_crossChainOrderPartialFill_success(fillAmount);
     }
 
@@ -725,10 +818,7 @@ contract FillOrderTest is OrderBookTestBase {
         orderBook.fillOrder(
             orderId,
             orderData,
-            IOrderBook.FillParams({
-                amountOutToFill: orderData.amountOut,
-                originRecipient: solver.toBytes32()
-            })
+            IOrderBook.FillParams({ amountOutToFill: orderData.amountOut, originRecipient: solver.toBytes32() })
         );
         vm.stopPrank();
     }
@@ -766,19 +856,32 @@ contract FillOrderTest is OrderBookTestBase {
                 amountOut: order.amountOut,
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
-                solver: order.solver                
+                solver: order.solver
             }),
-            IOrderBook.FillParams({
-                amountOutToFill: fillAmount,
-                originRecipient: order.solver
-            })
+            IOrderBook.FillParams({ amountOutToFill: fillAmount, originRecipient: order.solver })
         );
 
         // Check balances after the first fill
-        assertEq(tokenIn.balanceOf(address(orderBook)), orderBookTokenInBefore - expectedAmountIn, "order book should have sent pro-rata tokenIn");
-        assertEq(tokenIn.balanceOf(params.solver.toAddress()), solverTokenInBefore + expectedAmountIn, "solver should have received pro-rata tokenIn");
-        assertEq(tokenOut.balanceOf(users["alice"]), recipientTokenOutBefore + fillAmount, "recipient should have received partial tokenOut");
-        assertEq(tokenOut.balanceOf(params.solver.toAddress()), solverTokenOutBefore - fillAmount, "solver should have sent partial tokenOut");
+        assertEq(
+            tokenIn.balanceOf(address(orderBook)),
+            orderBookTokenInBefore - expectedAmountIn,
+            "order book should have sent pro-rata tokenIn"
+        );
+        assertEq(
+            tokenIn.balanceOf(params.solver.toAddress()),
+            solverTokenInBefore + expectedAmountIn,
+            "solver should have received pro-rata tokenIn"
+        );
+        assertEq(
+            tokenOut.balanceOf(users["alice"]),
+            recipientTokenOutBefore + fillAmount,
+            "recipient should have received partial tokenOut"
+        );
+        assertEq(
+            tokenOut.balanceOf(params.solver.toAddress()),
+            solverTokenOutBefore - fillAmount,
+            "solver should have sent partial tokenOut"
+        );
 
         // Submit the second fill to complete the order
         uint128 remainingAmountOut = order.amountOut - fillAmount;
@@ -801,34 +904,51 @@ contract FillOrderTest is OrderBookTestBase {
                 amountOut: order.amountOut,
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
-                solver: order.solver                
+                solver: order.solver
             }),
-            IOrderBook.FillParams({
-                amountOutToFill: remainingAmountOut,
-                originRecipient: order.solver
-            })
+            IOrderBook.FillParams({ amountOutToFill: remainingAmountOut, originRecipient: order.solver })
         );
 
         // Check final balances
         assertEq(tokenIn.balanceOf(address(orderBook)), 0, "order book should have sent all tokenIn");
-        assertEq(tokenIn.balanceOf(params.solver.toAddress()), solverTokenInBefore + order.amountIn, "solver should have received all tokenIn");
-        assertEq(tokenOut.balanceOf(users["alice"]), recipientTokenOutBefore + order.amountOut, "recipient should have received all tokenOut");
-        assertEq(tokenOut.balanceOf(params.solver.toAddress()), solverTokenOutBefore - order.amountOut, "solver should have sent all tokenOut");
+        assertEq(
+            tokenIn.balanceOf(params.solver.toAddress()),
+            solverTokenInBefore + order.amountIn,
+            "solver should have received all tokenIn"
+        );
+        assertEq(
+            tokenOut.balanceOf(users["alice"]),
+            recipientTokenOutBefore + order.amountOut,
+            "recipient should have received all tokenOut"
+        );
+        assertEq(
+            tokenOut.balanceOf(params.solver.toAddress()),
+            solverTokenOutBefore - order.amountOut,
+            "solver should have sent all tokenOut"
+        );
     }
 
-    function testFuzz_bothSixDecimals_multiPartFill_success(uint128 fillAmount) public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
+    function testFuzz_bothSixDecimals_multiPartFill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
         _testFuzz_multiPartFill_success(fillAmount);
     }
 
-    function testFuzz_tokenInSmallerDecimals_multiPartFill_success(uint128 fillAmount) public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
+    function testFuzz_tokenInSmallerDecimals_multiPartFill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(6) givenTokenOutDecimals(18) {
         _testFuzz_multiPartFill_success(fillAmount);
     }
 
-    function testFuzz_tokenInLargerDecimals_multiPartFill_success(uint128 fillAmount) public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
+    function testFuzz_tokenInLargerDecimals_multiPartFill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(18) givenTokenOutDecimals(6) {
         _testFuzz_multiPartFill_success(fillAmount);
     }
 
-    function testFuzz_bothEighteenDecimals_multiPartFill_success(uint128 fillAmount) public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
+    function testFuzz_bothEighteenDecimals_multiPartFill_success(
+        uint128 fillAmount
+    ) public givenTokenInDecimals(18) givenTokenOutDecimals(18) {
         _testFuzz_multiPartFill_success(fillAmount);
     }
 }

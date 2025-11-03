@@ -16,13 +16,10 @@ abstract contract OrderBookStorageLayout {
     struct OrderBookStorageStruct {
         // destination configuration
         mapping(uint32 destChainId => IOrderBook.Destination) destinations;
-
         // only store full data about origin orders
         mapping(bytes32 orderId => IOrderBook.Order) localOrders;
-
         // store fill amounts for both origin and destination orders
         mapping(bytes32 orderId => IOrderBook.FilledAmounts) filledAmounts;
-
         // track nonces for each sender to ensure unique order IDs
         mapping(address sender => uint64 nonce) senderNonces;
     }
@@ -51,8 +48,13 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     /// @dev keccak256("GaslessOrderParams(uint16 version,address sender,uint64 nonce,uint32 originChainId,uint32 destChainId,uint32 fillDeadline,address tokenIn,bytes32 tokenOut,uint128 amountIn,uint128 amountOut,bytes32 recipient,bytes32 solver)")
     bytes32 public constant GASLESS_ORDER_TYPEHASH = 0xdcc220f897990a71a7c6f1069339af0681016bb96f2d791f2214e234d7029603;
 
+    /// @notice the type hash used for cancel request signatures
+    /// @dev keccak256("CancelRequest(bytes32 orderId)")
+    bytes32 public constant CANCEL_REQUEST_TYPEHASH =
+        0xb527222e97466d0fc0fe78079eb3beced1bb20e1103e09bb21df58dde41c6c92;
+
     /// @notice the chain ID of this chain according to the messaging network used by this contract
-    uint32 public immutable chainId; 
+    uint32 public immutable chainId;
 
     /// @notice the messenger contract used for cross-chain communication
     /// @dev sends crosschain messages to report fills on this chain to other chains
@@ -72,7 +74,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
     }
 
-    /* ========== Initiating Orders ========== */
+    /* ========== Creating Orders ========== */
 
     /// @inheritdoc IOrderBook
     function openOrder(OrderParams calldata orderParams_) external override returns (bytes32) {
@@ -87,8 +89,17 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         bytes32 r_,
         bytes32 s_
     ) external override returns (bytes32) {
-        try IERC20Extended(orderParams_.tokenIn).permit(msg.sender, address(this), uint256(orderParams_.amountIn), deadline_, v_, r_, s_) {} catch {}
-
+        try
+            IERC20Extended(orderParams_.tokenIn).permit(
+                msg.sender,
+                address(this),
+                uint256(orderParams_.amountIn),
+                deadline_,
+                v_,
+                r_,
+                s_
+            )
+        {} catch {}
         return _openOrder(msg.sender, orderParams_);
     }
 
@@ -98,8 +109,15 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         uint256 deadline_,
         bytes memory permitSignature_
     ) external override returns (bytes32) {
-        try IERC20Extended(orderParams_.tokenIn).permit(msg.sender, address(this), uint256(orderParams_.amountIn), deadline_, permitSignature_) {} catch {}
-
+        try
+            IERC20Extended(orderParams_.tokenIn).permit(
+                msg.sender,
+                address(this),
+                uint256(orderParams_.amountIn),
+                deadline_,
+                permitSignature_
+            )
+        {} catch {}
         return _openOrder(msg.sender, orderParams_);
     }
 
@@ -120,8 +138,17 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         bytes32 r_,
         bytes32 s_
     ) external override returns (bytes32) {
-        try IERC20Extended(orderParams_.tokenIn).permit(orderParams_.sender, address(this), uint256(orderParams_.amountIn), deadline_, v_, r_, s_) {} catch {}
-
+        try
+            IERC20Extended(orderParams_.tokenIn).permit(
+                orderParams_.sender,
+                address(this),
+                uint256(orderParams_.amountIn),
+                deadline_,
+                v_,
+                r_,
+                s_
+            )
+        {} catch {}
         return _openOrderFor(orderParams_, orderSignature_);
     }
 
@@ -132,8 +159,15 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         uint256 deadline_,
         bytes memory permitSignature_
     ) external override returns (bytes32) {
-        try IERC20Extended(orderParams_.tokenIn).permit(orderParams_.sender, address(this), uint256(orderParams_.amountIn), deadline_, permitSignature_) {} catch {}
-
+        try
+            IERC20Extended(orderParams_.tokenIn).permit(
+                orderParams_.sender,
+                address(this),
+                uint256(orderParams_.amountIn),
+                deadline_,
+                permitSignature_
+            )
+        {} catch {}
         return _openOrderFor(orderParams_, orderSignature_);
     }
 
@@ -147,24 +181,27 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
 
         // Destination chain must either be the current chain or a supported destination
-        if (orderParams_.destChainId != chainId && !$.destinations[orderParams_.destChainId].isSupported) revert InvalidDestinationChain();
+        if (orderParams_.destChainId != chainId && !$.destinations[orderParams_.destChainId].isSupported)
+            revert InvalidDestinationChain();
 
         // Create order
         uint64 nonce_ = $.senderNonces[sender_]++;
 
-        bytes32 orderId_ = getOrderId(OrderData({
-            version: VERSION, // origin contract version
-            originChainId: chainId,
-            sender: sender_.toBytes32(),
-            nonce: nonce_,
-            destChainId: orderParams_.destChainId,
-            fillDeadline: uint64(orderParams_.fillDeadline),
-            tokenOut: orderParams_.tokenOut,
-            recipient: orderParams_.recipient,
-            amountIn: orderParams_.amountIn,
-            amountOut: orderParams_.amountOut,
-            solver: orderParams_.solver
-        }));
+        bytes32 orderId_ = getOrderId(
+            OrderData({
+                version: VERSION, // origin contract version
+                originChainId: chainId,
+                sender: sender_.toBytes32(),
+                nonce: nonce_,
+                destChainId: orderParams_.destChainId,
+                fillDeadline: uint64(orderParams_.fillDeadline),
+                tokenOut: orderParams_.tokenOut,
+                recipient: orderParams_.recipient,
+                amountIn: orderParams_.amountIn,
+                amountOut: orderParams_.amountOut,
+                solver: orderParams_.solver
+            })
+        );
 
         $.localOrders[orderId_] = Order({
             version: VERSION, // origin contract version
@@ -185,7 +222,15 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         // Transfer tokens in from the sender, ensuring the required amount is received
         IERC20(orderParams_.tokenIn).safeTransferExactFrom(sender_, address(this), uint256(orderParams_.amountIn));
 
-        emit OrderOpened(orderId_, orderParams_.tokenIn, orderParams_.amountIn, orderParams_.destChainId, orderParams_.tokenOut, orderParams_.amountOut, orderParams_.solver);
+        emit OrderOpened(
+            orderId_,
+            orderParams_.tokenIn,
+            orderParams_.amountIn,
+            orderParams_.destChainId,
+            orderParams_.tokenOut,
+            orderParams_.amountOut,
+            orderParams_.solver
+        );
 
         return orderId_;
     }
@@ -209,29 +254,59 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         if (orderParams_.nonce != $.senderNonces[orderParams_.sender]) revert InvalidNonce();
 
         // Open order on behalf of the sender
-        return _openOrder(orderParams_.sender, OrderParams({
-            destChainId: orderParams_.destChainId,
-            tokenIn: orderParams_.tokenIn,
-            tokenOut: orderParams_.tokenOut,
-            amountIn: orderParams_.amountIn,
-            amountOut: orderParams_.amountOut,
-            recipient: orderParams_.recipient,
-            fillDeadline: orderParams_.fillDeadline,
-            solver: orderParams_.solver
-        }));
+        return
+            _openOrder(
+                orderParams_.sender,
+                OrderParams({
+                    destChainId: orderParams_.destChainId,
+                    tokenIn: orderParams_.tokenIn,
+                    tokenOut: orderParams_.tokenOut,
+                    amountIn: orderParams_.amountIn,
+                    amountOut: orderParams_.amountOut,
+                    recipient: orderParams_.recipient,
+                    fillDeadline: orderParams_.fillDeadline,
+                    solver: orderParams_.solver
+                })
+            );
     }
 
-    // ========== Refunding Orders ========== //
+    /* ========== Refunding Orders ========== */
 
     /// @inheritdoc IOrderBook
     function requestCancelOrder(bytes32 orderId_) external override {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         Order storage order = $.localOrders[orderId_];
 
+        // Validate that the caller is the sender
+        if (order.sender != msg.sender) revert NotAuthorized();
+
+        _requestCancelOrder(orderId_);
+    }
+
+    /// @inheritdoc IOrderBook
+    function requestCancelOrderFor(bytes32 orderId_, bytes calldata signature_) external override {
+        // Load order to get sender
+        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
+        Order storage order = $.localOrders[orderId_];
+
+        // Verify signature
+        if (signature_.length == 64) {
+            (bytes32 r, bytes32 vs) = abi.decode(signature_, (bytes32, bytes32));
+            _revertIfInvalidSignature(order.sender, getCancelRequestDigest(orderId_), r, vs);
+        } else {
+            _revertIfInvalidSignature(order.sender, getCancelRequestDigest(orderId_), signature_);
+        }
+
+        _requestCancelOrder(orderId_);
+    }
+
+    function _requestCancelOrder(bytes32 orderId_) internal {
+        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
+        Order storage order = $.localOrders[orderId_];
+
         // Validate that the order can be cancelled and the caller is the sender
         if (order.status != OrderStatus.Created) revert InvalidOrderStatus();
-        if (uint256(order.fillDeadline) <= block.timestamp) revert OrderExpired();
-        if (order.sender != msg.sender) revert NotAuthorized();
+        if (uint256(order.fillDeadline) < block.timestamp) revert OrderExpired();
 
         // Mark the order as cancel requested
         order.status = OrderStatus.CancelRequested;
@@ -244,16 +319,12 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
         if (order.destChainId == chainId) {
             // Local orders can be immediately refunded
-            _claimRefund(orderId_);
+            _claimRefund(orderId_, order);
         }
     }
 
     /// @inheritdoc IOrderBook
     function claimRefund(bytes32 orderId_) external override {
-        _claimRefund(orderId_);
-    }
-
-    function _claimRefund(bytes32 orderId_) internal {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         Order storage order = $.localOrders[orderId_];
 
@@ -261,15 +332,23 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         // If the order is local, the finality buffer is 0
         uint32 finalityBuffer_ = order.destChainId == chainId ? 0 : $.destinations[order.destChainId].finalityBuffer;
         if (order.status == OrderStatus.Created) {
-            // If the order is still in Created status, it can only be refunded if the fill deadline + finality buffer has passed
-            if (uint256(order.fillDeadline) + finalityBuffer_ > block.timestamp) revert FinalityPending();
+            // If the order is still in Created status,
+            // it can only be refunded if the fill deadline + finality buffer has passed
+            if (uint256(order.fillDeadline) + finalityBuffer_ >= block.timestamp) revert FinalityPending();
         } else if (order.status == OrderStatus.CancelRequested) {
-            // If the order is in CancelRequested status, it can only be refunded if the refund was requested at least finality buffer ago
-            if (uint256(order.cancelRequestedAt) + finalityBuffer_ > block.timestamp) revert FinalityPending();
+            // If the order is in CancelRequested status,
+            // it can only be refunded if the refund was requested at least finality buffer ago
+            if (uint256(order.cancelRequestedAt) + finalityBuffer_ >= block.timestamp) revert FinalityPending();
         } else {
             // If the order is in any other status, it cannot be refunded
             revert InvalidOrderStatus();
         }
+
+        _claimRefund(orderId_, order);
+    }
+
+    function _claimRefund(bytes32 orderId_, Order storage order) internal {
+        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
 
         // Calculate the refund amount
         uint128 amountInRemaining_ = order.amountIn - $.filledAmounts[orderId_].amountInReleased;
@@ -283,11 +362,14 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         emit RefundClaimed(orderId_, order.sender, amountInRemaining_);
     }
 
-
     /* ========== Filling Orders ========== */
 
     /// @inheritdoc IOrderBook
-    function fillOrder(bytes32 orderId_, OrderData calldata orderData_, FillParams calldata fillerParams_) external override {
+    function fillOrder(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        FillParams calldata fillerParams_
+    ) external override {
         // Ensure the provided order ID matches the computed order ID from the order data
         // This check is not strictly required, but it is a useful sanity check for solvers
         // to ensure they have the order data correct
@@ -314,7 +396,9 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
         // Calculate the corresponding of token in to release to the filler
         uint128 amountInRemaining_ = orderData_.amountIn - filledAmounts.amountInReleased;
-        uint128 amountInToRelease_ = fullFill_ ? amountInRemaining_ : ((uint256(orderData_.amountIn) * amountOutToFill_) / orderData_.amountOut).toUint128();
+        uint128 amountInToRelease_ = fullFill_
+            ? amountInRemaining_
+            : ((uint256(orderData_.amountIn) * amountOutToFill_) / orderData_.amountOut).toUint128();
 
         // Update filled amounts
         filledAmounts.amountOutFilled += amountOutToFill_;
@@ -330,18 +414,25 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
                 emit OrderCompleted(orderId_);
             }
 
-            // If this is a fill on the origin chain, we can immediately release the token in to the filler 
+            // If this is a fill on the origin chain, we can immediately release the token in to the filler
             // This is because the origin and destination chains are the same, so no cross-chain messaging is needed
-            IERC20(order.tokenIn).safeTransferExact(fillerParams_.originRecipient.toAddress(), uint256(amountInToRelease_));
+            IERC20(order.tokenIn).safeTransferExact(
+                fillerParams_.originRecipient.toAddress(),
+                uint256(amountInToRelease_)
+            );
         }
-        
-        // Transfer tokens from the solver to the recipient
-        IERC20(orderData_.tokenOut.toAddress()).safeTransferExactFrom(msg.sender, orderData_.recipient.toAddress(), uint256(amountOutToFill_));
 
-        // If this is a fill on a different chain than the origin chain, 
-        // we need to send a message back to the origin chain to release 
+        // Transfer tokens from the solver to the recipient
+        IERC20(orderData_.tokenOut.toAddress()).safeTransferExactFrom(
+            msg.sender,
+            orderData_.recipient.toAddress(),
+            uint256(amountOutToFill_)
+        );
+
+        // If this is a fill on a different chain than the origin chain,
+        // we need to send a message back to the origin chain to release
         // the corresponding amount of tokenIn to the solver's recipient
-        if (chainId != orderData_.originChainId) {    
+        if (chainId != orderData_.originChainId) {
             IMessenger(messenger).sendFillReport(
                 orderData_.originChainId,
                 FillReport({
@@ -365,7 +456,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
         // Validate the fill report and sender
         if (msg.sender != messenger) revert NotAuthorized();
-        if (order.status != OrderStatus.Created && order.status != OrderStatus.CancelRequested) revert InvalidOrderStatus();
+        if (order.status != OrderStatus.Created && order.status != OrderStatus.CancelRequested)
+            revert InvalidOrderStatus();
 
         // Update the fill amounts for the order
         IOrderBook.FilledAmounts storage filledAmounts = $.filledAmounts[report_.orderId];
@@ -373,7 +465,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         filledAmounts.amountInReleased += report_.amountInToRelease;
 
         // Validate that the filled amounts do not exceed the order amounts
-        if (filledAmounts.amountOutFilled > order.amountOut || filledAmounts.amountInReleased > order.amountIn) revert InvalidReport();
+        if (filledAmounts.amountOutFilled > order.amountOut || filledAmounts.amountInReleased > order.amountIn)
+            revert InvalidReport();
 
         // Mark order as completed if fully filled
         if (filledAmounts.amountOutFilled == order.amountOut) {
@@ -382,19 +475,24 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         }
 
         // Transfer the amount in to release to the recipient specified by the filler
-        IERC20(order.tokenIn).safeTransferExact(report_.originRecipient.toAddress(), uint256(report_.amountInToRelease));
+        IERC20(order.tokenIn).safeTransferExact(
+            report_.originRecipient.toAddress(),
+            uint256(report_.amountInToRelease)
+        );
     }
 
     /* ========== Admin Functions ========== */
 
-    function setDestinationConfig(uint32 destChainId_, bool isSupported_, uint32 finalityBuffer_) external override onlyRole(DEFAULT_ADMIN_ROLE) {
+    /// @inheritdoc IOrderBook
+    function setDestinationConfig(
+        uint32 destChainId_,
+        bool isSupported_,
+        uint32 finalityBuffer_
+    ) external override onlyRole(DEFAULT_ADMIN_ROLE) {
         if (isSupported_ && finalityBuffer_ == 0) revert InvalidFinalityBuffer();
 
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-        $.destinations[destChainId_] = Destination({
-            isSupported: isSupported_,
-            finalityBuffer: finalityBuffer_
-        });
+        $.destinations[destChainId_] = Destination({ isSupported: isSupported_, finalityBuffer: finalityBuffer_ });
     }
 
     /* ========== View Functions ========== */
@@ -402,19 +500,22 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     // Order IDs are unique across chains and allow using fill data to compute the identifier
     // This is useful for tracking data against orders on both the origin and destination chains
     function getOrderId(OrderData memory orderData_) public pure override returns (bytes32) {
-        return keccak256(abi.encodePacked(
-            orderData_.version,
-            orderData_.sender,
-            orderData_.nonce,
-            orderData_.originChainId,
-            orderData_.destChainId,
-            orderData_.fillDeadline,
-            orderData_.tokenOut,
-            orderData_.amountIn,
-            orderData_.amountOut,
-            orderData_.recipient,
-            orderData_.solver
-        ));
+        return
+            keccak256(
+                abi.encodePacked(
+                    orderData_.version,
+                    orderData_.sender,
+                    orderData_.nonce,
+                    orderData_.originChainId,
+                    orderData_.destChainId,
+                    orderData_.fillDeadline,
+                    orderData_.tokenOut,
+                    orderData_.amountIn,
+                    orderData_.amountOut,
+                    orderData_.recipient,
+                    orderData_.solver
+                )
+            );
     }
 
     function getOrder(bytes32 orderId_) external view override returns (Order memory) {
@@ -442,21 +543,34 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         return $.destinations[destChainId_].finalityBuffer;
     }
 
+    /* ========== EIP-712 Digest Functions ========== */
+
+    /// @inheritdoc IOrderBook
     function getGaslessOrderDigest(GaslessOrderParams memory orderParams_) public view override returns (bytes32) {
-        return _getDigest(keccak256(abi.encode(
-            GASLESS_ORDER_TYPEHASH,
-            orderParams_.version,
-            orderParams_.sender,
-            orderParams_.nonce,
-            orderParams_.originChainId,
-            orderParams_.destChainId,
-            orderParams_.fillDeadline,
-            orderParams_.tokenIn,
-            orderParams_.tokenOut,
-            orderParams_.amountIn,
-            orderParams_.amountOut,
-            orderParams_.recipient,
-            orderParams_.solver
-        )));
+        return
+            _getDigest(
+                keccak256(
+                    abi.encode(
+                        GASLESS_ORDER_TYPEHASH,
+                        orderParams_.version,
+                        orderParams_.sender,
+                        orderParams_.nonce,
+                        orderParams_.originChainId,
+                        orderParams_.destChainId,
+                        orderParams_.fillDeadline,
+                        orderParams_.tokenIn,
+                        orderParams_.tokenOut,
+                        orderParams_.amountIn,
+                        orderParams_.amountOut,
+                        orderParams_.recipient,
+                        orderParams_.solver
+                    )
+                )
+            );
+    }
+
+    /// @inheritdoc IOrderBook
+    function getCancelRequestDigest(bytes32 orderId_) public view override returns (bytes32) {
+        return _getDigest(keccak256(abi.encode(CANCEL_REQUEST_TYPEHASH, orderId_)));
     }
 }
