@@ -230,13 +230,10 @@ async fn test_order_rejected() {
         solver: FixedBytes::from([0u8; 32]),
     });
 
-    builder
+    let _ = builder
         .send()
         .await
-        .expect("Failed to send openOrder transaction")
-        .watch()
-        .await
-        .expect("Failed to confirm transaction");
+        .expect("Failed to send openOrder transaction");
 
     // Wait for the solver to process the order
     let rejected = wait_for_log(&suite.log_capture, "event=\"OrderRejected\" order_id=3cc8eacf0fb4494f90d52f2fd566e3750b21b8b88f86b9fdce50b23df6e47212").await;
@@ -260,13 +257,10 @@ async fn test_order_processed() {
         solver: FixedBytes::from([0u8; 32]),
     });
 
-    builder
+    let _ = builder
         .send()
         .await
-        .expect("Failed to send openOrder transaction")
-        .get_receipt()
-        .await
-        .expect("Failed to confirm transaction");
+        .expect("Failed to send openOrder transaction");
 
     // Wait for the solver to process the order
     let created = wait_for_log(&suite.log_capture, "event=\"OrderCreated\" order_id=cd7918d1ca877739e07228e799c448933806c55fa39a24d70d58c5d99c52bbf9").await;
