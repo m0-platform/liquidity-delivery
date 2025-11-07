@@ -63,9 +63,9 @@ impl EventHandler for OrderProcessor {
                     e.order.amount_in,
                 ))]);
             }
-            SolverEvent::HoldSuccessful(_e) => {
+            SolverEvent::HoldSuccessful(e) => {
                 // TODO: build fillOrder transaction
-                tracing::info!("Building fillOrder transaction");
+                tracing::info!(order_id=e.order_id, "Building fillOrder transaction");
             }
             _ => {}
         }
