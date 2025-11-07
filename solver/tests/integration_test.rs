@@ -51,6 +51,16 @@ struct TestSuite {
     svm_signer: Arc<Keypair>,
     shutdown_tx: broadcast::Sender<()>,
     log_capture: tracing_capture::CaptureLayer,
+    provider: &'static FillProvider<
+        JoinFill<
+            JoinFill<
+                Identity,
+                JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+            >,
+            WalletFiller<alloy::network::EthereumWallet>,
+        >,
+        RootProvider,
+    >,
 }
 
 impl TestSuite {
@@ -67,9 +77,11 @@ impl TestSuite {
         let evm_signer: PrivateKeySigner = anvil.keys()[0].clone().into();
         let svm_signer = Arc::new(Keypair::new());
 
-        let provider = ProviderBuilder::new()
-            .wallet(evm_signer.clone())
-            .connect_http(anvil.endpoint_url());
+        let provider: &'static _ = Box::leak(Box::new(
+            ProviderBuilder::new()
+                .wallet(evm_signer.clone())
+                .connect_http(anvil.endpoint_url()),
+        ));
 
         let contract = OrderBook::deploy(&provider, 11155111, Address::new([0u8; 20]))
             .await
@@ -105,7 +117,7 @@ impl TestSuite {
                 .expect("Failed to get deployed contract address");
 
             // Create MockERC20 instance for interacting with the deployed contract
-            let token = MockERC20::new(token_address, &provider);
+            let token = MockERC20::new(token_address, provider);
 
             // Mint 100 tokens to the signer
             token
@@ -116,7 +128,7 @@ impl TestSuite {
                 .send()
                 .await
                 .expect("Failed to send mint transaction")
-                .get_receipt()
+                .watch()
                 .await
                 .expect("Failed to confirm mint transaction");
 
@@ -128,13 +140,13 @@ impl TestSuite {
             ));
 
             // Approve the OrderBook contract to spend tokens
-            let token = MockERC20::new(token_address, &provider);
+            let token = MockERC20::new(token_address, provider);
             token
                 .approve(contract_address, U256::MAX)
                 .send()
                 .await
                 .expect("Failed to send approve transaction")
-                .get_receipt()
+                .watch()
                 .await
                 .expect("Failed to confirm approve transaction");
         }
@@ -176,6 +188,7 @@ impl TestSuite {
             svm_signer,
             shutdown_tx,
             log_capture,
+            provider,
         }
     }
 }
@@ -203,12 +216,7 @@ async fn test_inventory_manager_loads_balances() {
 #[tokio::test]
 async fn test_order_rejected() {
     let suite = get_tests_suite().await;
-
-    let provider = ProviderBuilder::new()
-        .wallet(suite.evm_signer.clone())
-        .connect_http(suite.anvil.endpoint_url());
-
-    let contract = OrderBook::new(suite.contract_address, &provider);
+    let contract = OrderBook::new(suite.contract_address, suite.provider);
 
     let builder = contract.openOrder(OrderParams {
         tokenIn: suite.tokens[0].into(),
@@ -226,7 +234,7 @@ async fn test_order_rejected() {
         .send()
         .await
         .expect("Failed to send openOrder transaction")
-        .get_receipt()
+        .watch()
         .await
         .expect("Failed to confirm transaction");
 
@@ -236,45 +244,36 @@ async fn test_order_rejected() {
     assert!(suite.log_capture.contains("reason=Asset not supported"));
 }
 
-// #[tokio::test]
-// async fn test_order_processed() {
-//     let suite = get_tests_suite().await;
+#[tokio::test]
+async fn test_order_processed() {
+    let suite = get_tests_suite().await;
+    let contract = OrderBook::new(suite.contract_address, &suite.provider);
 
-//     let provider = ProviderBuilder::new()
-//         .wallet(suite.evm_signer.clone())
-//         .connect_http(suite.anvil.endpoint_url());
+    let builder = contract.openOrder(OrderParams {
+        tokenIn: suite.tokens[0].into(),
+        destChainId: 11155111,
+        tokenOut: FixedBytes::from(decode_evm_address(suite.tokens[1])),
+        amountIn: 1000000,
+        amountOut: 1000000,
+        recipient: FixedBytes::from(decode_evm_address(suite.evm_signer.address())),
+        fillDeadline: u32::MAX,
+        solver: FixedBytes::from([0u8; 32]),
+    });
 
-//     let contract = OrderBook::new(suite.contract_address, &provider);
+    builder
+        .send()
+        .await
+        .expect("Failed to send openOrder transaction")
+        .get_receipt()
+        .await
+        .expect("Failed to confirm transaction");
 
-//     let builder = contract.openOrder(OrderParams {
-//         tokenIn: suite.tokens[0].into(),
-//         destChainId: 11155111,
-//         tokenOut: FixedBytes::from(decode_evm_address(suite.tokens[1])),
-//         amountIn: 1000000,
-//         amountOut: 1000000,
-//         recipient: FixedBytes::from(decode_evm_address(suite.evm_signer.address())),
-//         fillDeadline: u32::MAX,
-//         solver: FixedBytes::from([0u8; 32]),
-//     });
-
-//     builder
-//         .send()
-//         .await
-//         .expect("Failed to send openOrder transaction")
-//         .get_receipt()
-//         .await
-//         .expect("Failed to confirm transaction");
-
-//     // Wait for the solver to process the order
-//     assert!(
-//         wait_for_log(&suite.log_capture, "event=\"OrderCreated\" order_id=ec224b6df9436835d1e2c68a8b0f36d6e8e40ad4da250a1102eb90d9822ea520").await,
-//         "Timeout waiting for OrderCreated event"
-//     );
-//     assert!(
-//         wait_for_log(&suite.log_capture, "Building fillOrder transaction").await,
-//         "Timeout waiting for fillOrder transaction log"
-//     );
-// }
+    // Wait for the solver to process the order
+    let created = wait_for_log(&suite.log_capture, "event=\"OrderCreated\" order_id=cd7918d1ca877739e07228e799c448933806c55fa39a24d70d58c5d99c52bbf9").await;
+    assert!(created, "Timeout waiting for OrderCreated event");
+    let hold = wait_for_log(&suite.log_capture, "event=\"HoldSuccessfulEvent\" order_id=cd7918d1ca877739e07228e799c448933806c55fa39a24d70d58c5d99c52bbf9").await;
+    assert!(hold, "Timeout waiting for HoldSuccessfulEvent event");
+}
 
 async fn wait_for_log(capture: &tracing_capture::CaptureLayer, substring: &str) -> bool {
     let timeout = Duration::from_secs(5);
