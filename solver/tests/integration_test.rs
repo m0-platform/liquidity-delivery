@@ -18,6 +18,7 @@ use alloy::{
     sol,
 };
 use anchor_client::solana_sdk::signature::Keypair;
+use core::panic;
 use m0_liquidity_sdk::types::Chain;
 use solver::{config::Signers, utils::decode_evm_address, Config};
 use std::{sync::Arc, time::Duration};
@@ -191,6 +192,24 @@ impl TestSuite {
             provider,
         }
     }
+
+    async fn wait_for_log(&self, substring: &str) {
+        let timeout = Duration::from_secs(5);
+        let poll_interval = Duration::from_millis(10);
+        let start = tokio::time::Instant::now();
+
+        while start.elapsed() < timeout {
+            if self.log_capture.contains(substring) {
+                return;
+            }
+            sleep(poll_interval).await;
+        }
+
+        panic!(
+            "Timeout waiting for log containing substring: {}",
+            substring
+        );
+    }
 }
 
 // Singleton instance of the shared test infrastructure
@@ -235,10 +254,8 @@ async fn test_order_rejected() {
         .await
         .expect("Failed to send openOrder transaction");
 
-    // Wait for the solver to process the order
-    let rejected = wait_for_log(&suite.log_capture, "event=\"OrderRejected\" order_id=3cc8eacf0fb4494f90d52f2fd566e3750b21b8b88f86b9fdce50b23df6e47212").await;
-    assert!(rejected, "Timeout waiting for OrderRejected event");
-    assert!(suite.log_capture.contains("reason=Asset not supported"));
+    suite.wait_for_log("event=\"OrderRejected\" order_id=3cc8eacf0fb4494f90d52f2fd566e3750b21b8b88f86b9fdce50b23df6e47212").await;
+    suite.wait_for_log("reason=Asset not supported").await;
 }
 
 #[tokio::test]
@@ -262,24 +279,6 @@ async fn test_order_processed() {
         .await
         .expect("Failed to send openOrder transaction");
 
-    // Wait for the solver to process the order
-    let created = wait_for_log(&suite.log_capture, "event=\"OrderCreated\" order_id=cd7918d1ca877739e07228e799c448933806c55fa39a24d70d58c5d99c52bbf9").await;
-    assert!(created, "Timeout waiting for OrderCreated event");
-    let hold = wait_for_log(&suite.log_capture, "event=\"HoldSuccessfulEvent\" order_id=cd7918d1ca877739e07228e799c448933806c55fa39a24d70d58c5d99c52bbf9").await;
-    assert!(hold, "Timeout waiting for HoldSuccessfulEvent event");
-}
-
-async fn wait_for_log(capture: &tracing_capture::CaptureLayer, substring: &str) -> bool {
-    let timeout = Duration::from_secs(5);
-    let poll_interval = Duration::from_millis(10);
-    let start = tokio::time::Instant::now();
-
-    while start.elapsed() < timeout {
-        if capture.contains(substring) {
-            return true;
-        }
-        sleep(poll_interval).await;
-    }
-
-    false
+    suite.wait_for_log("event=\"OrderCreated\" order_id=cd7918d1ca877739e07228e799c448933806c55fa39a24d70d58c5d99c52bbf9").await;
+    suite.wait_for_log("event=\"HoldSuccessfulEvent\" order_id=cd7918d1ca877739e07228e799c448933806c55fa39a24d70d58c5d99c52bbf9").await;
 }
