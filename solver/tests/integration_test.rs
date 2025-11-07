@@ -6,7 +6,10 @@ use alloy::{
     network::TransactionBuilder,
     node_bindings::{Anvil, AnvilInstance},
     primitives::{Address, FixedBytes, U256},
-    providers::{Provider, ProviderBuilder},
+    providers::{
+        fillers::{BlobGasFiller, ChainIdFiller, FillProvider, GasFiller, JoinFill, NonceFiller},
+        Identity, Provider, ProviderBuilder, RootProvider,
+    },
     rpc::types::TransactionRequest,
     signers::local::PrivateKeySigner,
     sol,
@@ -15,8 +18,10 @@ use anchor_client::solana_sdk::signature::Keypair;
 use m0_liquidity_sdk::types::Chain;
 use solver::{config::Signers, utils::decode_evm_address, Config};
 use std::{sync::Arc, time::Duration};
-use tokio::{sync::broadcast, time::sleep};
-use tracing_capture::TestTracingGuard;
+use tokio::{
+    sync::{broadcast, OnceCell},
+    time::sleep,
+};
 
 use crate::{mock_api::AssetConfig, IOrderBook::OrderParams};
 
@@ -26,7 +31,6 @@ sol!(
     "../evm/out/OrderBook.sol/OrderBook.json"
 );
 
-// MockERC20 interface for calling deployed contract
 sol! {
     #[sol(rpc)]
     interface MockERC20 {
@@ -43,14 +47,22 @@ struct TestSuite {
     evm_signer: PrivateKeySigner,
     svm_signer: Arc<Keypair>,
     mock_server: mockito::ServerGuard,
-    shutdown_tx: Option<broadcast::Sender<()>>,
-    log_guard: TestTracingGuard,
+    shutdown_tx: broadcast::Sender<()>,
+    log_guard: tracing_capture::TestTracingGuard,
+    provider: FillProvider<
+        JoinFill<
+            Identity,
+            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+        >,
+        RootProvider,
+    >,
 }
+
 impl TestSuite {
-    /// Create a new test suite with Anvil and deployed contracts
-    async fn new() -> Self {
+    async fn init() -> Self {
         let log_guard = tracing_capture::init_test_tracing();
 
+        // Start Anvil node
         let anvil = Anvil::new()
             .block_time(1)
             .chain_id(11155111)
@@ -58,6 +70,8 @@ impl TestSuite {
             .expect("failed to spawn anvil node");
 
         let evm_signer: PrivateKeySigner = anvil.keys()[0].clone().into();
+        let svm_signer = Arc::new(Keypair::new());
+
         let provider = ProviderBuilder::new()
             .wallet(evm_signer.clone())
             .connect_http(anvil.endpoint_url());
@@ -82,6 +96,7 @@ impl TestSuite {
 
             let tx = TransactionRequest::default().with_deploy_code(bytecode);
 
+            // Deploy ERC20 contract
             let receipt = provider
                 .send_transaction(tx)
                 .await
@@ -97,7 +112,7 @@ impl TestSuite {
             // Create MockERC20 instance for interacting with the deployed contract
             let token = MockERC20::new(token_address, &provider);
 
-            // Mint 100 tokens to the signer (100 * 10^6)
+            // Mint 100 tokens to the signer
             token
                 .mint(
                     evm_signer.address(),
@@ -106,7 +121,7 @@ impl TestSuite {
                 .send()
                 .await
                 .expect("Failed to send mint transaction")
-                .watch()
+                .get_receipt()
                 .await
                 .expect("Failed to confirm mint transaction");
 
@@ -116,76 +131,81 @@ impl TestSuite {
                 "Sepolia",
                 ["USDC", "USDT", "USDS"][i],
             ));
+
+            // Approve the OrderBook contract to spend tokens
+            let token = MockERC20::new(token_address, &provider);
+            token
+                .approve(contract_address, U256::MAX)
+                .send()
+                .await
+                .expect("Failed to send approve transaction")
+                .get_receipt()
+                .await
+                .expect("Failed to confirm approve transaction");
         }
 
         // Create mock API with the test tokens
         let mock_server = mock_api::mock_api_with_assets(api_tokens).await;
+
+        // Setup solver
+        let shutdown_tx = {
+            let mut config = Config::default();
+
+            // Anvil chain configuration
+            config.chains.push(solver::config::ChainConfig {
+                chain_id: 11155111,
+                chain: Chain::Sepolia,
+                rpc_url: anvil.endpoint_url().to_string(),
+                ws_url: anvil.ws_endpoint_url().to_string(),
+                order_book_address: contract_address.to_string(),
+            });
+
+            config.liquidity_api_url = mock_server.url();
+            config.signers = Signers::new(evm_signer.clone(), svm_signer.clone());
+
+            let shutdown_tx = solver::run_solver(config)
+                .await
+                .expect("Failed to start solver");
+
+            // Let the solver boot up
+            sleep(Duration::from_millis(10)).await;
+
+            shutdown_tx
+        };
 
         Self {
             anvil,
             contract_address,
             tokens,
             evm_signer,
-            svm_signer: Arc::new(Keypair::new()),
+            svm_signer,
             mock_server,
-            shutdown_tx: None,
+            shutdown_tx,
             log_guard,
+            provider,
         }
-    }
-
-    /// Start the solver with the test configuration
-    async fn start_solver(&mut self) -> &mut Self {
-        self.start_solver_with_config(|_| {}).await
-    }
-
-    /// Start the solver with custom configuration modifications
-    async fn start_solver_with_config<F>(&mut self, config_modifier: F) -> &mut Self
-    where
-        F: FnOnce(&mut Config),
-    {
-        let mut config = Config::default();
-
-        // Anvil chain configuration
-        config.chains.push(solver::config::ChainConfig {
-            chain_id: 11155111,
-            chain: Chain::Sepolia,
-            rpc_url: self.anvil.endpoint_url().to_string(),
-            ws_url: self.anvil.ws_endpoint_url().to_string(),
-            order_book_address: self.contract_address.to_string(),
-        });
-
-        config.liquidity_api_url = self.mock_server.url();
-        config.signers = Signers::new(self.evm_signer.clone(), self.svm_signer.clone());
-
-        // Apply custom configuration
-        config_modifier(&mut config);
-
-        let shutdown_tx = solver::run_solver(config)
-            .await
-            .expect("Failed to start solver");
-
-        self.shutdown_tx = Some(shutdown_tx);
-
-        // Let the solver boot up
-        sleep(Duration::from_millis(10)).await;
-
-        self
     }
 }
 
 impl Drop for TestSuite {
     fn drop(&mut self) {
-        // Send shutdown signal if solver was started
-        if let Some(shutdown_tx) = self.shutdown_tx.take() {
-            let _ = shutdown_tx.send(());
-        }
+        let _ = self.shutdown_tx.send(());
     }
+}
+
+// Singleton instance of the shared test infrastructure
+static SHARED_INFRA: OnceCell<TestSuite> = OnceCell::const_new();
+
+// Get or initialize the shared test infrastructure
+async fn get_tests_suite() -> &'static TestSuite {
+    SHARED_INFRA
+        .get_or_init(|| async { TestSuite::init().await })
+        .await
 }
 
 #[tokio::test]
 async fn test_inventory_manager_loads_balances() {
-    let mut suite = TestSuite::new().await;
-    suite.start_solver().await;
+    let suite = get_tests_suite().await;
 
     // Check that the Manager loaded balances for both ETH and the test tokens
     assert!(suite.log_guard.contains("USDC: 100"));
@@ -196,25 +216,8 @@ async fn test_inventory_manager_loads_balances() {
 
 #[tokio::test]
 async fn test_order_rejected() {
-    let mut suite = TestSuite::new().await;
-    suite.start_solver().await;
-
-    let provider = ProviderBuilder::new()
-        .wallet(suite.evm_signer.clone())
-        .connect_http(suite.anvil.endpoint_url());
-
-    let contract = OrderBook::new(suite.contract_address, &provider);
-
-    // Approve the OrderBook contract to spend tokens
-    let token = MockERC20::new(suite.tokens[0], &provider);
-    token
-        .approve(suite.contract_address, U256::MAX)
-        .send()
-        .await
-        .expect("Failed to send approve transaction")
-        .watch()
-        .await
-        .expect("Failed to confirm approve transaction");
+    let suite = get_tests_suite().await;
+    let contract = OrderBook::new(suite.contract_address, &suite.provider);
 
     let builder = contract.openOrder(OrderParams {
         tokenIn: suite.tokens[0].into(),
@@ -232,7 +235,7 @@ async fn test_order_rejected() {
         .send()
         .await
         .expect("Failed to send openOrder transaction")
-        .watch()
+        .get_receipt()
         .await
         .expect("Failed to confirm transaction");
 
@@ -246,25 +249,8 @@ async fn test_order_rejected() {
 
 #[tokio::test]
 async fn test_order_processed() {
-    let mut suite = TestSuite::new().await;
-    suite.start_solver().await;
-
-    let provider = ProviderBuilder::new()
-        .wallet(suite.evm_signer.clone())
-        .connect_http(suite.anvil.endpoint_url());
-
-    let contract = OrderBook::new(suite.contract_address, &provider);
-
-    // Approve the OrderBook contract to spend tokens
-    let token = MockERC20::new(suite.tokens[0], &provider);
-    token
-        .approve(suite.contract_address, U256::MAX)
-        .send()
-        .await
-        .expect("Failed to send approve transaction")
-        .watch()
-        .await
-        .expect("Failed to confirm approve transaction");
+    let suite = get_tests_suite().await;
+    let contract = OrderBook::new(suite.contract_address, &suite.provider);
 
     let builder = contract.openOrder(OrderParams {
         tokenIn: suite.tokens[0].into(),
@@ -281,7 +267,7 @@ async fn test_order_processed() {
         .send()
         .await
         .expect("Failed to send openOrder transaction")
-        .watch()
+        .get_receipt()
         .await
         .expect("Failed to confirm transaction");
 
