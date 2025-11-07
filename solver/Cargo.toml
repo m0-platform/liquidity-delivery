@@ -32,3 +32,4 @@ governor = "0.6"
 
 [dev-dependencies]
 mockito = "1.7.0"
+ctor = "0.2"

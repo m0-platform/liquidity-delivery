@@ -55,7 +55,7 @@ struct TestSuite {
 
 impl TestSuite {
     async fn init() -> Self {
-        let log_capture = tracing_capture::init_test_tracing();
+        let log_capture = tracing_capture::get_capture();
 
         // Start Anvil node
         let anvil = Anvil::new()
@@ -180,12 +180,6 @@ impl TestSuite {
     }
 }
 
-impl Drop for TestSuite {
-    fn drop(&mut self) {
-        let _ = self.shutdown_tx.send(());
-    }
-}
-
 // Singleton instance of the shared test infrastructure
 static SHARED_INFRA: OnceCell<TestSuite> = OnceCell::const_new();
 
@@ -200,14 +194,10 @@ async fn get_tests_suite() -> &'static TestSuite {
 async fn test_inventory_manager_loads_balances() {
     let suite = get_tests_suite().await;
 
-    // Check that the Manager loaded balances for both ETH and the test tokens
     assert!(suite.log_capture.contains("USDC: 100"));
     assert!(suite.log_capture.contains("USDT: 100"));
     assert!(suite.log_capture.contains("USDS: 100"));
     assert!(suite.log_capture.contains("ETH: 9999.99"));
-
-    // Give time for any pending operations to complete before next test
-    sleep(Duration::from_millis(100)).await;
 }
 
 #[tokio::test]
@@ -240,11 +230,9 @@ async fn test_order_rejected() {
         .await
         .expect("Failed to confirm transaction");
 
-    // Let the solver run and pick up the order
-    sleep(Duration::from_millis(100)).await;
-
-    // Check that the OrderRejected event was created
-    assert!(suite.log_capture.contains("event=\"OrderRejected\" order_id=3cc8eacf0fb4494f90d52f2fd566e3750b21b8b88f86b9fdce50b23df6e47212"));
+    // Wait for the solver to process the order
+    let rejected = wait_for_log(&suite.log_capture, "event=\"OrderRejected\" order_id=3cc8eacf0fb4494f90d52f2fd566e3750b21b8b88f86b9fdce50b23df6e47212").await;
+    assert!(rejected, "Timeout waiting for OrderRejected event");
     assert!(suite.log_capture.contains("reason=Asset not supported"));
 }
 
@@ -277,10 +265,28 @@ async fn test_order_rejected() {
 //         .await
 //         .expect("Failed to confirm transaction");
 
-//     // Let the solver run and pick up the order
-//     sleep(Duration::from_millis(100)).await;
-
-//     // Check that the Order was picked up and not rejected
-//     assert!(suite.log_capture.contains("event=\"OrderCreated\" order_id=ec224b6df9436835d1e2c68a8b0f36d6e8e40ad4da250a1102eb90d9822ea520"));
-//     assert!(suite.log_capture.contains("Building fillOrder transaction"));
+//     // Wait for the solver to process the order
+//     assert!(
+//         wait_for_log(&suite.log_capture, "event=\"OrderCreated\" order_id=ec224b6df9436835d1e2c68a8b0f36d6e8e40ad4da250a1102eb90d9822ea520").await,
+//         "Timeout waiting for OrderCreated event"
+//     );
+//     assert!(
+//         wait_for_log(&suite.log_capture, "Building fillOrder transaction").await,
+//         "Timeout waiting for fillOrder transaction log"
+//     );
 // }
+
+async fn wait_for_log(capture: &tracing_capture::CaptureLayer, substring: &str) -> bool {
+    let timeout = Duration::from_secs(5);
+    let poll_interval = Duration::from_millis(10);
+    let start = tokio::time::Instant::now();
+
+    while start.elapsed() < timeout {
+        if capture.contains(substring) {
+            return true;
+        }
+        sleep(poll_interval).await;
+    }
+
+    false
+}

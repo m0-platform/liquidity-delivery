@@ -1,8 +1,10 @@
+use ctor::{ctor, dtor};
 use std::fmt::Debug;
-use std::io::{stderr, Write};
+use std::io::{stdout, Write};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use tracing::level_filters::LevelFilter;
 use tracing::Subscriber;
+use tracing_subscriber::layer::Context;
 use tracing_subscriber::{
     fmt::MakeWriter, layer::SubscriberExt, util::SubscriberInitExt, Layer, Registry,
 };
@@ -33,15 +35,8 @@ impl CaptureLayer {
             .any(|log| log.contains(substring))
     }
 
-    /// Flush buffered logs to stderr
     fn flush(&self) {
-        self.writer.flush_to_stderr();
-    }
-
-    /// Clear all captured logs and the buffer
-    pub fn clear(&self) {
-        self.logs.write().unwrap().clear();
-        self.writer.clear();
+        self.writer.flush_to_stdout();
     }
 }
 
@@ -49,11 +44,7 @@ impl<S> Layer<S> for CaptureLayer
 where
     S: Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
 {
-    fn on_event(
-        &self,
-        event: &tracing::Event<'_>,
-        _ctx: tracing_subscriber::layer::Context<'_, S>,
-    ) {
+    fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
         struct SimpleVisitor {
             fields: Vec<(String, String)>,
         }
@@ -82,37 +73,38 @@ where
     }
 }
 
-impl Drop for CaptureLayer {
-    fn drop(&mut self) {
-        // Check if we're panicking (test failed)
-        if std::thread::panicking() {
-            self.flush();
-        }
-    }
+#[ctor]
+fn init_tracing() {
+    let writer = BufferedWriter::new();
+    let capture_layer = CaptureLayer::new(writer.clone());
+
+    let fmt_layer = tracing_subscriber::fmt::layer()
+        .with_writer(writer)
+        .with_filter(LevelFilter::INFO);
+
+    Registry::default()
+        .with(capture_layer.clone())
+        .with(fmt_layer)
+        .init();
+
+    let _ = GLOBAL_CAPTURE.set(capture_layer);
 }
 
-/// Initialize the tracing subscriber for tests and return a capture layer
-pub fn init_test_tracing() -> CaptureLayer {
-    let capture = GLOBAL_CAPTURE
-        .get_or_init(|| {
-            let writer = BufferedWriter::new();
-            let capture_layer = CaptureLayer::new(writer.clone());
+#[dtor]
+fn flush_logs() {
+    println!("========= LOGS =========");
+    if let Some(capture) = GLOBAL_CAPTURE.get() {
+        capture.flush();
+    }
+    println!("========================");
+}
 
-            let fmt_layer = tracing_subscriber::fmt::layer()
-                .with_writer(writer)
-                .with_filter(LevelFilter::INFO);
-
-            Registry::default()
-                .with(capture_layer.clone())
-                .with(fmt_layer)
-                .init();
-
-            capture_layer
-        })
-        .clone();
-
-    capture.clear();
-    capture
+/// Get the global capture layer for assertions in tests
+pub fn get_capture() -> CaptureLayer {
+    GLOBAL_CAPTURE
+        .get()
+        .expect("Tracing not initialized")
+        .clone()
 }
 
 /// A writer that buffers output and can be flushed on demand
@@ -128,18 +120,12 @@ impl BufferedWriter {
         }
     }
 
-    fn flush_to_stderr(&self) {
+    fn flush_to_stdout(&self) {
         if let Ok(buffer) = self.buffer.lock() {
             if !buffer.is_empty() {
-                let _ = stderr().write_all(&buffer);
-                let _ = stderr().flush();
+                let _ = stdout().write_all(&buffer);
+                let _ = stdout().flush();
             }
-        }
-    }
-
-    fn clear(&self) {
-        if let Ok(mut buffer) = self.buffer.lock() {
-            buffer.clear();
         }
     }
 }
