@@ -15,7 +15,7 @@ use crate::{
 };
 use std::ops::Deref;
 
-#[derive(AnchorSerialize, AnchorDeserialize)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct OrderParams {
     pub dest_chain_id: u32,
     pub fill_deadline: u64,
@@ -118,7 +118,7 @@ impl OpenOrder<'_> {
         // Validate params
         require!(params.amount_in > 0, OrderBookError::InvalidAmountIn);
         require!(params.amount_out > 0, OrderBookError::InvalidAmountOut);
-        require!(params.fill_deadline > Clock::get()?.unix_timestamp as u64, OrderBookError::InvalidFillDeadline);
+        require!(params.fill_deadline >= Clock::get()?.unix_timestamp as u64, OrderBookError::InvalidFillDeadline);
 
         Ok(())
     }

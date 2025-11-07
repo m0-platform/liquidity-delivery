@@ -1,6 +1,7 @@
 [submodule "evm/lib/common"]
 	path = evm/lib/common
 	url = https://github.com/m0-foundation/common
+	branch = release-v1.4.0
 [submodule "evm/lib/forge-std"]
 	path = evm/lib/forge-std
 	url = https://github.com/foundry-rs/forge-std

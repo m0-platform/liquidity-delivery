@@ -3,9 +3,9 @@ pragma solidity 0.8.26;
 
 import { Test } from "../../../lib/forge-std/src/Test.sol";
 import { ERC1967Proxy } from "../../../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
 
 import { OrderBook, IOrderBook } from "../../../src/OrderBook.sol";
-import { TypeConverter } from "../../../src/libs/TypeConverter.sol";
 import { MockMessenger } from "../../mock/MockMessenger.t.sol";
 import { MockERC20 } from "../../mock/MockERC20.t.sol";
 
@@ -67,7 +67,7 @@ abstract contract OrderBookTestBase is Test {
         // Create users
         uint256 userCount = USERS.length;
         for (uint256 i = 0; i < userCount; i++) {
-            address user = keccak256(abi.encodePacked(USERS[i])).toAddress();
+            address user = (keccak256(abi.encodePacked(USERS[i])) >> 96).toAddress();
             users[USERS[i]] = user;
         }
 

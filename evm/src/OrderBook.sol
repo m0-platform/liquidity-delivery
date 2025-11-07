@@ -5,11 +5,11 @@ import { IERC20 } from "../lib/common/src/interfaces/IERC20.sol";
 import { IERC20Extended } from "../lib/common/src/interfaces/IERC20Extended.sol";
 import { AccessControlUpgradeable } from "../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import { ERC712ExtendedUpgradeable } from "../lib/common/src/ERC712ExtendedUpgradeable.sol";
+import { TypeConverter } from "../lib/common/src/libs/TypeConverter.sol";
+import { TransferHelper } from "../lib/common/src/libs/TransferHelper.sol";
 
 import { IOrderBook } from "./interfaces/IOrderBook.sol";
 import { IMessenger } from "./interfaces/IMessenger.sol";
-import { TypeConverter } from "./libs/TypeConverter.sol";
-import { TransferHelper } from "./libs/TransferHelper.sol";
 
 abstract contract OrderBookStorageLayout {
     /// @custom:storage-location erc7201:M0.storage.OrderBook
@@ -370,6 +370,25 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         OrderData calldata orderData_,
         FillParams calldata fillerParams_
     ) external override {
+        _fillOrder(orderId_, orderData_, fillerParams_, new bytes(0));
+    }
+
+    /// @inheritdoc IOrderBook
+    function fillOrder(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        FillParams calldata fillerParams_,
+        bytes calldata messageData_
+    ) external override {
+        _fillOrder(orderId_, orderData_, fillerParams_, messageData_);
+    }
+
+    function _fillOrder(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        FillParams calldata fillerParams_,
+        bytes memory messageData_
+    ) internal {
         // Ensure the provided order ID matches the computed order ID from the order data
         // This check is not strictly required, but it is a useful sanity check for solvers
         // to ensure they have the order data correct
@@ -382,8 +401,10 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         if (fillerParams_.amountOutToFill == 0) revert FillAmountZero();
 
         // If the solver is specified, ensure that the caller is the designated solver
-        address solver_ = orderData_.solver.toAddress();
-        if (solver_ != address(0) && solver_ != msg.sender) revert NotAuthorized();
+        {
+            address solver_ = orderData_.solver.toAddress();
+            if (solver_ != address(0) && solver_ != msg.sender) revert NotAuthorized();
+        }
 
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
 
@@ -440,7 +461,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
                     originRecipient: fillerParams_.originRecipient,
                     amountOutFilled: amountOutToFill_,
                     amountInToRelease: amountInToRelease_
-                })
+                }),
+                messageData_
             );
         }
 

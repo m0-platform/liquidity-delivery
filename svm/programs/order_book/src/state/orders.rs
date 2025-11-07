@@ -114,7 +114,7 @@ mod tests {
 
     sol! {
         IOrderBook,
-        "../../../evm/out/IOrderBook.sol/IOrderBook.abi.json"
+        "../../../evm/out/IOrderBook.sol/IOrderBook.json"
     }
 
     #[test]

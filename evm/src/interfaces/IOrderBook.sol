@@ -396,6 +396,20 @@ interface IOrderBook {
     function fillOrder(bytes32 orderId_, OrderData calldata orderData_, FillParams calldata fillerParams_) external;
 
     /**
+     * @notice Fill an order on this chain with additional message data required by some crosschain messages
+     * @param orderId_ ID of the order to fill
+     * @param orderData_ OrderData payload with all order information required to identify an order to be filled.
+     * @param fillerParams_ Parameters supplied by the solver of the order
+     * @param messageData_ Additional message data required by some crosschain message protocols (see PortalV2 for more info)
+     */
+    function fillOrder(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        FillParams calldata fillerParams_,
+        bytes calldata messageData_
+    ) external;
+
+    /**
      * @notice Report a fill that was made on another chain back to this chain as the origin chain
      * @dev Must be called by the messenger contract
      * @param report_ Fill data sent from the destination chain

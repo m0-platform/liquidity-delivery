@@ -14,7 +14,11 @@ contract MockMessenger is IMessenger {
         orderBook = orderBook_;
     }
 
-    function sendFillReport(uint32 destinationChainId, IOrderBook.FillReport calldata report) external override {
+    function sendFillReport(
+        uint32 destinationChainId,
+        IOrderBook.FillReport calldata report,
+        bytes calldata messageData
+    ) external override {
         fillReports[report.orderId] = report;
         emit FillReportSent(destinationChainId, report);
     }
