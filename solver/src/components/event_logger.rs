@@ -82,7 +82,8 @@ impl EventHandler for EventLogger {
                     event = "RequestHoldEvent",
                     order_id = %e.order_id,
                     timestamp = e.timestamp,
-                    asset = ?e.asset,
+                    asset = ?e.asset.symbol,
+                    chain = ?e.asset.chain,
                     amount = %e.amount,
                 );
             }
