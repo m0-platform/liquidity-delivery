@@ -19,9 +19,10 @@ use alloy::{
 };
 use anchor_client::solana_sdk::signature::Keypair;
 use core::panic;
+use ctor::dtor;
 use m0_liquidity_sdk::types::Chain;
 use solver::{config::Signers, utils::decode_evm_address, Config};
-use std::{sync::Arc, time::Duration};
+use std::{process::Command, sync::Arc, time::Duration};
 use tokio::{
     sync::{broadcast, OnceCell},
     time::sleep,
@@ -44,6 +45,17 @@ sol! {
     }
 }
 
+type TestProvider = FillProvider<
+    JoinFill<
+        JoinFill<
+            Identity,
+            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
+        >,
+        WalletFiller<alloy::network::EthereumWallet>,
+    >,
+    RootProvider,
+>;
+
 struct TestSuite {
     anvil: AnvilInstance,
     contract_address: Address,
@@ -52,16 +64,7 @@ struct TestSuite {
     svm_signer: Arc<Keypair>,
     shutdown_tx: broadcast::Sender<()>,
     log_capture: tracing_capture::CaptureLayer,
-    provider: &'static FillProvider<
-        JoinFill<
-            JoinFill<
-                Identity,
-                JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-            >,
-            WalletFiller<alloy::network::EthereumWallet>,
-        >,
-        RootProvider,
-    >,
+    provider: &'static TestProvider,
 }
 
 impl TestSuite {
@@ -176,7 +179,7 @@ impl TestSuite {
                 .expect("Failed to start solver");
 
             // Let the solver boot up
-            sleep(Duration::from_millis(10)).await;
+            sleep(Duration::from_millis(100)).await;
 
             shutdown_tx
         };
@@ -195,7 +198,7 @@ impl TestSuite {
 
     async fn wait_for_log(&self, substring: &str) {
         let timeout = Duration::from_secs(5);
-        let poll_interval = Duration::from_millis(10);
+        let poll_interval = Duration::from_millis(50);
         let start = tokio::time::Instant::now();
 
         while start.elapsed() < timeout {
@@ -210,6 +213,19 @@ impl TestSuite {
             substring
         );
     }
+
+    fn shutdown(&self) {
+        let _ = self.shutdown_tx.send(());
+        let _ = Command::new("kill")
+            .arg("-SIGTERM")
+            .arg(self.anvil.child().id().to_string())
+            .output();
+    }
+}
+
+#[dtor]
+fn cleanup() {
+    SHARED_INFRA.get().unwrap().shutdown();
 }
 
 // Singleton instance of the shared test infrastructure
