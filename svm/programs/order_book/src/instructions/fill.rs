@@ -17,7 +17,7 @@ use messenger::{
 };
 
 // Handler Inputs
-#[derive(AnchorSerialize,AnchorDeserialize)]
+#[derive(AnchorSerialize,AnchorDeserialize,Clone)]
 pub struct FillParams {
     pub amount_out_to_fill: u64,
     pub origin_recipient: [u8; 32],
@@ -39,7 +39,7 @@ pub struct OrderCompleted {
 
 // Account Contexts
 #[derive(Accounts)]
-#[instruction(order_id: [u8; 32], order_data: OrderData)]
+#[instruction(order_id: [u8; 32], order_data: OrderData, _fill_params: FillParams)]
 pub struct FillCommon<'info> {
     #[account(mut)]
     pub solver: Signer<'info>,
@@ -88,9 +88,52 @@ pub struct FillCommon<'info> {
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(order_id: [u8; 32], order_data: OrderData)]
+#[instruction(order_id: [u8; 32], order_data: OrderData, fill_params: FillParams)]
 pub struct FillNativeOrder<'info> {
-    pub common: FillCommon<'info>,
+    // pub common: FillCommon<'info>,
+    #[account(mut)]
+    pub solver: Signer<'info>,
+
+    #[account(
+        seeds = [GLOBAL_SEED],
+        bump = global_account.bump,
+        constraint = order_data.dest_chain_id == global_account.chain_id @ OrderBookError::InvalidDestChainId,
+    )]
+    pub global_account: Account<'info, OrderBookGlobal>,
+
+    #[account(
+        mint::token_program = token_out_program,
+        constraint = token_out_mint.key().to_bytes() == order_data.token_out @ OrderBookError::InvalidTokenOutMint,
+    )]
+    pub token_out_mint: InterfaceAccount<'info, Mint>,
+
+    #[account(
+        mut,
+        token::mint = token_out_mint,
+        token::token_program = token_out_program,   
+    )]
+    pub solver_token_out_account: InterfaceAccount<'info, TokenAccount>,
+
+    /// CHECK: This is validated against the order data
+    #[account(
+        address = Pubkey::new_from_array(order_data.recipient) @ OrderBookError::InvalidRecipient,
+    )]
+    pub recipient: UncheckedAccount<'info>,
+
+    #[account(
+        init_if_needed,
+        payer = solver,
+        associated_token::mint = token_out_mint,
+        associated_token::authority = recipient,
+        associated_token::token_program = token_out_program,
+    )]
+    pub recipient_token_out_ata: InterfaceAccount<'info, TokenAccount>,
+    
+    pub token_out_program: Interface<'info, TokenInterface>,
+
+    pub associated_token_program: Program<'info, AssociatedToken>,
+
+    pub system_program: Program<'info, System>,
 
     #[account(
         mut,
@@ -108,6 +151,7 @@ pub struct FillNativeOrder<'info> {
     #[account(
         mut,
         token::mint = token_in_mint,
+        token::authority = Pubkey::new_from_array(fill_params.origin_recipient),
         token::token_program = token_in_program,   
     )]
     pub solver_token_in_account: InterfaceAccount<'info, TokenAccount>,
@@ -126,10 +170,10 @@ pub struct FillNativeOrder<'info> {
 impl FillNativeOrder<'_> {
     fn validate(&self, order_id: &[u8; 32], order_data: &OrderData, fill_params: &FillParams) -> Result<()> {
         // Validate the params
-        validate_params(order_id, order_data, fill_params, &self.common.solver.key())?;
+        validate_params(order_id, order_data, fill_params, &self.solver.key())?;
 
         // Validate the origin chain ID is this chain
-        require!(order_data.origin_chain_id == self.common.global_account.chain_id, OrderBookError::InvalidOriginChainId);
+        require!(order_data.origin_chain_id == self.global_account.chain_id, OrderBookError::InvalidOriginChainId);
 
         // Validate the order is in a fillable state
         require!(self.order.data.status == OrderStatus::Created, OrderBookError::OrderNotFillable);
@@ -173,12 +217,12 @@ impl FillNativeOrder<'_> {
 
         // Transfer the output tokens from the solver to the recipient
         transfer_tokens(
-            &ctx.accounts.common.solver_token_out_account,
-            &ctx.accounts.common.recipient_token_out_ata,
+            &ctx.accounts.solver_token_out_account,
+            &ctx.accounts.recipient_token_out_ata,
             amount_out_to_fill,
-            &ctx.accounts.common.token_out_mint,
-            &ctx.accounts.common.solver,
-            &ctx.accounts.common.token_out_program,
+            &ctx.accounts.token_out_mint,
+            &ctx.accounts.solver,
+            &ctx.accounts.token_out_program,
         )?;
 
         // Transfer the input tokens from the order to the solver
@@ -200,7 +244,7 @@ impl FillNativeOrder<'_> {
         emit_cpi!(
             OrderFilled {
                 order_id,
-                solver: ctx.accounts.common.solver.key(),
+                solver: ctx.accounts.solver.key(),
                 amount_in_to_release: amount_in_to_release as u128,
                 amount_out_filled: amount_out_to_fill as u128,
             }
@@ -223,11 +267,54 @@ impl FillNativeOrder<'_> {
 #[derive(Accounts)]
 #[instruction(order_id: [u8; 32], order_data: OrderData)]
 pub struct FillForeignOrder<'info> {
-    pub common: FillCommon<'info>,
+    // pub common: FillCommon<'info>,
+        #[account(mut)]
+    pub solver: Signer<'info>,
+
+    #[account(
+        seeds = [GLOBAL_SEED],
+        bump = global_account.bump,
+        constraint = order_data.dest_chain_id == global_account.chain_id @ OrderBookError::InvalidDestChainId,
+    )]
+    pub global_account: Account<'info, OrderBookGlobal>,
+
+    #[account(
+        mint::token_program = token_out_program,
+        constraint = token_out_mint.key().to_bytes() == order_data.token_out @ OrderBookError::InvalidTokenOutMint,
+    )]
+    pub token_out_mint: InterfaceAccount<'info, Mint>,
+
+    #[account(
+        mut,
+        token::mint = token_out_mint,
+        token::token_program = token_out_program,   
+    )]
+    pub solver_token_out_account: InterfaceAccount<'info, TokenAccount>,
+
+    /// CHECK: This is validated against the order data
+    #[account(
+        address = Pubkey::new_from_array(order_data.recipient) @ OrderBookError::InvalidRecipient,
+    )]
+    pub recipient: UncheckedAccount<'info>,
 
     #[account(
         init_if_needed,
-        payer = common.solver,
+        payer = solver,
+        associated_token::mint = token_out_mint,
+        associated_token::authority = recipient,
+        associated_token::token_program = token_out_program,
+    )]
+    pub recipient_token_out_ata: InterfaceAccount<'info, TokenAccount>,
+    
+    pub token_out_program: Interface<'info, TokenInterface>,
+
+    pub associated_token_program: Program<'info, AssociatedToken>,
+
+    pub system_program: Program<'info, System>,
+
+    #[account(
+        init_if_needed,
+        payer = solver,
         space = ANCHOR_DISCRIMINATOR_SIZE + Order::<ForeignOrder>::INIT_SPACE,
         seeds = [ORDER_SEED_PREFIX, &order_id],
         bump
@@ -235,15 +322,13 @@ pub struct FillForeignOrder<'info> {
     pub order: Account<'info, Order::<ForeignOrder>>,
 
     pub messenger_program: Program<'info, Messenger>,
-
-    pub system_program: Program<'info, System>,
 }
 
 impl FillForeignOrder<'_> {
 
     fn validate(&self, order_id: &[u8; 32], order_data: &OrderData, fill_params: &FillParams) -> Result<()> {
         // Validate the params
-        validate_params(order_id, order_data, fill_params, &self.common.solver.key())?;
+        validate_params(order_id, order_data, fill_params, &self.solver.key())?;
 
         // Validate the order is in a fillable state
         require!(self.order.data.amount_out_filled < order_data.amount_out, OrderBookError::OrderNotFillable);
@@ -291,12 +376,12 @@ impl FillForeignOrder<'_> {
 
         // Transfer the output tokens from the solver to the recipient
         transfer_tokens(
-            &ctx.accounts.common.solver_token_out_account,
-            &ctx.accounts.common.recipient_token_out_ata,
+            &ctx.accounts.solver_token_out_account,
+            &ctx.accounts.recipient_token_out_ata,
             amount_out_to_fill,
-            &ctx.accounts.common.token_out_mint,
-            &ctx.accounts.common.solver,
-            &ctx.accounts.common.token_out_program,
+            &ctx.accounts.token_out_mint,
+            &ctx.accounts.solver,
+            &ctx.accounts.token_out_program,
         )?;
 
         // Send a fill report message to the origin chain via the messenger program
@@ -304,9 +389,9 @@ impl FillForeignOrder<'_> {
             CpiContext::new_with_signer(
                 ctx.accounts.messenger_program.to_account_info(),
                 SendFillReport {
-                    signer: ctx.accounts.common.global_account.to_account_info()
+                    signer: ctx.accounts.global_account.to_account_info()
                 },
-                &[&[GLOBAL_SEED, &[ctx.accounts.common.global_account.bump]]]
+                &[&[GLOBAL_SEED, &[ctx.accounts.global_account.bump]]]
             ), 
             order_data.origin_chain_id,
             FillReport {
@@ -321,7 +406,7 @@ impl FillForeignOrder<'_> {
         emit_cpi!(
             OrderFilled {
                 order_id,
-                solver: ctx.accounts.common.solver.key(),
+                solver: ctx.accounts.solver.key(),
                 amount_in_to_release: amount_in_to_release as u128,
                 amount_out_filled: amount_out_to_fill as u128,
             }
