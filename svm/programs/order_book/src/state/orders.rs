@@ -64,6 +64,7 @@ pub struct OrderData {
     pub origin_chain_id: u32,
     pub dest_chain_id: u32,
     pub fill_deadline: u64,
+    pub token_in: [u8; 32],
     pub token_out: [u8; 32],
     pub amount_in: u128,
     pub amount_out: u128,
@@ -81,6 +82,7 @@ fn encode_order_data(order_data: &OrderData) -> Vec<u8> {
     encoded.extend_from_slice(&order_data.origin_chain_id.to_be_bytes());
     encoded.extend_from_slice(&order_data.dest_chain_id.to_be_bytes());
     encoded.extend_from_slice(&order_data.fill_deadline.to_be_bytes());
+    encoded.extend_from_slice(&order_data.token_in);
     encoded.extend_from_slice(&order_data.token_out);
     encoded.extend_from_slice(&order_data.amount_in.to_be_bytes());
     encoded.extend_from_slice(&order_data.amount_out.to_be_bytes());
@@ -111,6 +113,7 @@ impl OrderData {
             origin_chain_id,
             dest_chain_id: native_order.dest_chain_id,
             fill_deadline: native_order.fill_deadline,
+            token_in: native_order.token_in.to_bytes(),
             token_out: native_order.token_out,
             amount_in: native_order.amount_in,
             amount_out: native_order.amount_out,
@@ -144,6 +147,7 @@ mod tests {
             originChainId: 1u32,
             destChainId: 2u32,
             fillDeadline: 1234567890u64,
+            tokenIn: FixedBytes::<32>::new([5u8; 32]),
             tokenOut: FixedBytes::<32>::new([2u8; 32]),
             amountIn: 1000u128,
             amountOut: 2000u128,
@@ -162,6 +166,7 @@ mod tests {
             origin_chain_id: 1u32,
             dest_chain_id: 2u32,
             fill_deadline: 1234567890u64,
+            token_in: [5u8; 32],
             token_out: [2u8; 32],
             amount_in: 1000u128,
             amount_out: 2000u128,

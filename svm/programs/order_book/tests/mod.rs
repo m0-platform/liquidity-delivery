@@ -1,8 +1,9 @@
 mod instructions;
 
 use anchor_litesvm::{AnchorContext, AnchorLiteSVM, Keypair, Pubkey, Signer, TestHelpers, get_anchor_account};
-use anchor_lang::solana_program::instruction::Instruction;
+use anchor_lang::{prelude::{AccountMeta, ToAccountMetas}, solana_program::instruction::Instruction};
 use anchor_spl::{associated_token::get_associated_token_address, token::{TokenAccount, spl_token::state::Account}};
+use order_book::{FillParams, ORDER_SEED_PREFIX, OrderData, VERSION};
 use std::{collections::HashMap, error::Error};
 
 anchor_lang::declare_program!(messenger);
@@ -11,6 +12,7 @@ const LAMPORTS_PER_SOL: u64 = 1_000_000_000;
 const INITIAL_FUNDS: u64 = 10 * LAMPORTS_PER_SOL;
 
 const CHAIN_ID: u32 = 1; // Example chain ID for testing
+const DEST_CHAIN_ID: u32 = 2; // Example destination chain ID for testing
     
 struct OrderBookTest {
     pub ctx: AnchorContext,
@@ -23,9 +25,11 @@ impl OrderBookTest {
     pub fn new() -> Result<Self, Box<dyn Error>> {
         // Create the Anchor Lite SVM context with the order_book program loaded
         // Ensure that all the standard SPL programs are also loaded
-        let mut ctx = AnchorLiteSVM::build_with_program(
-            order_book::ID,
-            include_bytes!("../../../target/deploy/order_book.so"),
+        let mut ctx = AnchorLiteSVM::build_with_programs(
+            &[
+                (order_book::ID, include_bytes!("../../../target/deploy/order_book.so")),
+                (messenger::ID, include_bytes!("../../../target/deploy/messenger.so"))
+            ],
         );
 
         // Create users and fund them
@@ -88,6 +92,7 @@ impl OrderBookTest {
     fn initialize(&mut self) -> Result<(), Box<dyn Error>> {
         let admin = self.users.get("admin").unwrap();
 
+        // Initialize the order book global account
         let ix = self.ctx.program()
             .accounts(
                 order_book::accounts::Initialize {
@@ -110,6 +115,38 @@ impl OrderBookTest {
             .args(
                 order_book::instruction::Initialize {
                     chain_id: CHAIN_ID,
+                }
+            )
+            .instruction()?;
+
+        self.ctx.execute_instruction(ix, &[admin])?;
+
+        // Add the destination chain configuration
+        let ix = self.ctx.program()
+            .accounts(
+                order_book::accounts::ConfigureDestination {
+                    admin: admin.pubkey(),
+                    global_account: self.ctx.svm.get_pda(
+                        &[
+                            order_book::state::GLOBAL_SEED,
+                        ],
+                        &order_book::ID,
+                    ),
+                    destination_account: self.ctx.svm.get_pda(
+                        &[
+                            order_book::state::DESTINATION_SEED_PREFIX,
+                            &DEST_CHAIN_ID.to_be_bytes(),
+                        ],
+                        &order_book::ID,
+                    ),
+                    system_program: anchor_lang::solana_program::system_program::ID,
+                }
+            )
+            .args(
+                order_book::instruction::ConfigureDestination {
+                    dest_chain_id: DEST_CHAIN_ID,
+                    is_supported: true,
+                    finality_buffer: Some(15 * 60), // 15 minutes
                 }
             )
             .instruction()?;
@@ -265,6 +302,104 @@ impl OrderBookTest {
         Ok(())
     }
 
+    // Helpers to construct account objects to pass to instructions
+    fn build_fill_native_order_accounts(
+        &self,
+        solver: &Pubkey,
+        order_id: [u8; 32]
+    ) -> Result<order_book::accounts::FillNativeOrder, Box<dyn Error>> {
+        let (order_account, native_order_data) = self.get_native_order_account(&order_id)?;
+        let (global_account, _) = self.get_global_account()?;
+        
+        let token_out_mint = Pubkey::new_from_array(native_order_data.data.token_out);
+        let recipient = Pubkey::new_from_array(native_order_data.data.recipient);
+        let recipient_token_out_ata = get_associated_token_address(
+            &recipient,
+            &token_out_mint,
+        );
+        let solver_token_out_ata = get_associated_token_address(
+            solver,
+            &token_out_mint,
+        );
+        let token_in_mint = native_order_data.data.token_in;
+        let order_token_in_ata = get_associated_token_address(
+            &order_account,
+            &token_in_mint,
+        );
+        let solver_token_in_ata = get_associated_token_address(
+            solver,
+            &token_in_mint,
+        );
+
+        Ok(order_book::accounts::FillNativeOrder {
+            program: order_book::ID,
+            event_authority: self.get_event_authority()?,
+            solver: *solver,
+            global_account,
+            token_out_mint,
+            solver_token_out_account: solver_token_out_ata,
+            recipient,
+            recipient_token_out_ata,
+            token_out_program: anchor_spl::token::ID,
+            associated_token_program: anchor_spl::associated_token::ID,
+            system_program: anchor_lang::solana_program::system_program::ID,
+            order: order_account,
+            token_in_mint,
+            order_token_in_ata,
+            solver_token_in_account: solver_token_in_ata,
+            token_in_program: anchor_spl::token::ID,
+        })
+    }
+
+    fn build_fill_native_order_accounts_from_order_data(
+        &self,
+        solver: &Pubkey,
+        order_data: &OrderData
+    ) -> Result<order_book::accounts::FillNativeOrder, Box<dyn Error>> {
+
+        let order_account = self.ctx.svm.get_pda(&[ORDER_SEED_PREFIX, order_data.compute_order_id().as_slice()], &order_book::ID);
+        let (global_account, _) = self.get_global_account()?;
+        
+        let token_out_mint = Pubkey::new_from_array(order_data.token_out);
+        let recipient = Pubkey::new_from_array(order_data.recipient);
+        let recipient_token_out_ata = get_associated_token_address(
+            &recipient,
+            &token_out_mint,
+        );
+        let solver_token_out_ata = get_associated_token_address(
+            solver,
+            &token_out_mint,
+        );
+        let token_in_mint = Pubkey::new_from_array(order_data.token_in);
+        let order_token_in_ata = get_associated_token_address(
+            &order_account,
+            &token_in_mint,
+        );
+        let solver_token_in_ata = get_associated_token_address(
+            solver,
+            &token_in_mint,
+        );
+
+        Ok(order_book::accounts::FillNativeOrder {
+            program: order_book::ID,
+            event_authority: self.get_event_authority()?,
+            solver: *solver,
+            global_account,
+            token_out_mint,
+            solver_token_out_account: solver_token_out_ata,
+            recipient,
+            recipient_token_out_ata,
+            token_out_program: anchor_spl::token::ID,
+            associated_token_program: anchor_spl::associated_token::ID,
+            system_program: anchor_lang::solana_program::system_program::ID,
+            order: order_account,
+            token_in_mint,
+            order_token_in_ata,
+            solver_token_in_account: solver_token_in_ata,
+            token_in_program: anchor_spl::token::ID,
+        })
+    }
+
     // Helpers to construct instructions
     fn create_open_order_ix(
         &self,
@@ -277,6 +412,18 @@ impl OrderBookTest {
         let (global_account, global_data) = self.get_global_account().unwrap();
         let (sender_nonce_account, sender_nonce_data) = self.get_sender_nonce_account(sender).unwrap();
 
+        let destination_account = if order_params.dest_chain_id != global_data.chain_id {
+            Some(self.ctx.svm.get_pda(
+                &[
+                    order_book::state::DESTINATION_SEED_PREFIX,
+                    &order_params.dest_chain_id.to_be_bytes(),
+                ],
+                &order_book::ID,
+            ))
+        } else {
+            None
+        };
+
         let order_id = order_book::state::compute_order_id(&order_book::state::OrderData {
             version: order_book::constants::VERSION,
             sender: sender.to_bytes(),
@@ -284,6 +431,7 @@ impl OrderBookTest {
             origin_chain_id: global_data.chain_id,
             dest_chain_id: order_params.dest_chain_id,
             fill_deadline: order_params.fill_deadline,
+            token_in: token_in_mint.to_bytes(),
             token_out: order_params.token_out,
             amount_in: order_params.amount_in as u128,
             amount_out: order_params.amount_out,
@@ -307,7 +455,7 @@ impl OrderBookTest {
                     payer: *sender,
                     token_authority: token_authority.cloned(),
                     global_account,
-                    destination_account: None,
+                    destination_account,
                     token_in_mint: *token_in_mint,
                     sender_token_in_account: *sender_token_in_account,
                     sender_nonce_account,
@@ -326,5 +474,170 @@ impl OrderBookTest {
             .instruction()?;
 
         Ok((order_id, ix))
+    }
+
+    fn create_configure_destination_ix(
+        &self,
+        admin: &Pubkey,
+        dest_chain_id: u32,
+        is_supported: bool,
+        finality_buffer: Option<u64>,
+    ) -> Result<Instruction, Box<dyn Error>> {
+        let global_account = self.ctx.svm.get_pda(
+            &[
+                order_book::state::GLOBAL_SEED,
+            ],
+            &order_book::ID,
+        );
+        let destination_account = self.ctx.svm.get_pda(
+            &[
+                order_book::state::DESTINATION_SEED_PREFIX,
+                &dest_chain_id.to_be_bytes(),
+            ],
+            &order_book::ID,
+        );
+
+        let ix = self.ctx.program()
+            .accounts(
+                order_book::accounts::ConfigureDestination {
+                    admin: *admin,
+                    global_account,
+                    destination_account,
+                    system_program: anchor_lang::solana_program::system_program::ID,
+                }
+            )
+            .args(
+                order_book::instruction::ConfigureDestination {
+                    dest_chain_id,
+                    is_supported,
+                    finality_buffer,
+                }
+            )
+            .instruction()?;
+
+        Ok(ix)
+    }
+
+    fn create_fill_native_order_ix(
+        &self,
+        solver: &Pubkey,
+        order_id: [u8; 32],
+        fill_params: &order_book::instructions::fill::FillParams,
+    ) -> Result<Instruction, Box<dyn Error>> {
+        let (order_account, native_order_data) = self.get_native_order_account(&order_id)?;
+        let (global_account, global_data) = self.get_global_account()?;
+        
+        let token_out_mint = Pubkey::new_from_array(native_order_data.data.token_out);
+        let recipient = Pubkey::new_from_array(native_order_data.data.recipient);
+        let recipient_token_out_ata = get_associated_token_address(
+            &recipient,
+            &token_out_mint,
+        );
+        let solver_token_out_ata = get_associated_token_address(
+            solver,
+            &token_out_mint,
+        );
+        let token_in_mint = native_order_data.data.token_in;
+        let order_token_in_ata = get_associated_token_address(
+            &order_account,
+            &token_in_mint,
+        );
+        let solver_token_in_ata = get_associated_token_address(
+            solver,
+            &token_in_mint,
+        );
+
+        let order_data = OrderData::new_from_native_order(native_order_data.data, global_data.chain_id);
+
+        let accounts = order_book::accounts::FillNativeOrder {
+                program: order_book::ID,
+                event_authority: self.get_event_authority()?,
+                // common: order_book::accounts::FillCommon {
+                    solver: *solver,
+                    global_account,
+                    token_out_mint,
+                    solver_token_out_account: solver_token_out_ata,
+                    recipient,
+                    recipient_token_out_ata,
+                    token_out_program: anchor_spl::token::ID,
+                    associated_token_program: anchor_spl::associated_token::ID,
+                    system_program: anchor_lang::solana_program::system_program::ID,
+                // },
+                order: order_account,
+                token_in_mint,
+                order_token_in_ata,
+                solver_token_in_account: solver_token_in_ata,
+                token_in_program: anchor_spl::token::ID,
+            };
+        
+        let ix = self.ctx.program()
+            .accounts(accounts)
+            .args(
+                order_book::instruction::FillNativeOrder {
+                    order_id,
+                    order_data,
+                    fill_params: fill_params.clone(),
+                }
+            )
+            .instruction()?;
+
+        Ok(ix)
+    }
+
+    // fn create_fill_foreign_order_ix(
+    //     &self,
+    //     solver: &Pubkey,
+    //     order_id: [u8; 32],
+    //     fill_params: &order_book::instructions::fill::FillParams,
+    // ) -> Result<Instruction, Box<dyn Error>> {
+
+
+
+    //     Ok(ix)
+    // }
+
+    // Helpers to quickly execute instructions on the program
+
+    fn open_order(
+        &mut self,
+        sender: &str,
+        token_in_mint: &str,
+        order_params: &order_book::instructions::open::OrderParams
+    ) -> Result<[u8; 32], Box<dyn Error>> {
+        let sender_keypair = self.users.get(sender).unwrap();
+        let token_in_mint_pubkey = self.mints.get(token_in_mint).unwrap();
+        let sender_token_in_account = self.atas.get(&(token_in_mint, sender)).unwrap();
+
+        let (order_id, ix) = self.create_open_order_ix(
+            &sender_keypair.pubkey(),
+            token_in_mint_pubkey,
+            sender_token_in_account,
+            None,
+            order_params,
+        )?;
+
+        self.ctx.execute_instruction(ix, &[sender_keypair])?;
+
+        Ok(order_id)
+    }
+
+    fn configure_destination(
+        &mut self,
+        dest_chain_id: u32,
+        is_supported: bool,
+        finality_buffer: Option<u64>,
+    ) -> Result<(), Box<dyn Error>> {
+        let admin_keypair = self.users.get("admin").unwrap();
+
+        let ix = self.create_configure_destination_ix(
+            &admin_keypair.pubkey(),
+            dest_chain_id,
+            is_supported,
+            finality_buffer,
+        )?;
+
+        self.ctx.execute_instruction(ix, &[admin_keypair])?;
+
+        Ok(())
     }
 }
