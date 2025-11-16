@@ -38,54 +38,6 @@ pub struct OrderCompleted {
 }
 
 // Account Contexts
-#[derive(Accounts)]
-#[instruction(order_id: [u8; 32], order_data: OrderData, _fill_params: FillParams)]
-pub struct FillCommon<'info> {
-    #[account(mut)]
-    pub solver: Signer<'info>,
-
-    #[account(
-        seeds = [GLOBAL_SEED],
-        bump = global_account.bump,
-        constraint = order_data.dest_chain_id == global_account.chain_id @ OrderBookError::InvalidDestChainId,
-    )]
-    pub global_account: Account<'info, OrderBookGlobal>,
-
-    #[account(
-        mint::token_program = token_out_program,
-        constraint = token_out_mint.key().to_bytes() == order_data.token_out @ OrderBookError::InvalidTokenOutMint,
-    )]
-    pub token_out_mint: InterfaceAccount<'info, Mint>,
-
-    #[account(
-        mut,
-        token::mint = token_out_mint,
-        token::token_program = token_out_program,   
-    )]
-    pub solver_token_out_account: InterfaceAccount<'info, TokenAccount>,
-
-    /// CHECK: This is validated against the order data
-    #[account(
-        address = Pubkey::new_from_array(order_data.recipient) @ OrderBookError::InvalidRecipient,
-    )]
-    pub recipient: UncheckedAccount<'info>,
-
-    #[account(
-        init_if_needed,
-        payer = solver,
-        associated_token::mint = token_out_mint,
-        associated_token::authority = recipient,
-        associated_token::token_program = token_out_program,
-    )]
-    pub recipient_token_out_ata: InterfaceAccount<'info, TokenAccount>,
-    
-    pub token_out_program: Interface<'info, TokenInterface>,
-
-    pub associated_token_program: Program<'info, AssociatedToken>,
-
-    pub system_program: Program<'info, System>,
-}
-
 #[event_cpi]
 #[derive(Accounts)]
 #[instruction(order_id: [u8; 32], order_data: OrderData, fill_params: FillParams)]
