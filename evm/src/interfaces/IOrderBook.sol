@@ -195,6 +195,7 @@ interface IOrderBook {
      * @param originChainId internal chain ID where the order was created
      * @param destChainId Destination chain ID where the order is to be filled
      * @param fillDeadline Timestamp by which the order must be filled on the destination chain
+     * @param tokenIn Address of the input token on the origin chain
      * @param tokenOut Address of the output token on the destination chain
      * @param amountIn Amount of input token provided
      * @param amountOut Amount of output token expected on the destination chain
@@ -208,6 +209,7 @@ interface IOrderBook {
         uint32 originChainId;
         uint32 destChainId;
         uint64 fillDeadline;
+        bytes32 tokenIn;
         bytes32 tokenOut;
         uint128 amountIn;
         uint128 amountOut;

@@ -127,6 +127,7 @@ abstract contract OrderBookTestBase is Test {
                     fillDeadline: params_.fillDeadline,
                     amountIn: params_.amountIn,
                     amountOut: params_.amountOut,
+                    tokenIn: params_.tokenIn.toBytes32(),
                     tokenOut: params_.tokenOut,
                     recipient: params_.recipient,
                     solver: params_.solver
@@ -166,6 +167,7 @@ abstract contract OrderBookTestBase is Test {
                 fillDeadline: order.fillDeadline,
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
+                tokenIn: order.tokenIn.toBytes32(),
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
                 solver: order.solver

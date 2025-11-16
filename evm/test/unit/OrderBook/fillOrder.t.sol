@@ -103,6 +103,7 @@ contract FillOrderTest is OrderBookTestBase {
                 fillDeadline: order.fillDeadline,
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
+                tokenIn: order.tokenIn.toBytes32(),
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
                 solver: order.solver
@@ -134,6 +135,7 @@ contract FillOrderTest is OrderBookTestBase {
                 fillDeadline: order.fillDeadline,
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
+                tokenIn: order.tokenIn.toBytes32(),
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
                 solver: order.solver
@@ -157,6 +159,7 @@ contract FillOrderTest is OrderBookTestBase {
             originChainId: CHAIN_ID,
             destChainId: order.destChainId,
             fillDeadline: order.fillDeadline,
+            tokenIn: order.tokenIn.toBytes32(),
             tokenOut: order.tokenOut,
             amountIn: order.amountIn,
             amountOut: order.amountOut,
@@ -197,6 +200,7 @@ contract FillOrderTest is OrderBookTestBase {
                 fillDeadline: order.fillDeadline,
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
+                tokenIn: order.tokenIn.toBytes32(),
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
                 solver: order.solver
@@ -225,6 +229,7 @@ contract FillOrderTest is OrderBookTestBase {
                 fillDeadline: order.fillDeadline,
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
+                tokenIn: order.tokenIn.toBytes32(),
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
                 solver: order.solver
@@ -258,6 +263,7 @@ contract FillOrderTest is OrderBookTestBase {
                 fillDeadline: order.fillDeadline,
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
+                tokenIn: order.tokenIn.toBytes32(),
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
                 solver: order.solver
@@ -286,6 +292,7 @@ contract FillOrderTest is OrderBookTestBase {
                 fillDeadline: order.fillDeadline,
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
+                tokenIn: order.tokenIn.toBytes32(),
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
                 solver: order.solver
@@ -324,6 +331,7 @@ contract FillOrderTest is OrderBookTestBase {
                 fillDeadline: order.fillDeadline,
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
+                tokenIn: order.tokenIn.toBytes32(),
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
                 solver: order.solver
@@ -418,6 +426,7 @@ contract FillOrderTest is OrderBookTestBase {
                 fillDeadline: order.fillDeadline,
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
+                tokenIn: order.tokenIn.toBytes32(),
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
                 solver: order.solver
@@ -507,6 +516,7 @@ contract FillOrderTest is OrderBookTestBase {
                 fillDeadline: order.fillDeadline,
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
+                tokenIn: order.tokenIn.toBytes32(),
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
                 solver: order.solver
@@ -576,6 +586,7 @@ contract FillOrderTest is OrderBookTestBase {
             fillDeadline: uint64(block.timestamp + FILL_DURATION),
             amountIn: AMOUNT_IN,
             amountOut: AMOUNT_OUT,
+            tokenIn: address(tokenIn).toBytes32(),
             tokenOut: address(tokenOut).toBytes32(),
             recipient: users["alice"].toBytes32(),
             solver: params.solver
@@ -654,6 +665,7 @@ contract FillOrderTest is OrderBookTestBase {
             fillDeadline: uint64(block.timestamp + FILL_DURATION),
             amountIn: AMOUNT_IN,
             amountOut: AMOUNT_OUT,
+            tokenIn: address(tokenIn).toBytes32(),
             tokenOut: address(tokenOut).toBytes32(),
             recipient: users["alice"].toBytes32(),
             solver: params.solver
@@ -727,6 +739,7 @@ contract FillOrderTest is OrderBookTestBase {
             fillDeadline: uint64(block.timestamp + FILL_DURATION),
             amountIn: AMOUNT_IN,
             amountOut: AMOUNT_OUT,
+            tokenIn: address(tokenIn).toBytes32(),
             tokenOut: address(tokenOut).toBytes32(),
             recipient: users["alice"].toBytes32(),
             solver: params.solver
@@ -805,6 +818,7 @@ contract FillOrderTest is OrderBookTestBase {
             fillDeadline: uint64(block.timestamp + FILL_DURATION),
             amountIn: AMOUNT_IN,
             amountOut: AMOUNT_OUT,
+            tokenIn: address(tokenIn).toBytes32(),
             tokenOut: address(tokenOut).toBytes32(),
             recipient: users["alice"].toBytes32(),
             solver: address(0).toBytes32() // No designated solver
@@ -855,6 +869,7 @@ contract FillOrderTest is OrderBookTestBase {
                 fillDeadline: order.fillDeadline,
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
+                tokenIn: order.tokenIn.toBytes32(),
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
                 solver: order.solver
@@ -903,6 +918,7 @@ contract FillOrderTest is OrderBookTestBase {
                 fillDeadline: order.fillDeadline,
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
+                tokenIn: order.tokenIn.toBytes32(),
                 tokenOut: order.tokenOut,
                 recipient: order.recipient,
                 solver: order.solver
