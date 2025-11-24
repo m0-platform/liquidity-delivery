@@ -16,9 +16,9 @@ const DEST_CHAIN_ID: u32 = 2; // Example destination chain ID for testing
     
 struct OrderBookTest {
     pub ctx: AnchorContext,
-    pub users: HashMap<&'static str, Keypair>,
-    pub mints: HashMap<&'static str, Pubkey>,
-    pub atas: HashMap<(&'static str, &'static str), Pubkey>,
+    users: HashMap<&'static str, Keypair>,
+    mints: HashMap<&'static str, Pubkey>,
+    atas: HashMap<(&'static str, &'static str), Pubkey>,
 }
 
 impl OrderBookTest {
@@ -276,6 +276,19 @@ impl OrderBookTest {
         Ok(token_account.amount)
     }
 
+    // Helpers to fetch test data
+    fn get_user(&self, user: &str) -> Keypair {
+        self.users.get(user).unwrap().insecure_clone()
+    }
+
+    fn get_mint(&self, mint: &str) -> Pubkey {
+        self.mints.get(mint).unwrap().clone()
+    }
+
+    fn get_ata(&self, mint: &str, owner: &str) -> Pubkey {
+        self.atas.get(&(mint, owner)).unwrap().clone()
+    }
+
     // Helpers for token actions
     fn approve_token_delegate(
         &mut self,
@@ -397,6 +410,43 @@ impl OrderBookTest {
             order_token_in_ata,
             solver_token_in_account: solver_token_in_ata,
             token_in_program: anchor_spl::token::ID,
+        })
+    }
+
+    fn build_fill_foreign_order_accounts_from_order_data(
+        &self,
+        solver: &Pubkey,
+        order_data: &OrderData
+
+    ) -> Result<order_book::accounts::FillForeignOrder, Box<dyn Error>> {
+        let order_account = self.ctx.svm.get_pda(&[ORDER_SEED_PREFIX, order_data.compute_order_id().as_slice()], &order_book::ID);
+        let (global_account, _) = self.get_global_account()?;
+        
+        let token_out_mint = Pubkey::new_from_array(order_data.token_out);
+        let recipient = Pubkey::new_from_array(order_data.recipient);
+        let recipient_token_out_ata = get_associated_token_address(
+            &recipient,
+            &token_out_mint,
+        );
+        let solver_token_out_ata = get_associated_token_address(
+            solver,
+            &token_out_mint,
+        );
+
+        Ok(order_book::accounts::FillForeignOrder {
+            program: order_book::ID,
+            event_authority: self.get_event_authority()?,
+            solver: *solver,
+            global_account,
+            token_out_mint,
+            solver_token_out_account: solver_token_out_ata,
+            recipient,
+            recipient_token_out_ata,
+            token_out_program: anchor_spl::token::ID,
+            associated_token_program: anchor_spl::associated_token::ID,
+            system_program: anchor_lang::solana_program::system_program::ID,
+            order: order_account,
+            messenger_program: messenger::ID
         })
     }
 
@@ -524,51 +574,12 @@ impl OrderBookTest {
         order_id: [u8; 32],
         fill_params: &order_book::instructions::fill::FillParams,
     ) -> Result<Instruction, Box<dyn Error>> {
-        let (order_account, native_order_data) = self.get_native_order_account(&order_id)?;
-        let (global_account, global_data) = self.get_global_account()?;
-        
-        let token_out_mint = Pubkey::new_from_array(native_order_data.data.token_out);
-        let recipient = Pubkey::new_from_array(native_order_data.data.recipient);
-        let recipient_token_out_ata = get_associated_token_address(
-            &recipient,
-            &token_out_mint,
-        );
-        let solver_token_out_ata = get_associated_token_address(
-            solver,
-            &token_out_mint,
-        );
-        let token_in_mint = native_order_data.data.token_in;
-        let order_token_in_ata = get_associated_token_address(
-            &order_account,
-            &token_in_mint,
-        );
-        let solver_token_in_ata = get_associated_token_address(
-            solver,
-            &token_in_mint,
-        );
+        let accounts = self.build_fill_native_order_accounts(solver, order_id)?;
+
+        let (_, native_order_data) = self.get_native_order_account(&order_id)?;
+        let (_, global_data) = self.get_global_account()?;
 
         let order_data = OrderData::new_from_native_order(native_order_data.data, global_data.chain_id);
-
-        let accounts = order_book::accounts::FillNativeOrder {
-                program: order_book::ID,
-                event_authority: self.get_event_authority()?,
-                // common: order_book::accounts::FillCommon {
-                    solver: *solver,
-                    global_account,
-                    token_out_mint,
-                    solver_token_out_account: solver_token_out_ata,
-                    recipient,
-                    recipient_token_out_ata,
-                    token_out_program: anchor_spl::token::ID,
-                    associated_token_program: anchor_spl::associated_token::ID,
-                    system_program: anchor_lang::solana_program::system_program::ID,
-                // },
-                order: order_account,
-                token_in_mint,
-                order_token_in_ata,
-                solver_token_in_account: solver_token_in_ata,
-                token_in_program: anchor_spl::token::ID,
-            };
         
         let ix = self.ctx.program()
             .accounts(accounts)
@@ -584,17 +595,28 @@ impl OrderBookTest {
         Ok(ix)
     }
 
-    // fn create_fill_foreign_order_ix(
-    //     &self,
-    //     solver: &Pubkey,
-    //     order_id: [u8; 32],
-    //     fill_params: &order_book::instructions::fill::FillParams,
-    // ) -> Result<Instruction, Box<dyn Error>> {
+    fn create_fill_foreign_order_ix(
+        &self,
+        solver: &Pubkey,
+        order_data: &OrderData,
+        fill_params: &order_book::instructions::fill::FillParams,
+    ) -> Result<Instruction, Box<dyn Error>> {
+        let accounts = self.build_fill_foreign_order_accounts_from_order_data(solver, order_data)?;
+        let order_id = order_data.compute_order_id();
 
+        let ix = self.ctx.program()
+            .accounts(accounts)
+            .args(
+                order_book::instruction::FillForeignOrder {
+                    order_id,
+                    order_data: order_data.clone(),
+                    fill_params: fill_params.clone()
+                }
+            )
+            .instruction()?;
 
-
-    //     Ok(ix)
-    // }
+        Ok(ix)
+    }
 
     // Helpers to quickly execute instructions on the program
 
@@ -640,4 +662,42 @@ impl OrderBookTest {
 
         Ok(())
     }
+
+    fn fill_native_order(
+        &mut self,
+        solver: &str,
+        order_id: [u8; 32],
+        amount_out_to_fill: u64
+    ) -> Result<(), Box<dyn Error>> {
+        let solver_keypair = self.users.get(solver).unwrap();
+
+        let fill_params = order_book::instructions::FillParams { amount_out_to_fill, origin_recipient: solver_keypair.pubkey().to_bytes() };
+
+        let ix = self.create_fill_native_order_ix(&solver_keypair.pubkey(), order_id, &fill_params)?;
+
+        self.ctx.execute_instruction(ix, &[solver_keypair])?;
+
+        Ok(())
+    }
+
+    fn fill_foreign_order(
+        &mut self,
+        solver: &str,
+        order_data: &OrderData,
+        amount_out_to_fill: u64
+    ) -> Result<(), Box<dyn Error>> {
+        let solver_keypair = self.users.get(solver).unwrap();
+
+        let fill_params = order_book::instructions::FillParams { amount_out_to_fill, origin_recipient: solver_keypair.pubkey().to_bytes() };
+
+        let ix = self.create_fill_foreign_order_ix(&solver_keypair.pubkey(), order_data, &fill_params)?;
+
+        self.ctx.execute_instruction(ix, &[solver_keypair])?;
+
+        Ok(())
+    }
+
+    
+
+
 }
