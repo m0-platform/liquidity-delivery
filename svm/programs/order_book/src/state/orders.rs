@@ -12,7 +12,7 @@ pub enum OrderStatus {
 }
 
 #[repr(u8)]
-#[derive(AnchorDeserialize, AnchorSerialize, InitSpace, Clone, PartialEq)]
+#[derive(AnchorDeserialize, AnchorSerialize, InitSpace, Clone, Debug, PartialEq)]
 pub enum OrderType {
     Native,
     Foreign
