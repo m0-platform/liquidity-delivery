@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.26;
 
-import { IERC20 } from "../lib/common/src/interfaces/IERC20.sol";
+import { IERC20 } from "../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
 import { IERC20Extended } from "../lib/common/src/interfaces/IERC20Extended.sol";
 import { AccessControlUpgradeable } from "../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import { ERC712ExtendedUpgradeable } from "../lib/common/src/ERC712ExtendedUpgradeable.sol";
 import { TypeConverter } from "../lib/common/src/libs/TypeConverter.sol";
-import { TransferHelper } from "../lib/common/src/libs/TransferHelper.sol";
+import { SafeERC20 } from "./libs/SafeERC20.sol";
 
 import { IOrderBook } from "./interfaces/IOrderBook.sol";
 import { IMessenger } from "./interfaces/IMessenger.sol";
@@ -37,7 +37,7 @@ abstract contract OrderBookStorageLayout {
 
 contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeable, ERC712ExtendedUpgradeable {
     using TypeConverter for *;
-    using TransferHelper for IERC20;
+    using SafeERC20 for IERC20;
 
     // ========== State Variables ========== //
 
