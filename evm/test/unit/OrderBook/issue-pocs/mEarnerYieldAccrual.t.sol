@@ -111,7 +111,8 @@ contract MEarnerYieldAccrualTest is Test {
                 orderId: orderId,
                 amountOutFilled: AMOUNT_OUT,
                 amountInToRelease: AMOUNT_IN, // Only releases original 100e6
-                originRecipient: solver.toBytes32()
+                originRecipient: solver.toBytes32(),
+                tokenIn: address(mToken).toBytes32()
             })
         );
 
@@ -210,7 +211,8 @@ contract MEarnerYieldAccrualTest is Test {
                 orderId: orderId,
                 amountOutFilled: AMOUNT_OUT,
                 amountInToRelease: AMOUNT_IN,
-                originRecipient: solver.toBytes32()
+                originRecipient: solver.toBytes32(),
+                tokenIn: address(mToken).toBytes32()
             })
         );
 

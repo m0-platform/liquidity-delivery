@@ -74,7 +74,8 @@ contract FinalityBufferRaceConditionTest is OrderBookTestBase {
                 orderId: orderId,
                 amountOutFilled: params.amountOut,
                 amountInToRelease: params.amountIn,
-                originRecipient: users["solver"].toBytes32()
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
             })
         );
         uint256 solverBalanceAfter = tokenIn.balanceOf(users["solver"]);

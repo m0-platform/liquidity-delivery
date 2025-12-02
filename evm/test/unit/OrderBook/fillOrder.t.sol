@@ -998,7 +998,6 @@ contract FillOrderTest is OrderBookTestBase {
             IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
         );
 
-
         // Check order status
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Completed), "order should be completed");

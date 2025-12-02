@@ -108,7 +108,8 @@ contract PausableTokenTest is Test {
                 orderId: orderId,
                 amountOutFilled: AMOUNT_OUT,
                 amountInToRelease: AMOUNT_IN,
-                originRecipient: solver.toBytes32()
+                originRecipient: solver.toBytes32(),
+                tokenIn: address(pausableToken).toBytes32()
             })
         );
 

@@ -189,7 +189,8 @@ abstract contract OrderBookTestBase is Test {
                 orderId: orderId_,
                 amountOutFilled: amountOutFilled_,
                 amountInToRelease: amountInToRelease_,
-                originRecipient: solver_.toBytes32()
+                originRecipient: solver_.toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
             })
         );
     }

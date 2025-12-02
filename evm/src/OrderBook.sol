@@ -462,7 +462,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
                     orderId: orderId_,
                     originRecipient: fillerParams_.originRecipient,
                     amountOutFilled: amountOutToFill_,
-                    amountInToRelease: amountInToRelease_
+                    amountInToRelease: amountInToRelease_,
+                    tokenIn: orderData_.tokenIn
                 }),
                 messageData_
             );
@@ -482,6 +483,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         if (msg.sender != messenger) revert NotAuthorized();
         if (order.status != OrderStatus.Created && order.status != OrderStatus.CancelRequested)
             revert InvalidOrderStatus();
+        if (report_.tokenIn != order.tokenIn.toBytes32()) revert InvalidReport();
 
         // Update the fill amounts for the order
         IOrderBook.FilledAmounts storage filledAmounts = $.filledAmounts[report_.orderId];

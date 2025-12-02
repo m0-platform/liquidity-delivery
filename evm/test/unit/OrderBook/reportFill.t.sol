@@ -45,7 +45,8 @@ contract ReportFillTest is OrderBookTestBase {
                 orderId: orderId,
                 amountOutFilled: params.amountOut,
                 amountInToRelease: params.amountIn,
-                originRecipient: users["solver"].toBytes32()
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
             })
         );
     }
@@ -61,7 +62,8 @@ contract ReportFillTest is OrderBookTestBase {
                 orderId: fakeOrderId,
                 amountOutFilled: params.amountOut,
                 amountInToRelease: params.amountIn,
-                originRecipient: users["solver"].toBytes32()
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
             })
         );
     }
@@ -80,7 +82,8 @@ contract ReportFillTest is OrderBookTestBase {
                 orderId: orderId,
                 amountOutFilled: params.amountOut / 2,
                 amountInToRelease: params.amountIn / 2,
-                originRecipient: users["solver"].toBytes32()
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
             })
         );
     }
@@ -96,7 +99,8 @@ contract ReportFillTest is OrderBookTestBase {
                 orderId: orderId,
                 amountOutFilled: params.amountOut + 1,
                 amountInToRelease: params.amountIn,
-                originRecipient: users["solver"].toBytes32()
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
             })
         );
     }
@@ -112,7 +116,25 @@ contract ReportFillTest is OrderBookTestBase {
                 orderId: orderId,
                 amountOutFilled: params.amountOut,
                 amountInToRelease: params.amountIn + 1,
-                originRecipient: users["solver"].toBytes32()
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
+            })
+        );
+    }
+
+    function test_wrongTokenIn_reverts() public {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+
+        // Try to report fill with wrong tokenIn
+        vm.prank(address(messenger));
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
+        orderBook.reportFill(
+            IOrderBook.FillReport({
+                orderId: orderId,
+                amountOutFilled: params.amountOut,
+                amountInToRelease: params.amountIn,
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(users["bob"]).toBytes32() // invalid tokenIn
             })
         );
     }
@@ -135,7 +157,8 @@ contract ReportFillTest is OrderBookTestBase {
                 orderId: orderId,
                 amountOutFilled: fillAmount,
                 amountInToRelease: expectedAmountIn,
-                originRecipient: users["solver"].toBytes32()
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
             })
         );
 
@@ -210,7 +233,8 @@ contract ReportFillTest is OrderBookTestBase {
                 orderId: orderId,
                 amountOutFilled: params.amountOut,
                 amountInToRelease: params.amountIn,
-                originRecipient: users["solver"].toBytes32()
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
             })
         );
 
@@ -289,7 +313,8 @@ contract ReportFillTest is OrderBookTestBase {
                 orderId: orderId,
                 amountOutFilled: fillAmount,
                 amountInToRelease: expectedAmountIn,
-                originRecipient: users["solver"].toBytes32()
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
             })
         );
 
@@ -370,7 +395,8 @@ contract ReportFillTest is OrderBookTestBase {
                 orderId: orderId,
                 amountOutFilled: params.amountOut,
                 amountInToRelease: params.amountIn,
-                originRecipient: users["solver"].toBytes32()
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
             })
         );
 
