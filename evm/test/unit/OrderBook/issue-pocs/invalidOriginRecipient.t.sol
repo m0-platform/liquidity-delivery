@@ -31,7 +31,15 @@ contract InvalidOriginRecipientTest is OrderBookTestBase {
 
         // Reverts with SafeERC20 error - balance didn't increase
         // An explicit InvalidRecipient check would be clearer and fail earlier
-        vm.expectRevert(abi.encodeWithSelector(SafeERC20.SafeERC20FeeOnTransfer.selector, address(tokenIn), address(orderBook), params.amountIn, 0));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                SafeERC20.SafeERC20FeeOnTransfer.selector,
+                address(tokenIn),
+                address(orderBook),
+                params.amountIn,
+                0
+            )
+        );
         orderBook.fillOrder(
             orderId,
             IOrderBook.OrderData({
