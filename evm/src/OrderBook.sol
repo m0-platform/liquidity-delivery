@@ -500,10 +500,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
         // Transfer the amount in to release to the recipient specified by the filler
         // We do not check fee on transfer here to avoid potential reverts on reported fills
-        IERC20(order.tokenIn).safeTransfer(
-            report_.originRecipient.toAddress(),
-            uint256(report_.amountInToRelease)
-        );
+        IERC20(order.tokenIn).safeTransfer(report_.originRecipient.toAddress(), uint256(report_.amountInToRelease));
     }
 
     /* ========== Admin Functions ========== */
@@ -562,7 +559,12 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         destination.finalityBuffer = effectiveFinalityBuffer;
         destination.newFinalityBuffer = finalityBuffer_;
 
-        emit DestinationConfigUpdated(destChainId_, isSupported_, finalityBuffer_, destination.newFinalityBufferEffectiveTimestamp);
+        emit DestinationConfigUpdated(
+            destChainId_,
+            isSupported_,
+            finalityBuffer_,
+            destination.newFinalityBufferEffectiveTimestamp
+        );
     }
 
     /* ========== View Functions ========== */
