@@ -181,7 +181,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
 
         // Destination chain must either be the current chain or a supported destination
-        if (orderParams_.destChainId != chainId && !$.destinations[orderParams_.destChainId].isSupported)
+        if (orderParams_.destChainId != chainId && !isDestinationSupported(orderParams_.destChainId))
             revert InvalidDestinationChain();
 
         // Create order
@@ -225,6 +225,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
         emit OrderOpened(
             orderId_,
+            sender_,
             orderParams_.tokenIn,
             orderParams_.amountIn,
             orderParams_.destChainId,
@@ -331,7 +332,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
         // Validate that the order can be refunded
         // If the order is local, the finality buffer is 0
-        uint32 finalityBuffer_ = order.destChainId == chainId ? 0 : $.destinations[order.destChainId].finalityBuffer;
+        uint32 finalityBuffer_ = order.destChainId == chainId ? 0 : getDestinationFinalityBuffer(order.destChainId);
         if (order.status == OrderStatus.Created) {
             // If the order is still in Created status,
             // it can only be refunded if the fill deadline + finality buffer has passed
@@ -498,10 +499,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         }
 
         // Transfer the amount in to release to the recipient specified by the filler
-        IERC20(order.tokenIn).safeTransferExact(
-            report_.originRecipient.toAddress(),
-            uint256(report_.amountInToRelease)
-        );
+        // We do not check fee on transfer here to avoid potential reverts on reported fills
+        IERC20(order.tokenIn).safeTransfer(report_.originRecipient.toAddress(), uint256(report_.amountInToRelease));
     }
 
     /* ========== Admin Functions ========== */
@@ -512,10 +511,60 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         bool isSupported_,
         uint32 finalityBuffer_
     ) external override onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (destChainId_ == chainId) revert InvalidDestinationChain();
         if (isSupported_ && finalityBuffer_ == 0) revert InvalidFinalityBuffer();
 
-        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-        $.destinations[destChainId_] = Destination({ isSupported: isSupported_, finalityBuffer: finalityBuffer_ });
+        Destination storage destination = _getOrderBookStorageLocation().destinations[destChainId_];
+
+        // Existing State Cases
+        // 1. Destination is not supported currently and support is being removed (no-op)
+        // 2. Destination is supported currently and we are removing support
+        // 3. Destination is not supported currently and we are adding support
+        // 4. Destination is supported currently and we are updating the finality buffer
+
+        // Case 1: No-op
+        if (!isSupported_ && !destination.isSupported) return;
+
+        // Case 2: Removing support
+        uint32 effectiveFinalityBuffer = getDestinationFinalityBuffer(destChainId_);
+        if (!isSupported_) {
+            // Disabling support for new orders to the destination chain
+            destination.isSupported = false;
+
+            // Update the finality buffer to the current effective finality buffer
+            destination.finalityBuffer = effectiveFinalityBuffer;
+
+            // Set the new finality buffer to 0 with an effective timestamp of now + the current effective finality buffer
+            destination.newFinalityBuffer = 0;
+            destination.newFinalityBufferEffectiveTimestamp = uint64(block.timestamp) + effectiveFinalityBuffer;
+
+            emit DestinationConfigUpdated(
+                destChainId_,
+                isSupported_,
+                destination.newFinalityBuffer,
+                destination.newFinalityBufferEffectiveTimestamp
+            );
+
+            return;
+        }
+
+        // Case 3 & 4: Setting new finality buffer
+        // If reducing the finality buffer, set the effective timestamp to now + the old finality buffer
+        // This is to allow existing orders to still respect the old finality buffer
+        // If increasing the finality buffer, it can be set immediately
+        destination.isSupported = true;
+        destination.newFinalityBufferEffectiveTimestamp = finalityBuffer_ < effectiveFinalityBuffer
+            ? uint64(block.timestamp) + effectiveFinalityBuffer
+            : uint64(block.timestamp);
+        destination.finalityBuffer = effectiveFinalityBuffer;
+        destination.newFinalityBuffer = finalityBuffer_;
+
+        emit DestinationConfigUpdated(
+            destChainId_,
+            isSupported_,
+            finalityBuffer_,
+            destination.newFinalityBufferEffectiveTimestamp
+        );
     }
 
     /* ========== View Functions ========== */
@@ -557,14 +606,21 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         return $.senderNonces[sender_];
     }
 
-    function isDestinationSupported(uint32 destChainId_) external view override returns (bool) {
-        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-        return $.destinations[destChainId_].isSupported;
+    function isDestinationSupported(uint32 destChainId_) public view override returns (bool) {
+        Destination storage destination = _getOrderBookStorageLocation().destinations[destChainId_];
+        return destination.isSupported;
     }
 
-    function getDestinationFinalityBuffer(uint32 destChainId_) external view override returns (uint32) {
-        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-        return $.destinations[destChainId_].finalityBuffer;
+    function getDestinationFinalityBuffer(uint32 destChainId_) public view override returns (uint32) {
+        Destination storage destination = _getOrderBookStorageLocation().destinations[destChainId_];
+        return
+            destination.newFinalityBufferEffectiveTimestamp <= block.timestamp
+                ? destination.newFinalityBuffer
+                : destination.finalityBuffer;
+    }
+
+    function getDestinationConfig(uint32 destChainId_) public view override returns (Destination memory) {
+        return _getOrderBookStorageLocation().destinations[destChainId_];
     }
 
     /* ========== EIP-712 Digest Functions ========== */

@@ -8,6 +8,7 @@ interface IOrderBook {
      * @notice Emitted when a new order is opened
      * @dev This event is emitted on the origin chain
      * @param orderId The ID of the order
+     * @param sender The address that provided the funds on the origin chain
      * @param tokenIn The address of the input token on this chain
      * @param amountIn The amount of input token provided
      * @param destChainId The internal chain ID where the order will be filled
@@ -17,6 +18,7 @@ interface IOrderBook {
      */
     event OrderOpened(
         bytes32 indexed orderId,
+        address sender,
         address tokenIn,
         uint128 amountIn,
         uint32 indexed destChainId,
@@ -63,6 +65,21 @@ interface IOrderBook {
      * @param orderId The ID of the completed order
      */
     event OrderCompleted(bytes32 orderId);
+
+    /**
+     * @notice Emitted when the configuration for a destination chain is updated
+     * @dev This event is emitted on the origin chain
+     * @param destChainId The internal chain ID of the destination chain
+     * @param newIsSupported Whether orders can be created with this chain as the destination
+     * @param newFinalityBuffer The new finality buffer duration (in seconds)
+     * @param newEffectiveTimestamp The timestamp when the new status and/or finality buffer becomes effective
+     */
+    event DestinationConfigUpdated(
+        uint32 indexed destChainId,
+        bool newIsSupported,
+        uint32 newFinalityBuffer,
+        uint64 newEffectiveTimestamp
+    );
 
     /* ========== Errors ========== */
     error AmountInZero();
@@ -249,10 +266,14 @@ interface IOrderBook {
      * @notice Configuration for a supported destination chain
      * @param isSupported Whether orders can be created with this chain as the destination
      * @param finalityBuffer Duration (in seconds) to wait after the fill deadline before allowing refunds
+     * @param newFinalityBuffer New duration (in seconds) to wait after the fill deadline before allowing refunds
+     * @param newFinalityBufferEffectiveTimestamp Timestamp when the new finality buffer becomes effective
      */
     struct Destination {
         bool isSupported;
         uint32 finalityBuffer;
+        uint32 newFinalityBuffer;
+        uint64 newFinalityBufferEffectiveTimestamp;
     }
 
     /**
@@ -461,6 +482,9 @@ interface IOrderBook {
      * @dev If a chain is not supported, this will return 0
      */
     function getDestinationFinalityBuffer(uint32 destChainId_) external view returns (uint32);
+
+    /// @notice Returns the full destination configuration for the provided chain ID
+    function getDestinationConfig(uint32 destChainId_) external view returns (Destination memory);
 
     /* ========== EIP-712 Digest Functions ========== */
 

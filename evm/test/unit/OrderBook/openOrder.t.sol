@@ -103,6 +103,7 @@ contract OpenOrderTest is OrderBookTestBase {
         vm.expectEmit(true, true, true, true);
         emit IOrderBook.OrderOpened(
             expOrderId,
+            users["alice"],
             params.tokenIn,
             params.amountIn,
             params.destChainId,

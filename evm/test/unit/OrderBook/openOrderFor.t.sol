@@ -172,6 +172,7 @@ contract OpenOrderForTest is OrderBookTestBase {
         vm.expectEmit(true, true, true, true);
         emit IOrderBook.OrderOpened(
             expOrderId,
+            sender.addr,
             gaslessParams.tokenIn,
             gaslessParams.amountIn,
             gaslessParams.destChainId,
@@ -215,6 +216,7 @@ contract OpenOrderForTest is OrderBookTestBase {
         vm.expectEmit(true, true, true, true);
         emit IOrderBook.OrderOpened(
             expOrderId,
+            sender.addr,
             gaslessParams.tokenIn,
             gaslessParams.amountIn,
             gaslessParams.destChainId,
