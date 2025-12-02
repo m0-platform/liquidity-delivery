@@ -8,6 +8,7 @@ interface IOrderBook {
      * @notice Emitted when a new order is opened
      * @dev This event is emitted on the origin chain
      * @param orderId The ID of the order
+     * @param sender The address that provided the funds on the origin chain
      * @param tokenIn The address of the input token on this chain
      * @param amountIn The amount of input token provided
      * @param destChainId The internal chain ID where the order will be filled
@@ -17,6 +18,7 @@ interface IOrderBook {
      */
     event OrderOpened(
         bytes32 indexed orderId,
+        address sender,
         address tokenIn,
         uint128 amountIn,
         uint32 indexed destChainId,

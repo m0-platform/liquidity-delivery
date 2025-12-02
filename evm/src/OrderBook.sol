@@ -225,6 +225,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
         emit OrderOpened(
             orderId_,
+            sender_,
             orderParams_.tokenIn,
             orderParams_.amountIn,
             orderParams_.destChainId,
@@ -498,7 +499,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         }
 
         // Transfer the amount in to release to the recipient specified by the filler
-        IERC20(order.tokenIn).safeTransferExact(
+        // We do not check fee on transfer here to avoid potential reverts on reported fills
+        IERC20(order.tokenIn).safeTransfer(
             report_.originRecipient.toAddress(),
             uint256(report_.amountInToRelease)
         );
