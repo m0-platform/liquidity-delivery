@@ -181,7 +181,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
 
         // Destination chain must either be the current chain or a supported destination
-        if (orderParams_.destChainId != chainId && !$.destinations[orderParams_.destChainId].isSupported)
+        if (orderParams_.destChainId != chainId && !isDestinationSupported(orderParams_.destChainId))
             revert InvalidDestinationChain();
 
         // Create order
@@ -331,7 +331,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
         // Validate that the order can be refunded
         // If the order is local, the finality buffer is 0
-        uint32 finalityBuffer_ = order.destChainId == chainId ? 0 : $.destinations[order.destChainId].finalityBuffer;
+        uint32 finalityBuffer_ = order.destChainId == chainId ? 0 : getDestinationFinalityBuffer(order.destChainId);
         if (order.status == OrderStatus.Created) {
             // If the order is still in Created status,
             // it can only be refunded if the fill deadline + finality buffer has passed
@@ -518,63 +518,49 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         Destination storage destination = _getOrderBookStorageLocation().destinations[destChainId_];
 
         // Existing State Cases
-        // 1. Destination is not supported currently
+        // 1. Destination is not supported currently and support is being removed (no-op)
         // 2. Destination is supported currently and we are removing support
-        // 3. Destination is supported currently and we are updating the finality buffer
+        // 3. Destination is not supported currently and we are adding support
+        // 4. Destination is supported currently and we are updating the finality buffer
 
-        // Case 1: Destination is not supported currently
-        // Do a fresh initialization of the destination config
-        if (!destination.isSupported) {
-            destination.isSupported = isSupported_; // If isSupported_ is false, this is effectively a no-op since the destination isn't supported
-            uint32 finalityBuffer = isSupported_ ? finalityBuffer_ : 0;
-            destination.finalityBuffer = finalityBuffer;
-            destination.newFinalityBuffer = finalityBuffer;
-            destination.newEffectiveTimestamp = uint64(block.timestamp);
+        // Case 1: No-op
+        if (!isSupported_ && !destination.isSupported) return;
 
-            emit DestinationConfigUpdated(
-                destChainId_,
-                isSupported_,
-                finalityBuffer,
-                destination.newEffectiveTimestamp
-            );
-
-            return;
-        }
-
-        // Case 2: Destination is supported currently and we are removing support
+        // Case 2: Removing support
         uint32 effectiveFinalityBuffer = getDestinationFinalityBuffer(destChainId_);
         if (!isSupported_) {
-            // Disabling support for the destination chain after existing orders are completed
-            destination.newIsSupported = false;
+            // Disabling support for new orders to the destination chain
+            destination.isSupported = false;
 
             // Update the finality buffer to the current effective finality buffer
             destination.finalityBuffer = effectiveFinalityBuffer;
 
-            // Ensure the other fields are reset
+            // Set the new finality buffer to 0 with an effective timestamp of now + the current effective finality buffer
             destination.newFinalityBuffer = 0;
-            destination.newEffectiveTimestamp = uint64(block.timestamp) + effectiveFinalityBuffer;
+            destination.newFinalityBufferEffectiveTimestamp = uint64(block.timestamp) + effectiveFinalityBuffer;
 
             emit DestinationConfigUpdated(
                 destChainId_,
                 isSupported_,
                 destination.newFinalityBuffer,
-                destination.newEffectiveTimestamp
+                destination.newFinalityBufferEffectiveTimestamp
             );
 
             return;
         }
 
-        // Case 3: Destination is supported currently and we are updating the finality buffer
+        // Case 3 & 4: Setting new finality buffer
         // If reducing the finality buffer, set the effective timestamp to now + the old finality buffer
         // This is to allow existing orders to still respect the old finality buffer
         // If increasing the finality buffer, it can be set immediately
-        destination.newEffectiveTimestamp = finalityBuffer_ < effectiveFinalityBuffer
+        destination.isSupported = true;
+        destination.newFinalityBufferEffectiveTimestamp = finalityBuffer_ < effectiveFinalityBuffer
             ? uint64(block.timestamp) + effectiveFinalityBuffer
             : uint64(block.timestamp);
         destination.finalityBuffer = effectiveFinalityBuffer;
         destination.newFinalityBuffer = finalityBuffer_;
 
-        emit DestinationConfigUpdated(destChainId_, isSupported_, finalityBuffer_, destination.newEffectiveTimestamp);
+        emit DestinationConfigUpdated(destChainId_, isSupported_, finalityBuffer_, destination.newFinalityBufferEffectiveTimestamp);
     }
 
     /* ========== View Functions ========== */
@@ -618,14 +604,13 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
     function isDestinationSupported(uint32 destChainId_) public view override returns (bool) {
         Destination storage destination = _getOrderBookStorageLocation().destinations[destChainId_];
-        return
-            destination.newEffectiveTimestamp >= block.timestamp ? destination.newIsSupported : destination.isSupported;
+        return destination.isSupported;
     }
 
     function getDestinationFinalityBuffer(uint32 destChainId_) public view override returns (uint32) {
         Destination storage destination = _getOrderBookStorageLocation().destinations[destChainId_];
         return
-            destination.newEffectiveTimestamp >= block.timestamp
+            destination.newFinalityBufferEffectiveTimestamp <= block.timestamp
                 ? destination.newFinalityBuffer
                 : destination.finalityBuffer;
     }

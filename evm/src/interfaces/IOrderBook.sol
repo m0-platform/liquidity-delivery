@@ -269,10 +269,9 @@ interface IOrderBook {
      */
     struct Destination {
         bool isSupported;
-        bool newIsSupported;
         uint32 finalityBuffer;
         uint32 newFinalityBuffer;
-        uint64 newEffectiveTimestamp;
+        uint64 newFinalityBufferEffectiveTimestamp;
     }
 
     /**
