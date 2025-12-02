@@ -1,4 +1,4 @@
-use super::super::{OrderBookTest, CHAIN_ID, messenger};
+use super::super::{OrderBookTest, CHAIN_ID};
 use anchor_litesvm::{Signer, TestHelpers};
 use std::error::Error;
 
@@ -49,7 +49,7 @@ fn test_initialize_success() -> Result<(), Box<dyn Error>> {
 
     // Verify messenger authority is set correctly
     let expected_messenger_authority = test.ctx.svm.get_pda(
-        &[messenger::constants::AUTHORITY_SEED],
+        &[messenger::AUTHORITY_SEED],
         &messenger::ID,
     );
     assert_eq!(global_data.messenger_authority, expected_messenger_authority, "Messenger authority should be set correctly");
@@ -129,7 +129,7 @@ fn test_initialize_wrong_global_account_pda_reverts() -> Result<(), Box<dyn Erro
     );
 
     let messenger_authority = test.ctx.svm.get_pda(
-        &[messenger::constants::AUTHORITY_SEED],
+        &[messenger::AUTHORITY_SEED],
         &messenger::ID,
     );
 

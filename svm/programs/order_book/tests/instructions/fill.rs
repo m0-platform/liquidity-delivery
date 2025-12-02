@@ -1,4 +1,4 @@
-use super::super::{INITIAL_FUNDS, OrderBookTest, CHAIN_ID, DEST_CHAIN_ID, messenger};
+use super::super::{INITIAL_FUNDS, OrderBookTest, CHAIN_ID, DEST_CHAIN_ID};
 use anchor_litesvm::{AssertionHelpers, TestHelpers, Signer};
 use anchor_lang::prelude::Clock;
 use anchor_spl::associated_token::get_associated_token_address;

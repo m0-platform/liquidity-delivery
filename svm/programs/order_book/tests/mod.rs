@@ -6,8 +6,6 @@ use anchor_spl::{associated_token::get_associated_token_address, token::{TokenAc
 use order_book::{FillParams, ORDER_SEED_PREFIX, OrderData, VERSION};
 use std::{collections::HashMap, error::Error};
 
-anchor_lang::declare_program!(messenger);
-
 const LAMPORTS_PER_SOL: u64 = 1_000_000_000;
 const INITIAL_FUNDS: u64 = 10 * LAMPORTS_PER_SOL;
 
@@ -89,6 +87,7 @@ impl OrderBookTest {
         })
     }
 
+
     fn initialize(&mut self) -> Result<(), Box<dyn Error>> {
         let admin = self.users.get("admin").unwrap();
 
@@ -105,7 +104,7 @@ impl OrderBookTest {
                     ),
                     messenger_authority: self.ctx.svm.get_pda(
                         &[
-                            messenger::constants::AUTHORITY_SEED,
+                            messenger::AUTHORITY_SEED,
                         ],
                         &messenger::ID,
                     ),
@@ -281,6 +280,13 @@ impl OrderBookTest {
         self.users.get(user).unwrap().insecure_clone()
     }
 
+    fn get_messenger_authority(&self) -> Pubkey {
+        self.ctx.svm.get_pda(
+            &[messenger::AUTHORITY_SEED],
+            &messenger::ID,
+        )
+    }
+
     fn get_mint(&self, mint: &str) -> Pubkey {
         self.mints.get(mint).unwrap().clone()
     }
@@ -450,6 +456,99 @@ impl OrderBookTest {
         })
     }
 
+    fn build_request_cancel_accounts(
+        &self,
+        sender: &Pubkey,
+        order_id: [u8; 32],
+    ) -> Result<order_book::accounts::RequestCancelOrder, Box<dyn Error>> {
+        let order_account = self.ctx.svm.get_pda(
+            &[ORDER_SEED_PREFIX, &order_id],
+            &order_book::ID,
+        );
+
+        Ok(order_book::accounts::RequestCancelOrder {
+            program: order_book::ID,
+            event_authority: self.get_event_authority()?,
+            sender: *sender,
+            order: order_account,
+        })
+    }
+
+    fn build_claim_refund_accounts(
+        &self,
+        sender: &Pubkey,
+        order_id: [u8; 32],
+    ) -> Result<order_book::accounts::ClaimRefund, Box<dyn Error>> {
+        let (global_account, _) = self.get_global_account()?;
+        let order_account = self.ctx.svm.get_pda(
+            &[ORDER_SEED_PREFIX, &order_id],
+            &order_book::ID,
+        );
+        let (_, native_order_data) = self.get_native_order_account(&order_id)?;
+
+        let destination_account = if native_order_data.data.dest_chain_id != global_account.chain_id {
+            Some(self.ctx.svm.get_pda(
+                &[order_book::state::DESTINATION_SEED_PREFIX, &native_order_data.data.dest_chain_id.to_le_bytes()],
+                &order_book::ID,
+            ))
+        } else {
+            None
+        };
+
+        let token_in_mint = native_order_data.data.token_in;
+        let sender_token_in_ata = get_associated_token_address(sender, &token_in_mint);
+        let order_token_in_ata = get_associated_token_address(&order_account, &token_in_mint);
+
+        Ok(order_book::accounts::ClaimRefund {
+            program: order_book::ID,
+            event_authority: self.get_event_authority()?,
+            sender: *sender,
+            global_account,
+            destination_account,
+            order: order_account,
+            token_in_mint,
+            sender_token_in_ata,
+            order_token_in_ata,
+            token_in_program: anchor_spl::token::ID,
+        })
+    }
+
+    fn build_report_fill_accounts(
+        &self,
+        relayer: &Pubkey,
+        fill_report: &messenger::FillReport,
+    ) -> Result<messenger::accounts::ReportFill, Box<dyn Error>> {
+        let (global_account, _) = self.get_global_account()?;
+        let order_account = self.ctx.svm.get_pda(
+            &[ORDER_SEED_PREFIX, &fill_report.order_id],
+            &order_book::ID,
+        );
+        let (_, native_order_data) = self.get_native_order_account(&fill_report.order_id)?;
+
+        let token_in_mint = native_order_data.data.token_in;
+        let origin_recipient = Pubkey::new_from_array(fill_report.origin_recipient);
+        let recipient_token_in_ata = get_associated_token_address(&origin_recipient, &token_in_mint);
+        let order_token_in_ata = get_associated_token_address(&order_account, &token_in_mint);
+
+        let messenger_authority = self.get_messenger_authority();
+
+        Ok(messenger::accounts::ReportFill {
+            relayer: *relayer,
+            authority: messenger_authority,
+            event_authority: self.get_event_authority()?,
+            global_account,
+            order: order_account,
+            token_in_mint,
+            origin_recipient,
+            recipient_token_in_ata,
+            order_token_in_ata,
+            token_in_program: anchor_spl::token::ID,
+            associated_token_program: anchor_spl::associated_token::ID,
+            system_program: anchor_lang::solana_program::system_program::ID,
+            order_book_program: order_book::ID,
+        })
+    }
+
     // Helpers to construct instructions
     fn create_initialize_ix(
         &self,
@@ -461,7 +560,7 @@ impl OrderBookTest {
             &order_book::ID,
         );
         let messenger_authority = self.ctx.svm.get_pda(
-            &[messenger::constants::AUTHORITY_SEED],
+            &[messenger::AUTHORITY_SEED],
             &messenger::ID,
         );
 
@@ -668,6 +767,120 @@ impl OrderBookTest {
         Ok(ix)
     }
 
+    fn create_request_cancel_ix(
+        &self,
+        sender: &Pubkey,
+        order_id: [u8; 32],
+    ) -> Result<Instruction, Box<dyn Error>> {
+        let accounts = self.build_request_cancel_accounts(sender, order_id)?;
+
+        let ix = self.ctx.program()
+            .accounts(accounts)
+            .args(
+                order_book::instruction::RequestCancelOrder {
+                    order_id,
+                }
+            )
+            .instruction()?;
+
+        Ok(ix)
+    }
+
+    fn create_request_cancel_ix_with_custom_accounts(
+        &self,
+        accounts: order_book::accounts::RequestCancelOrder,
+        order_id: [u8; 32],
+    ) -> Result<Instruction, Box<dyn Error>> {
+        let ix = self.ctx.program()
+            .accounts(accounts)
+            .args(
+                order_book::instruction::RequestCancelOrder {
+                    order_id,
+                }
+            )
+            .instruction()?;
+
+        Ok(ix)
+    }
+
+    fn create_claim_refund_ix(
+        &self,
+        sender: &Pubkey,
+        order_id: [u8; 32],
+    ) -> Result<Instruction, Box<dyn Error>> {
+        let accounts = self.build_claim_refund_accounts(sender, order_id)?;
+
+        let ix = self.ctx.program()
+            .accounts(accounts)
+            .args(
+                order_book::instruction::ClaimRefund {
+                    order_id,
+                }
+            )
+            .instruction()?;
+
+        Ok(ix)
+    }
+
+    fn create_claim_refund_ix_with_custom_accounts(
+        &self,
+        accounts: order_book::accounts::ClaimRefund,
+        order_id: [u8; 32],
+    ) -> Result<Instruction, Box<dyn Error>> {
+        let ix = self.ctx.program()
+            .accounts(accounts)
+            .args(
+                order_book::instruction::ClaimRefund {
+                    order_id,
+                }
+            )
+            .instruction()?;
+
+        Ok(ix)
+    }
+
+    fn create_report_fill_ix(
+        &self,
+        relayer: &Pubkey,
+        fill_report: &messenger::FillReport,
+    ) -> Result<Instruction, Box<dyn Error>> {
+        let accounts = self.build_report_fill_accounts(relayer, fill_report)?;
+
+        // Build instruction manually for messenger program
+        let account_metas = accounts.to_account_metas(None);
+        let data = messenger::instruction::ReportFill {
+            fill_report: fill_report.clone(),
+        }.data();
+
+        let ix = Instruction {
+            program_id: messenger::ID,
+            accounts: account_metas,
+            data,
+        };
+
+        Ok(ix)
+    }
+
+    fn create_report_fill_ix_with_custom_accounts(
+        &self,
+        accounts: messenger::accounts::ReportFill,
+        fill_report: &messenger::FillReport,
+    ) -> Result<Instruction, Box<dyn Error>> {
+        // Build instruction manually for messenger program
+        let account_metas = accounts.to_account_metas(None);
+        let data = messenger::instruction::ReportFill {
+            fill_report: fill_report.clone(),
+        }.data();
+
+        let ix = Instruction {
+            program_id: messenger::ID,
+            accounts: account_metas,
+            data,
+        };
+
+        Ok(ix)
+    }
+
     // Helpers to quickly execute instructions on the program
 
     fn open_order(
@@ -747,7 +960,62 @@ impl OrderBookTest {
         Ok(())
     }
 
-    
+    // Report fill via the messenger program, which will CPI to order_book
+    // The messenger program's authority PDA will sign the CPI call
+    fn report_fill(
+        &mut self,
+        relayer: &str,
+        fill_report: &messenger::FillReport,
+    ) -> Result<(), Box<dyn Error>> {
+        let relayer_keypair = self.users.get(relayer).unwrap();
+
+        let ix = self.create_report_fill_ix(
+            &relayer_keypair.pubkey(),
+            fill_report,
+        )?;
+
+        self.ctx.execute_instruction(ix, &[relayer_keypair])?;
+
+        Ok(())
+    }
+
+    fn request_cancel(
+        &mut self,
+        sender: &str,
+        order_id: [u8; 32],
+    ) -> Result<(), Box<dyn Error>> {
+        let sender_keypair = self.users.get(sender).unwrap();
+
+        let ix = self.create_request_cancel_ix(
+            &sender_keypair.pubkey(),
+            order_id,
+        )?;
+
+        self.ctx.execute_instruction(ix, &[sender_keypair])?;
+
+        Ok(())
+    }
+
+    fn claim_refund(
+        &mut self,
+        sender: &str,
+        order_id: [u8; 32],
+    ) -> Result<(), Box<dyn Error>> {
+        let sender_keypair = self.users.get(sender).unwrap();
+
+        let ix = self.create_claim_refund_ix(
+            &sender_keypair.pubkey(),
+            order_id,
+        )?;
+
+        self.ctx.execute_instruction(ix, &[sender_keypair])?;
+
+        Ok(())
+    }
+
+
+
+
 
 
 }
