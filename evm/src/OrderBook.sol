@@ -569,8 +569,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
     /* ========== View Functions ========== */
 
-    // Order IDs are unique across chains and allow using fill data to compute the identifier
-    // This is useful for tracking data against orders on both the origin and destination chains
+    /// @inheritdoc IOrderBook
     function getOrderId(OrderData memory orderData_) public pure override returns (bytes32) {
         return
             keccak256(
@@ -591,26 +590,31 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
             );
     }
 
+    /// @inheritdoc IOrderBook
     function getOrder(bytes32 orderId_) external view override returns (Order memory) {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         return $.localOrders[orderId_];
     }
 
+    /// @inheritdoc IOrderBook
     function getFilledAmounts(bytes32 orderId_) external view override returns (FilledAmounts memory) {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         return $.filledAmounts[orderId_];
     }
 
+    /// @inheritdoc IOrderBook
     function getSenderNonce(address sender_) external view override returns (uint64) {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         return $.senderNonces[sender_];
     }
 
+    /// @inheritdoc IOrderBook
     function isDestinationSupported(uint32 destChainId_) public view override returns (bool) {
         Destination storage destination = _getOrderBookStorageLocation().destinations[destChainId_];
         return destination.isSupported;
     }
 
+    /// @inheritdoc IOrderBook
     function getDestinationFinalityBuffer(uint32 destChainId_) public view override returns (uint32) {
         Destination storage destination = _getOrderBookStorageLocation().destinations[destChainId_];
         return
@@ -619,7 +623,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
                 : destination.finalityBuffer;
     }
 
-    function getDestinationConfig(uint32 destChainId_) public view override returns (Destination memory) {
+    /// @inheritdoc IOrderBook
+    function getDestinationConfig(uint32 destChainId_) external view override returns (Destination memory) {
         return _getOrderBookStorageLocation().destinations[destChainId_];
     }
 
