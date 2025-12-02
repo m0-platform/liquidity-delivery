@@ -100,11 +100,7 @@ contract InvalidOriginRecipientTest is OrderBookTestBase {
 
         // Tokens were burned - sent to address(0)
         uint256 zeroAddressBalanceAfter = tokenIn.balanceOf(address(0));
-        assertEq(
-            zeroAddressBalanceAfter - zeroAddressBalanceBefore,
-            params.amountIn,
-            "tokens burned to address(0)"
-        );
+        assertEq(zeroAddressBalanceAfter - zeroAddressBalanceBefore, params.amountIn, "tokens burned to address(0)");
 
         // Solver received nothing from the fill - tokens went to address(0) instead
         uint256 solverBalanceAfter = tokenIn.balanceOf(users["solver"]);

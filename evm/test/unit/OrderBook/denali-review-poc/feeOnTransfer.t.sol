@@ -132,13 +132,9 @@ contract FeeOnTransferTest is Test {
 
         // 6. Verify alice received less than expected due to fee
         uint256 aliceBalanceAfter = feeToken.balanceOf(alice);
-        uint256 expectedWithFee = AMOUNT_IN - (AMOUNT_IN * 100 / 10000); // 99% of AMOUNT_IN
+        uint256 expectedWithFee = AMOUNT_IN - ((AMOUNT_IN * 100) / 10000); // 99% of AMOUNT_IN
 
-        assertEq(
-            aliceBalanceAfter - aliceBalanceBefore,
-            expectedWithFee,
-            "alice should receive amount minus 1% fee"
-        );
+        assertEq(aliceBalanceAfter - aliceBalanceBefore, expectedWithFee, "alice should receive amount minus 1% fee");
 
         // User lost 1% to fee
         uint256 fundsLost = AMOUNT_IN - (aliceBalanceAfter - aliceBalanceBefore);

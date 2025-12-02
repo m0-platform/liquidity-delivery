@@ -54,28 +54,17 @@ contract RoundingEdgeCaseTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({
-                amountOutToFill: dustFillAmount,
-                originRecipient: users["solver"].toBytes32()
-            })
+            IOrderBook.FillParams({ amountOutToFill: dustFillAmount, originRecipient: users["solver"].toBytes32() })
         );
         vm.stopPrank();
 
         // Verify: Solver received 0 TOKEN6 (rounded to zero!)
         uint256 solverTokenInAfter = tokenIn.balanceOf(users["solver"]);
-        assertEq(
-            solverTokenInAfter - solverTokenInBefore,
-            0,
-            "solver should receive 0 tokenIn due to rounding"
-        );
+        assertEq(solverTokenInAfter - solverTokenInBefore, 0, "solver should receive 0 tokenIn due to rounding");
 
         // Verify: Alice received 1 wei of TOKEN18
         uint256 aliceTokenOutAfter = tokenOut.balanceOf(users["alice"]);
-        assertEq(
-            aliceTokenOutAfter - aliceTokenOutBefore,
-            dustFillAmount,
-            "alice should receive 1 wei of tokenOut"
-        );
+        assertEq(aliceTokenOutAfter - aliceTokenOutBefore, dustFillAmount, "alice should receive 1 wei of tokenOut");
 
         // Calculate expected: (1e6 * 1) / 1e18 = 0
         uint256 expectedAmountIn = (uint256(params.amountIn) * dustFillAmount) / params.amountOut;
