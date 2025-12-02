@@ -8,7 +8,7 @@ import { TypeConverter } from "../../../../lib/common/src/libs/TypeConverter.sol
 import { OrderBook, IOrderBook } from "../../../../src/OrderBook.sol";
 import { MockMessenger } from "../../../mock/MockMessenger.t.sol";
 import { MockERC20 } from "../../../mock/MockERC20.t.sol";
-import { MockFeeToken } from "../../../mock/denali-review-poc/MockFeeToken.t.sol";
+import { MockFeeToken } from "../../../mock/issue-pocs/MockFeeToken.t.sol";
 
 /// @notice Tests for fee-on-transfer token behavior
 /// @dev Verifies that orders created with 0% fee tokens revert when fee is later enabled

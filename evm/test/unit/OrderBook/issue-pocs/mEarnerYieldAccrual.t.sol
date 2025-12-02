@@ -8,7 +8,7 @@ import { TypeConverter } from "../../../../lib/common/src/libs/TypeConverter.sol
 import { OrderBook, IOrderBook } from "../../../../src/OrderBook.sol";
 import { MockMessenger } from "../../../mock/MockMessenger.t.sol";
 import { MockERC20 } from "../../../mock/MockERC20.t.sol";
-import { MockMEarnerToken } from "../../../mock/denali-review-poc/MockMEarnerToken.t.sol";
+import { MockMEarnerToken } from "../../../mock/issue-pocs/MockMEarnerToken.t.sol";
 
 /// @notice Tests for MEarnerManager yield accrual behavior
 /// @dev Demonstrates that yield accrues to OrderBook during order lifetime and gets stuck

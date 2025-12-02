@@ -8,7 +8,7 @@ import { TypeConverter } from "../../../../lib/common/src/libs/TypeConverter.sol
 import { OrderBook, IOrderBook } from "../../../../src/OrderBook.sol";
 import { MockMessenger } from "../../../mock/MockMessenger.t.sol";
 import { MockERC20 } from "../../../mock/MockERC20.t.sol";
-import { MockPausableToken } from "../../../mock/denali-review-poc/MockPausableToken.t.sol";
+import { MockPausableToken } from "../../../mock/issue-pocs/MockPausableToken.t.sol";
 
 /// @notice Tests for pausable token behavior (USDC, USDT)
 /// @dev Demonstrates delayed double-spend when token is paused during reportFill

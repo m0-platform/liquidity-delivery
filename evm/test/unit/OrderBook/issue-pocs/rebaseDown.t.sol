@@ -8,7 +8,7 @@ import { TypeConverter } from "../../../../lib/common/src/libs/TypeConverter.sol
 import { OrderBook, IOrderBook } from "../../../../src/OrderBook.sol";
 import { MockMessenger } from "../../../mock/MockMessenger.t.sol";
 import { MockERC20 } from "../../../mock/MockERC20.t.sol";
-import { MockRebaseDownToken } from "../../../mock/denali-review-poc/MockRebaseDownToken.t.sol";
+import { MockRebaseDownToken } from "../../../mock/issue-pocs/MockRebaseDownToken.t.sol";
 
 /// @notice Tests for downward rebasing token behavior
 /// @dev Verifies behavior when token balance decreases after order creation
