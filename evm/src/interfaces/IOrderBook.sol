@@ -8,13 +8,13 @@ interface IOrderBook {
      * @notice Emitted when a new order is opened
      * @dev This event is emitted on the origin chain
      * @param orderId The ID of the order
-     * @param sender The address that provided the funds on the origin chain
-     * @param tokenIn The address of the input token on this chain
+     * @param sender The address that provided the funds on the origin (this) chain
+     * @param tokenIn The address of the input token on the origin (this) chain
      * @param amountIn The amount of input token provided
      * @param destChainId The internal chain ID where the order will be filled
      * @param tokenOut The address of the output token on the destination chain
      * @param amountOut The amount of output token expected
-     * @param solver The address of the solver that will fill the order, or zero address if any approved solver can fill
+     * @param solver The address of the solver that will fill the order, or zero address if any solver can fill
      */
     event OrderOpened(
         bytes32 indexed orderId,
@@ -72,13 +72,13 @@ interface IOrderBook {
      * @param destChainId The internal chain ID of the destination chain
      * @param newIsSupported Whether orders can be created with this chain as the destination
      * @param newFinalityBuffer The new finality buffer duration (in seconds)
-     * @param newEffectiveTimestamp The timestamp when the new status and/or finality buffer becomes effective
+     * @param newFinalityBufferEffectiveTimestamp The timestamp when the new finality buffer becomes effective
      */
     event DestinationConfigUpdated(
         uint32 indexed destChainId,
         bool newIsSupported,
         uint32 newFinalityBuffer,
-        uint64 newEffectiveTimestamp
+        uint64 newFinalityBufferEffectiveTimestamp
     );
 
     /* ========== Errors ========== */
@@ -104,30 +104,30 @@ interface IOrderBook {
 
     /**
      * @notice Parameters required to open an order onchain
-     * @dev Addresses on the destination chain are stored as bytes32 to support non-EVM
+     * @dev Addresses on the destination chain are stored as bytes32 to support non-EVM chains as destinations
      * @param destChainId Destination chain ID where the order is to be filled
      * @param fillDeadline Timestamp by which the order must be filled on the destination chain
-     * @param tokenIn Address of the input token on this chain
+     * @param tokenIn Address of the input token on the origin (this) chain
      * @param tokenOut Address of the output token on the destination chain
      * @param amountIn Amount of input token provided
      * @param amountOut Amount of output token expected
      * @param recipient Address to receive the funds on the destination chain
-     * @param solver Address of the solver that will fill the order, or zero address if
+     * @param solver Address of the solver that will fill the order, or zero address if any solver can fill
      */
     struct OrderParams {
         uint32 destChainId;
-        uint32 fillDeadline; // order can be filled up to this time, remaining funds can be refunded after this
+        uint32 fillDeadline;
         address tokenIn;
-        bytes32 tokenOut; // 32 bytes used for addresses to accomodate SVM chains in the network
+        bytes32 tokenOut;
         uint128 amountIn;
         uint128 amountOut;
         bytes32 recipient;
-        bytes32 solver; // may be the zero address, in which case the order can be filled by any approved solver
+        bytes32 solver;
     }
 
     /**
      * @notice Parameters required to open a gasless order onchain
-     * @dev Addresses on the destination chain are stored as bytes32 to support non-EVM
+     * @dev Addresses on the destination chain are stored as bytes32 to support non-EVM chains as destinations
      * @dev This payload is hashed and included as the internal digest of the
      *      EIP-712 payload required for gasless order submission
      * @param version Version of the contract the order is created for
@@ -141,7 +141,7 @@ interface IOrderBook {
      * @param amountIn Amount of input token provided
      * @param amountOut Amount of output token expected
      * @param recipient Address to receive the funds on the destination chain
-     * @param solver Address of the solver that will fill the order, or zero address if any approved solver can fill
+     * @param solver Address of the solver that will fill the order, or zero address if any solver can fill
      */
     struct GaslessOrderParams {
         uint16 version;
@@ -159,7 +159,7 @@ interface IOrderBook {
     }
 
     /**
-     * @notice Possible order statuses.
+     * @notice Possible order statuses
      */
     enum OrderStatus {
         DoesNotExist,
@@ -187,25 +187,25 @@ interface IOrderBook {
      */
     struct Order {
         OrderStatus status; // slot 1: 1 +
-        uint16 version; //         2 +
-        address sender; //         20 +
-        uint64 nonce; //         8 = 31 bytes
+        uint16 version; //             2 +
+        address sender; //             20 +
+        uint64 nonce; //               8 = 31 bytes
         uint32 destChainId; // slot 2: 4 +
-        uint32 fillDeadline; //         4 +
-        uint32 cancelRequestedAt; //         4 +
-        address tokenIn; //         20 = 32 bytes
-        bytes32 tokenOut; // slot 3
-        uint128 amountIn; // slot 4: 16 +
-        uint128 amountOut; //         16 = 32 bytes
-        bytes32 recipient; // slot 5
-        bytes32 solver; // slot 6
+        uint32 fillDeadline; //        4 +
+        uint32 cancelRequestedAt; //   4 +
+        address tokenIn; //            20 = 32 bytes
+        bytes32 tokenOut; //   slot 3
+        uint128 amountIn; //   slot 4: 16 +
+        uint128 amountOut; //          16 = 32 bytes
+        bytes32 recipient; //  slot 5
+        bytes32 solver; //     slot 6
     }
 
     /**
      * @notice Data required to identify and fill an order on a destination chain
      * @dev This struct is used to compute a unique order ID and to provide all necessary
-     *      information to fill the order on the destination chain.
-     *      The order ID is computed as the keccak256 hash of the packed-encoding of this struct.
+     *      information to fill the order on the destination chain
+     *      The order ID is computed as the keccak256 hash of the packed-encoding of this struct
      * @param version Version of the contract when the order was created
      * @param sender Address that provided the funds on the origin chain
      * @param nonce A counter tied to the sender to allow unique orders
@@ -237,13 +237,13 @@ interface IOrderBook {
     /**
      * @notice Data reported from a destination chain back to the origin chain about a fill
      * @dev This struct is sent by the messenger contract to report fills that occurred
-     *      on the destination chain back to the origin chain for refund processing.
+     *      on the destination chain back to the origin chain for refund processing
      * @param orderId The ID of the order being reported
      * @param amountInToRelease The amount of input token to release to the filler on the origin chain
      * @param amountOutFilled The amount of output token that was filled on the destination chain
      * @param originRecipient The address on the origin chain that should receive released funds
-     * @param tokenIn The address of the input token on the origin chain.
-     *                This is included for non-EVM chains to provide a way to resolve the account.
+     * @param tokenIn The address of the input token on the origin chain
+     *                This is included for non-EVM chains to provide a way to resolve the token
      */
     struct FillReport {
         bytes32 orderId;
@@ -256,7 +256,7 @@ interface IOrderBook {
     /**
      * @notice Parameters supplied by the filler of an order
      * @dev This struct contains parameters that are specific to the filler
-     *      and are not part of the original order data.
+     *      and are not part of the original order data
      * @param amountOutToFill The amount of output token the filler is providing to fill
      * @param originRecipient The address on the origin chain that should receive released funds
      */
@@ -332,7 +332,7 @@ interface IOrderBook {
     ) external returns (bytes32);
 
     /**
-     * @notice Opens a gasless order on behalf of a user.
+     * @notice Opens a gasless order on behalf of a user
      * @dev More flexible method relying on an offchain signature to authorize order creation
      * @param orderParams_ gasless order creation parameters (see GaslessOrderParams definition)
      * @param orderSignature_ Order sender's signature of the EIP-712 payload
@@ -402,10 +402,10 @@ interface IOrderBook {
     /**
      * @notice Refund any remaining unfilled amount of an order to the originator
      *         after its (fill deadline or request cancellation)
-     *         timestamp  + finality buffer has passed
+     *         timestamp + finality buffer has passed
      * @dev    Can be called by anyone. This allows applications to gracefully
-     *         handle refunds for orders that weren't filled.
-     *         Alternatively, if a user requested a refund, they can claim it here.
+     *         handle refunds for orders that weren't filled
+     *         Alternatively, if a user requested a refund, they can claim it here
      * @param  orderId_ ID of the order to claim a refund for
      */
     function claimRefund(bytes32 orderId_) external;
@@ -415,18 +415,19 @@ interface IOrderBook {
     /**
      * @notice Fill an order on this chain
      * @param orderId_ ID of the order to fill
-     * @param orderData_ OrderData payload with all order information required to identify an order to be filled.
+     * @param orderData_ OrderData payload with all order information required to identify an order to be filled
      * @param fillerParams_ Parameters supplied by the solver of the order
-     * @dev   The orderData is packed and hashed to verify the order ID as a safeguard for solvers.
+     * @dev   The orderData is packed and hashed to verify the order ID as a safeguard for solvers
      */
     function fillOrder(bytes32 orderId_, OrderData calldata orderData_, FillParams calldata fillerParams_) external;
 
     /**
      * @notice Fill an order on this chain with additional message data required by some crosschain messages
      * @param orderId_ ID of the order to fill
-     * @param orderData_ OrderData payload with all order information required to identify an order to be filled.
+     * @param orderData_ OrderData payload with all order information required to identify an order to be filled
      * @param fillerParams_ Parameters supplied by the solver of the order
      * @param messageData_ Additional message data required by some crosschain message protocols (see PortalV2 for more info)
+     * @dev   The orderData is packed and hashed to verify the order ID as a safeguard for solvers
      */
     function fillOrder(
         bytes32 orderId_,
@@ -447,9 +448,11 @@ interface IOrderBook {
     /**
      * @notice Set external chain support and finality buffer configuration
      * @dev Must be DEFAULT_ADMIN_ROLE to call
+     * @dev The new finality buffer becomes effective after waiting for the existing buffer duration
+     *      to avoid certain race conditions that could result in lost funds for solvers
      * @param destChainId_ The chain ID for the destination chain used by the messenger
      * @param isSupported_ whether support for the chain should be enabled (true activates, false deactivates)
-     * @param finalityBuffer_ duration (in seconds) to wait for messages from the destination
+     * @param finalityBuffer_ new duration (in seconds) to wait for messages from the destination
      *        chain to be finalized after deadlines for safe processing
      */
     function setDestinationConfig(uint32 destChainId_, bool isSupported_, uint32 finalityBuffer_) external;
