@@ -64,6 +64,21 @@ interface IOrderBook {
      */
     event OrderCompleted(bytes32 orderId);
 
+    /**
+     * @notice Emitted when the configuration for a destination chain is updated
+     * @dev This event is emitted on the origin chain
+     * @param destChainId The internal chain ID of the destination chain
+     * @param newIsSupported Whether orders can be created with this chain as the destination
+     * @param newFinalityBuffer The new finality buffer duration (in seconds)
+     * @param newEffectiveTimestamp The timestamp when the new status and/or finality buffer becomes effective
+     */
+    event DestinationConfigUpdated(
+        uint32 indexed destChainId,
+        bool newIsSupported,
+        uint32 newFinalityBuffer,
+        uint64 newEffectiveTimestamp
+    );
+
     /* ========== Errors ========== */
     error AmountInZero();
     error AmountOutZero();
@@ -249,10 +264,15 @@ interface IOrderBook {
      * @notice Configuration for a supported destination chain
      * @param isSupported Whether orders can be created with this chain as the destination
      * @param finalityBuffer Duration (in seconds) to wait after the fill deadline before allowing refunds
+     * @param newFinalityBuffer New duration (in seconds) to wait after the fill deadline before allowing refunds
+     * @param newFinalityBufferEffectiveTimestamp Timestamp when the new finality buffer becomes effective
      */
     struct Destination {
         bool isSupported;
+        bool newIsSupported;
         uint32 finalityBuffer;
+        uint32 newFinalityBuffer;
+        uint64 newEffectiveTimestamp;
     }
 
     /**
@@ -461,6 +481,9 @@ interface IOrderBook {
      * @dev If a chain is not supported, this will return 0
      */
     function getDestinationFinalityBuffer(uint32 destChainId_) external view returns (uint32);
+
+    /// @notice Returns the full destination configuration for the provided chain ID
+    function getDestinationConfig(uint32 destChainId_) external view returns (Destination memory);
 
     /* ========== EIP-712 Digest Functions ========== */
 

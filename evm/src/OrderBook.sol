@@ -512,10 +512,69 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         bool isSupported_,
         uint32 finalityBuffer_
     ) external override onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (destChainId_ == chainId) revert InvalidDestinationChain();
         if (isSupported_ && finalityBuffer_ == 0) revert InvalidFinalityBuffer();
 
-        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-        $.destinations[destChainId_] = Destination({ isSupported: isSupported_, finalityBuffer: finalityBuffer_ });
+        Destination storage destination = _getOrderBookStorageLocation().destinations[destChainId_];
+
+        // Existing State Cases
+        // 1. Destination is not supported currently
+        // 2. Destination is supported currently and we are removing support
+        // 3. Destination is supported currently and we are updating the finality buffer
+
+        // Case 1: Destination is not supported currently
+        // Do a fresh initialization of the destination config
+        if (!destination.isSupported) {
+            destination.isSupported = isSupported_; // If isSupported_ is false, this is effectively a no-op since the destination isn't supported
+            uint32 finalityBuffer = isSupported_ ? finalityBuffer_ : 0;
+            destination.finalityBuffer = finalityBuffer;
+            destination.newFinalityBuffer = finalityBuffer;
+            destination.newEffectiveTimestamp = uint64(block.timestamp);
+
+            emit DestinationConfigUpdated(
+                destChainId_,
+                isSupported_,
+                finalityBuffer,
+                destination.newEffectiveTimestamp
+            );
+
+            return;
+        }
+
+        // Case 2: Destination is supported currently and we are removing support
+        uint32 effectiveFinalityBuffer = getDestinationFinalityBuffer(destChainId_);
+        if (!isSupported_) {
+            // Disabling support for the destination chain after existing orders are completed
+            destination.newIsSupported = false;
+
+            // Update the finality buffer to the current effective finality buffer
+            destination.finalityBuffer = effectiveFinalityBuffer;
+
+            // Ensure the other fields are reset
+            destination.newFinalityBuffer = 0;
+            destination.newEffectiveTimestamp = uint64(block.timestamp) + effectiveFinalityBuffer;
+
+            emit DestinationConfigUpdated(
+                destChainId_,
+                isSupported_,
+                destination.newFinalityBuffer,
+                destination.newEffectiveTimestamp
+            );
+
+            return;
+        }
+
+        // Case 3: Destination is supported currently and we are updating the finality buffer
+        // If reducing the finality buffer, set the effective timestamp to now + the old finality buffer
+        // This is to allow existing orders to still respect the old finality buffer
+        // If increasing the finality buffer, it can be set immediately
+        destination.newEffectiveTimestamp = finalityBuffer_ < effectiveFinalityBuffer
+            ? uint64(block.timestamp) + effectiveFinalityBuffer
+            : uint64(block.timestamp);
+        destination.finalityBuffer = effectiveFinalityBuffer;
+        destination.newFinalityBuffer = finalityBuffer_;
+
+        emit DestinationConfigUpdated(destChainId_, isSupported_, finalityBuffer_, destination.newEffectiveTimestamp);
     }
 
     /* ========== View Functions ========== */
@@ -557,14 +616,22 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         return $.senderNonces[sender_];
     }
 
-    function isDestinationSupported(uint32 destChainId_) external view override returns (bool) {
-        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-        return $.destinations[destChainId_].isSupported;
+    function isDestinationSupported(uint32 destChainId_) public view override returns (bool) {
+        Destination storage destination = _getOrderBookStorageLocation().destinations[destChainId_];
+        return
+            destination.newEffectiveTimestamp >= block.timestamp ? destination.newIsSupported : destination.isSupported;
     }
 
-    function getDestinationFinalityBuffer(uint32 destChainId_) external view override returns (uint32) {
-        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-        return $.destinations[destChainId_].finalityBuffer;
+    function getDestinationFinalityBuffer(uint32 destChainId_) public view override returns (uint32) {
+        Destination storage destination = _getOrderBookStorageLocation().destinations[destChainId_];
+        return
+            destination.newEffectiveTimestamp >= block.timestamp
+                ? destination.newFinalityBuffer
+                : destination.finalityBuffer;
+    }
+
+    function getDestinationConfig(uint32 destChainId_) public view override returns (Destination memory) {
+        return _getOrderBookStorageLocation().destinations[destChainId_];
     }
 
     /* ========== EIP-712 Digest Functions ========== */
