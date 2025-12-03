@@ -25,7 +25,7 @@ pub struct ClaimRefund<'info> {
     pub global_account: Account<'info, OrderBookGlobal>,
 
     #[account(
-        seeds = [DESTINATION_SEED_PREFIX, order.data.dest_chain_id.to_le_bytes().as_ref()],
+        seeds = [DESTINATION_SEED_PREFIX, order.data.dest_chain_id.to_be_bytes().as_ref()],
         bump = destination_account.bump
     )]
     pub destination_account: Option<Account<'info, Destination>>,
@@ -79,12 +79,12 @@ impl ClaimRefund<'_> {
         let current_timestamp = Clock::get()?.unix_timestamp as u64;
         if order.status == OrderStatus::Created {
             require!(
-                order.fill_deadline + finality_buffer <= current_timestamp,
+                current_timestamp >= order.fill_deadline + finality_buffer,
                 OrderBookError::FinalityPending
             )
         } else if order.status == OrderStatus::CancelRequested {
             require!(
-                order.cancel_requested_at + finality_buffer <= current_timestamp,
+                current_timestamp >= order.cancel_requested_at + finality_buffer,
                 OrderBookError::FinalityPending
             )
         } else {
