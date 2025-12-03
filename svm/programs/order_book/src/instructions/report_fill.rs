@@ -66,6 +66,7 @@ pub struct ReportOrderFill<'info> {
     pub recipient_token_in_ata: InterfaceAccount<'info, TokenAccount>,
 
     #[account(
+        mut,
         associated_token::mint = token_in_mint,
         associated_token::authority = order.key(),
         associated_token::token_program = token_in_program
