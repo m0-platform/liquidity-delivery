@@ -53,5 +53,5 @@ pub enum OrderBookError {
     #[msg("Order is already filled")]
     OrderFilled,
     #[msg("Order status is not finalized")]
-    FinalityPending
+    FinalityPending,
 }

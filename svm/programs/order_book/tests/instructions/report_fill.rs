@@ -1,7 +1,7 @@
 use super::super::{OrderBookTest, CHAIN_ID, DEST_CHAIN_ID, INITIAL_FUNDS};
 use anchor_litesvm::{AssertionHelpers, Keypair, Signer, TestHelpers};
 use anchor_spl::associated_token::get_associated_token_address;
-use order_book::{error::OrderBookError, ORDER_SEED_PREFIX, FillReport};
+use order_book::{error::OrderBookError, FillReport, ORDER_SEED_PREFIX};
 use std::error::Error;
 
 // ReportOrderFill instruction tests
@@ -43,7 +43,11 @@ use std::error::Error;
 // [X] given the order status is CancelRequested
 //   [X] it still processes the fill (CancelRequested orders can be filled)
 
-fn default_fill_report(test: &OrderBookTest,order_id: [u8; 32], origin_recipient: [u8; 32]) -> FillReport {
+fn default_fill_report(
+    test: &OrderBookTest,
+    order_id: [u8; 32],
+    origin_recipient: [u8; 32],
+) -> FillReport {
     FillReport {
         order_id,
         amount_in_to_release: 500_000,
@@ -76,15 +80,20 @@ fn test_report_fill_unauthorized_messenger_reverts() -> Result<(), Box<dyn Error
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
     // Create fill report
-    let fill_report = default_fill_report(&test, order_id, test.get_user("solver").pubkey().to_bytes());
+    let fill_report =
+        default_fill_report(&test, order_id, test.get_user("solver").pubkey().to_bytes());
 
     // Build accounts with wrong messenger authority
     let messenger_authority = test.get_user("bob");
-    let accounts =
-        test.build_report_fill_accounts(&test.get_user("admin").pubkey(), &messenger_authority.pubkey(), &fill_report)?;
+    let accounts = test.build_report_fill_accounts(
+        &test.get_user("admin").pubkey(),
+        &messenger_authority.pubkey(),
+        &fill_report,
+    )?;
 
-
-    let ix = test.ctx.program()
+    let ix = test
+        .ctx
+        .program()
         .accounts(accounts)
         .args(order_book::instruction::ReportOrderFill { fill_report })
         .instruction()?;

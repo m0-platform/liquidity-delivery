@@ -1,4 +1,4 @@
-use anchor_lang::{prelude::*,solana_program::keccak};
+use anchor_lang::{prelude::*, solana_program::keccak};
 
 use crate::VERSION;
 
@@ -8,14 +8,14 @@ pub enum OrderStatus {
     DoesNotExist,
     Created,
     CancelRequested,
-    Completed
+    Completed,
 }
 
 #[repr(u8)]
 #[derive(AnchorDeserialize, AnchorSerialize, InitSpace, Clone, Debug, PartialEq)]
 pub enum OrderType {
     Native,
-    Foreign
+    Foreign,
 }
 
 #[constant]
@@ -39,11 +39,11 @@ pub struct NativeOrder {
     pub fill_deadline: u64,
     pub cancel_requested_at: u64,
     pub token_in: Pubkey,
-    pub token_out: [u8; 32], 
+    pub token_out: [u8; 32],
     pub amount_in: u128,
     pub amount_out: u128,
-    pub recipient: [u8; 32], 
-    pub solver: [u8; 32], 
+    pub recipient: [u8; 32],
+    pub solver: [u8; 32],
     pub amount_in_released: u128,
     pub amount_out_filled: u128,
 }
@@ -118,19 +118,18 @@ impl OrderData {
             amount_in: native_order.amount_in,
             amount_out: native_order.amount_out,
             recipient: native_order.recipient,
-            solver: native_order.solver
+            solver: native_order.solver,
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use alloy::{
+        primitives::{keccak256, FixedBytes},
+        sol,
         sol_types::SolValue,
-        primitives::{FixedBytes, keccak256},
-        sol
     };
 
     sol! {
@@ -155,7 +154,10 @@ mod tests {
             solver: FixedBytes::<32>::new([4u8; 32]),
         };
 
-        println!("EVM Version with Packed Encoding: {:?}", evm_order_data.abi_encode_packed());
+        println!(
+            "EVM Version with Packed Encoding: {:?}",
+            evm_order_data.abi_encode_packed()
+        );
 
         let expected_hash = keccak256(evm_order_data.abi_encode_packed()).0;
 
@@ -174,11 +176,11 @@ mod tests {
             solver: [4u8; 32],
         };
 
-        println!("SVM Version with Packed Encoding: {:?}", encode_order_data(&order_data));
-
-        assert_eq!(
-            order_data.compute_order_id(),
-            expected_hash
+        println!(
+            "SVM Version with Packed Encoding: {:?}",
+            encode_order_data(&order_data)
         );
+
+        assert_eq!(order_data.compute_order_id(), expected_hash);
     }
 }

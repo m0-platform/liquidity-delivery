@@ -1,14 +1,13 @@
-use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{Mint, TokenInterface, TokenAccount};
 use crate::{
     error::OrderBookError,
     state::{
-        Order, NativeOrder, OrderStatus,
-        ORDER_SEED_PREFIX, GLOBAL_SEED, OrderBookGlobal,
-        DESTINATION_SEED_PREFIX, Destination,
+        Destination, NativeOrder, Order, OrderBookGlobal, OrderStatus, DESTINATION_SEED_PREFIX,
+        GLOBAL_SEED, ORDER_SEED_PREFIX,
     },
     utils::transfer_tokens_from_program,
 };
+use anchor_lang::prelude::*;
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
 #[event_cpi]
 #[derive(Accounts)]
@@ -29,14 +28,14 @@ pub struct ClaimRefund<'info> {
         bump = destination_account.bump
     )]
     pub destination_account: Option<Account<'info, Destination>>,
-    
+
     #[account(
         mut,
         seeds = [ORDER_SEED_PREFIX, order_id.as_ref()],
         bump = order.bump,
         constraint = order.data.sender == sender.key() @ OrderBookError::NotAuthorized,
     )]
-    pub order: Account<'info, Order::<NativeOrder>>,
+    pub order: Account<'info, Order<NativeOrder>>,
 
     #[account(
         address = order.data.token_in @ OrderBookError::InvalidTokenMint,
@@ -67,7 +66,10 @@ impl ClaimRefund<'_> {
     fn validate(&self) -> Result<()> {
         // Validate the destination account exists if the order's destination chain is not the current chain
         let finality_buffer = if self.order.data.dest_chain_id != self.global_account.chain_id {
-            let destination_account = self.destination_account.as_ref().ok_or(OrderBookError::DestinationAccountRequired)?;
+            let destination_account = self
+                .destination_account
+                .as_ref()
+                .ok_or(OrderBookError::DestinationAccountRequired)?;
             destination_account.finality_buffer
         } else {
             0
@@ -110,7 +112,11 @@ impl ClaimRefund<'_> {
                 amount,
                 &ctx.accounts.token_in_mint,
                 &ctx.accounts.order.to_account_info(),
-                &[&[ORDER_SEED_PREFIX, order_id.as_ref(), &[ctx.accounts.order.bump]]],
+                &[&[
+                    ORDER_SEED_PREFIX,
+                    order_id.as_ref(),
+                    &[ctx.accounts.order.bump],
+                ]],
                 &ctx.accounts.token_in_program,
             )?;
         } else {
@@ -124,8 +130,6 @@ impl ClaimRefund<'_> {
         });
 
         Ok(())
-
-
     }
 }
 

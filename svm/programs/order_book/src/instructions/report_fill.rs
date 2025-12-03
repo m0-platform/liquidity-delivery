@@ -20,7 +20,6 @@ pub struct FillReport {
     pub token_in: [u8; 32],
 }
 
-
 #[event_cpi]
 #[derive(Accounts)]
 #[instruction(fill_report: FillReport)]
@@ -42,7 +41,7 @@ pub struct ReportOrderFill<'info> {
         seeds = [ORDER_SEED_PREFIX, fill_report.order_id.as_ref()],
         bump = order.bump,
     )]
-    pub order: Account<'info, Order::<NativeOrder>>,
+    pub order: Account<'info, Order<NativeOrder>>,
 
     #[account(
         address = order.data.token_in @ OrderBookError::InvalidTokenMint,

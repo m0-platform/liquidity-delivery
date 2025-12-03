@@ -1,7 +1,7 @@
 mod instructions;
 
 use anchor_lang::{
-    prelude::{AccountMeta, ToAccountMetas, declare_program},
+    prelude::{declare_program, AccountMeta, ToAccountMetas},
     solana_program::instruction::Instruction,
 };
 use anchor_litesvm::{
@@ -125,7 +125,7 @@ impl OrderBookTest {
                     .get_pda(&[order_book::state::GLOBAL_SEED], &order_book::ID),
                 system_program: anchor_lang::solana_program::system_program::ID,
             })
-            .args(order_book::instruction::Initialize { 
+            .args(order_book::instruction::Initialize {
                 chain_id: CHAIN_ID,
                 messenger_authority: messenger_authority.pubkey(),
             })
@@ -353,9 +353,8 @@ impl OrderBookTest {
 
         // Send transaction
         self.ctx.execute_instruction(create_ata_ix, &[&payer])?;
-        
-        Ok(ata)
 
+        Ok(ata)
     }
 
     // Helpers to construct account objects to pass to instructions
@@ -497,8 +496,7 @@ impl OrderBookTest {
             .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
         let (_, native_order_data) = self.get_native_order_account(&order_id)?;
 
-        let destination_account = if native_order_data.data.dest_chain_id != global_data.chain_id
-        {
+        let destination_account = if native_order_data.data.dest_chain_id != global_data.chain_id {
             Some(self.ctx.svm.get_pda(
                 &[
                     order_book::state::DESTINATION_SEED_PREFIX,
@@ -551,7 +549,7 @@ impl OrderBookTest {
             program: order_book::ID,
             event_authority: self.get_event_authority()?,
             relayer: *relayer,
-            messenger_authority: *messenger_authority,    
+            messenger_authority: *messenger_authority,
             global_account,
             order: order_account,
             token_in_mint,
@@ -584,7 +582,10 @@ impl OrderBookTest {
                 global_account,
                 system_program: anchor_lang::solana_program::system_program::ID,
             })
-            .args(order_book::instruction::Initialize { chain_id, messenger_authority: *messenger_authority })
+            .args(order_book::instruction::Initialize {
+                chain_id,
+                messenger_authority: *messenger_authority,
+            })
             .instruction()?;
 
         Ok(ix)
@@ -821,11 +822,8 @@ impl OrderBookTest {
         messenger_authority: &Pubkey,
         fill_report: &order_book::instructions::FillReport,
     ) -> Result<Instruction, Box<dyn Error>> {
-        let accounts = self.build_report_fill_accounts(
-            relayer,
-            messenger_authority,
-            fill_report
-        )?;
+        let accounts =
+            self.build_report_fill_accounts(relayer, messenger_authority, fill_report)?;
 
         let ix = self
             .ctx
@@ -934,9 +932,14 @@ impl OrderBookTest {
         let relayer_keypair = self.users.get(relayer).unwrap();
         let messenger_authority = self.users.get("messenger_authority").unwrap();
 
-        let ix = self.create_report_fill_ix(&relayer_keypair.pubkey(), &messenger_authority.pubkey(), fill_report)?;
+        let ix = self.create_report_fill_ix(
+            &relayer_keypair.pubkey(),
+            &messenger_authority.pubkey(),
+            fill_report,
+        )?;
 
-        self.ctx.execute_instruction(ix, &[relayer_keypair, messenger_authority])?
+        self.ctx
+            .execute_instruction(ix, &[relayer_keypair, messenger_authority])?
             .assert_success();
         Ok(())
     }

@@ -1,7 +1,7 @@
 use super::super::{OrderBookTest, CHAIN_ID, DEST_CHAIN_ID};
 use anchor_litesvm::{AssertionHelpers, Signer, TestHelpers};
 use anchor_spl::associated_token::get_associated_token_address;
-use order_book::{ORDER_SEED_PREFIX, error::OrderBookError};
+use order_book::{error::OrderBookError, ORDER_SEED_PREFIX};
 use std::error::Error;
 
 mod local_orders {
@@ -63,7 +63,8 @@ mod local_orders {
 
         let ix = test.create_claim_refund_ix_with_custom_accounts(accounts, order_id)?;
 
-        test.ctx.execute_instruction(ix, &[&wrong_sender])?
+        test.ctx
+            .execute_instruction(ix, &[&wrong_sender])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::NotAuthorized));
 
         Ok(())
@@ -76,7 +77,10 @@ mod local_orders {
 
         // Try to claim refund for non-existent order
         let fake_order_id = [99u8; 32];
-        let fake_order_account = test.ctx.svm.get_pda(&[ORDER_SEED_PREFIX, &fake_order_id], &order_book::ID);
+        let fake_order_account = test
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &fake_order_id], &order_book::ID);
         let fake_order_token_in_ata = test.create_associated_token_account(
             &test.get_mint("token-in-spl-6"),
             &fake_order_account,
@@ -99,7 +103,9 @@ mod local_orders {
         };
 
         // Create the instruction
-        let ix = test.ctx.program()
+        let ix = test
+            .ctx
+            .program()
             .accounts(accounts)
             .args(order_book::instruction::ClaimRefund {
                 order_id: fake_order_id,
@@ -107,7 +113,8 @@ mod local_orders {
             .instruction()?;
 
         // Execute and expect failure
-        test.ctx.execute_instruction(ix, &[&sender])?
+        test.ctx
+            .execute_instruction(ix, &[&sender])?
             .assert_anchor_error("AccountNotInitialized");
 
         Ok(())
@@ -127,17 +134,21 @@ mod local_orders {
 
         // Verify order is completed
         let (_, order_data) = test.get_native_order_account(&order_id)?;
-        assert_eq!(order_data.data.status, order_book::state::OrderStatus::Completed);
+        assert_eq!(
+            order_data.data.status,
+            order_book::state::OrderStatus::Completed
+        );
 
         // Try to claim refund on completed order
         let ix = test.create_claim_refund_ix(&test.get_user("alice").pubkey(), order_id)?;
 
-        test.ctx.execute_instruction(ix, &[&test.get_user("alice")])?
+        test.ctx
+            .execute_instruction(ix, &[&test.get_user("alice")])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidOrderStatus));
 
         Ok(())
     }
-   
+
     #[test]
     fn test_claim_refund_wrong_token_mint_reverts() -> Result<(), Box<dyn Error>> {
         let mut test = OrderBookTest::new()?;
@@ -151,19 +162,26 @@ mod local_orders {
         test.warp_forward(200);
 
         // Build accounts with wrong token mint
-        let mut accounts = test.build_claim_refund_accounts(&test.get_user("alice").pubkey(), order_id)?;
+        let mut accounts =
+            test.build_claim_refund_accounts(&test.get_user("alice").pubkey(), order_id)?;
 
         // Override with wrong mint
         let wrong_token_mint = test.get_mint("token-in-spl-9");
-        let order_account = test.ctx.svm.get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
-        let order_token_in_ata = test.create_associated_token_account(&wrong_token_mint, &order_account)?;
+        let order_account = test
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
+        let order_token_in_ata =
+            test.create_associated_token_account(&wrong_token_mint, &order_account)?;
         accounts.token_in_mint = wrong_token_mint;
-        accounts.sender_token_in_ata = get_associated_token_address(&test.get_user("alice").pubkey(), &wrong_token_mint);
+        accounts.sender_token_in_ata =
+            get_associated_token_address(&test.get_user("alice").pubkey(), &wrong_token_mint);
         accounts.order_token_in_ata = order_token_in_ata;
 
         let ix = test.create_claim_refund_ix_with_custom_accounts(accounts, order_id)?;
 
-        test.ctx.execute_instruction(ix, &[&test.get_user("alice")])?
+        test.ctx
+            .execute_instruction(ix, &[&test.get_user("alice")])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidTokenMint));
 
         Ok(())
@@ -175,21 +193,24 @@ mod local_orders {
         test.initialize()?;
 
         // Create an order
-        let order_params = default_order_params(&test); 
+        let order_params = default_order_params(&test);
         let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
-        // Warp time past fill_deadline 
+        // Warp time past fill_deadline
         test.warp_forward(200);
 
         // Build accounts with wrong sender ATA
-        let mut accounts = test.build_claim_refund_accounts(&test.get_user("alice").pubkey(), order_id)?;
+        let mut accounts =
+            test.build_claim_refund_accounts(&test.get_user("alice").pubkey(), order_id)?;
 
         // Override with carols's ATA (wrong owner)
-        accounts.sender_token_in_ata = get_associated_token_address(&test.get_user("carol").pubkey(), &accounts.token_in_mint);
+        accounts.sender_token_in_ata =
+            get_associated_token_address(&test.get_user("carol").pubkey(), &accounts.token_in_mint);
 
         let ix = test.create_claim_refund_ix_with_custom_accounts(accounts, order_id)?;
 
-        test.ctx.execute_instruction(ix, &[&test.get_user("carol")])?
+        test.ctx
+            .execute_instruction(ix, &[&test.get_user("carol")])?
             .assert_anchor_error("ConstraintTokenOwner");
 
         Ok(())
@@ -208,16 +229,21 @@ mod local_orders {
         test.warp_forward(200);
 
         // Build accounts with wrong order PDA
-        let mut accounts = test.build_claim_refund_accounts(&test.get_user("alice").pubkey(), order_id)?;
+        let mut accounts =
+            test.build_claim_refund_accounts(&test.get_user("alice").pubkey(), order_id)?;
 
         // Override with wrong order PDA
         let wrong_order_id = [88u8; 32];
-        let wrong_order_account = test.ctx.svm.get_pda(&[ORDER_SEED_PREFIX, &wrong_order_id], &order_book::ID);
+        let wrong_order_account = test
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &wrong_order_id], &order_book::ID);
         accounts.order = wrong_order_account;
 
         let ix = test.create_claim_refund_ix_with_custom_accounts(accounts, order_id)?;
 
-        test.ctx.execute_instruction(ix, &[&test.get_user("alice")])?
+        test.ctx
+            .execute_instruction(ix, &[&test.get_user("alice")])?
             .assert_anchor_error("AccountNotInitialized");
 
         Ok(())
@@ -231,14 +257,14 @@ mod local_orders {
         test.initialize()?;
 
         // Create an order
-        let order_params = default_order_params(&test); 
+        let order_params = default_order_params(&test);
         let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
         // Get initial balance
         let alice_token_in_ata = test.get_ata("token-in-spl-6", "alice");
         let alice_balance_before = test.get_token_balance(&alice_token_in_ata)?;
 
-        // Warp time past fill_deadline 
+        // Warp time past fill_deadline
         test.warp_forward(200);
 
         // Claim refund
@@ -254,7 +280,10 @@ mod local_orders {
 
         // Verify order status is Completed
         let (_, order_data) = test.get_native_order_account(&order_id)?;
-        assert_eq!(order_data.data.status, order_book::state::OrderStatus::Completed);
+        assert_eq!(
+            order_data.data.status,
+            order_book::state::OrderStatus::Completed
+        );
 
         Ok(())
     }
@@ -272,8 +301,12 @@ mod local_orders {
         test.fill_native_order("solver", order_id, 500_000)?;
 
         // Verify order has remaining tokens
-        let order_account = test.ctx.svm.get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
-        let order_token_in_ata = get_associated_token_address(&order_account, &test.get_mint("token-in-spl-6"));
+        let order_account = test
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
+        let order_token_in_ata =
+            get_associated_token_address(&order_account, &test.get_mint("token-in-spl-6"));
         let order_balance = test.get_token_balance(&order_token_in_ata)?;
         assert_eq!(order_balance, 500_000, "Order should have 50% remaining");
 
@@ -297,7 +330,10 @@ mod local_orders {
 
         // Verify order status is Completed
         let (_, order_data) = test.get_native_order_account(&order_id)?;
-        assert_eq!(order_data.data.status, order_book::state::OrderStatus::Completed);
+        assert_eq!(
+            order_data.data.status,
+            order_book::state::OrderStatus::Completed
+        );
 
         Ok(())
     }
@@ -332,7 +368,10 @@ mod local_orders {
 
         // Verify order status is Completed
         let (_, order_data) = test.get_native_order_account(&order_id)?;
-        assert_eq!(order_data.data.status, order_book::state::OrderStatus::Completed);
+        assert_eq!(
+            order_data.data.status,
+            order_book::state::OrderStatus::Completed
+        );
 
         Ok(())
     }
@@ -377,7 +416,7 @@ mod xchain_orders {
         }
     }
 
-     #[test]
+    #[test]
     fn test_claim_refund_finality_pending_created_status_reverts() -> Result<(), Box<dyn Error>> {
         let mut test = OrderBookTest::new()?;
         test.initialize()?;
@@ -402,7 +441,8 @@ mod xchain_orders {
         // Try to claim refund before finality buffer passes
         let ix = test.create_claim_refund_ix(&test.get_user("alice").pubkey(), order_id)?;
 
-        test.ctx.execute_instruction(ix, &[&test.get_user("alice")])?
+        test.ctx
+            .execute_instruction(ix, &[&test.get_user("alice")])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::FinalityPending));
 
         Ok(())
@@ -426,7 +466,8 @@ mod xchain_orders {
         // Try to claim refund before finality buffer passes
         let ix = test.create_claim_refund_ix(&test.get_user("alice").pubkey(), order_id)?;
 
-        test.ctx.execute_instruction(ix, &[&test.get_user("alice")])?
+        test.ctx
+            .execute_instruction(ix, &[&test.get_user("alice")])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::FinalityPending));
 
         Ok(())
@@ -438,7 +479,7 @@ mod xchain_orders {
         test.initialize()?;
 
         // Create an order with foreign destination
-        let order_params = default_order_params(&test); 
+        let order_params = default_order_params(&test);
         let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
         // Warp time past fill_deadline + finality buffer
@@ -446,24 +487,26 @@ mod xchain_orders {
         test.warp_forward(200 + dest_data.finality_buffer);
 
         // Build accounts but remove destination account
-        let mut accounts = test.build_claim_refund_accounts(&test.get_user("alice").pubkey(), order_id)?;
+        let mut accounts =
+            test.build_claim_refund_accounts(&test.get_user("alice").pubkey(), order_id)?;
         accounts.destination_account = None;
 
         let ix = test.create_claim_refund_ix_with_custom_accounts(accounts, order_id)?;
 
-        test.ctx.execute_instruction(ix, &[&test.get_user("alice")])?
+        test.ctx
+            .execute_instruction(ix, &[&test.get_user("alice")])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::DestinationAccountRequired));
 
         Ok(())
     }
 
-     #[test]
+    #[test]
     fn test_claim_refund_expired_order_success() -> Result<(), Box<dyn Error>> {
         let mut test = OrderBookTest::new()?;
         test.initialize()?;
 
         // Create an order
-        let order_params = default_order_params(&test); 
+        let order_params = default_order_params(&test);
         let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
         test.ctx.svm.expire_blockhash();
 
@@ -489,7 +532,10 @@ mod xchain_orders {
 
         // Verify order status is Completed
         let (_, order_data) = test.get_native_order_account(&order_id)?;
-        assert_eq!(order_data.data.status, order_book::state::OrderStatus::Completed);
+        assert_eq!(
+            order_data.data.status,
+            order_book::state::OrderStatus::Completed
+        );
 
         Ok(())
     }
@@ -527,7 +573,10 @@ mod xchain_orders {
 
         // Verify order status is Completed
         let (_, order_data) = test.get_native_order_account(&order_id)?;
-        assert_eq!(order_data.data.status, order_book::state::OrderStatus::Completed);
+        assert_eq!(
+            order_data.data.status,
+            order_book::state::OrderStatus::Completed
+        );
 
         Ok(())
     }
@@ -552,8 +601,12 @@ mod xchain_orders {
         test.report_fill("admin", &fill_report)?;
 
         // Verify order has remaining tokens
-        let order_account = test.ctx.svm.get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
-        let order_token_in_ata = get_associated_token_address(&order_account, &test.get_mint("token-in-spl-6"));
+        let order_account = test
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
+        let order_token_in_ata =
+            get_associated_token_address(&order_account, &test.get_mint("token-in-spl-6"));
         let order_balance = test.get_token_balance(&order_token_in_ata)?;
         assert_eq!(order_balance, 500_000, "Order should have 50% remaining");
 
@@ -578,18 +631,25 @@ mod xchain_orders {
 
         // Verify order status is Completed
         let (_, order_data) = test.get_native_order_account(&order_id)?;
-        assert_eq!(order_data.data.status, order_book::state::OrderStatus::Completed);
+        assert_eq!(
+            order_data.data.status,
+            order_book::state::OrderStatus::Completed
+        );
 
         Ok(())
     }
 
-        #[test]
+    #[test]
     fn test_claim_refund_by_third_party_success() -> Result<(), Box<dyn Error>> {
         let mut test = OrderBookTest::new()?;
         test.initialize()?;
 
         // Alice creates an order
-        let current_time = test.ctx.svm.get_sysvar::<anchor_lang::prelude::Clock>().unix_timestamp as u64;
+        let current_time = test
+            .ctx
+            .svm
+            .get_sysvar::<anchor_lang::prelude::Clock>()
+            .unix_timestamp as u64;
         let order_params = order_book::instructions::open::OrderParams {
             dest_chain_id: DEST_CHAIN_ID,
             fill_deadline: current_time + 100,
@@ -623,11 +683,11 @@ mod xchain_orders {
 
         // Verify order status is Completed
         let (_, order_data) = test.get_native_order_account(&order_id)?;
-        assert_eq!(order_data.data.status, order_book::state::OrderStatus::Completed);
+        assert_eq!(
+            order_data.data.status,
+            order_book::state::OrderStatus::Completed
+        );
 
         Ok(())
     }
-
-
 }
-

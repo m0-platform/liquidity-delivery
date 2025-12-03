@@ -1,17 +1,17 @@
+use crate::{
+    constants::{ANCHOR_DISCRIMINATOR_SIZE, VERSION},
+    error::OrderBookError,
+    state::{
+        compute_order_id, Destination, NativeOrder, Nonce, Order, OrderBookGlobal, OrderData,
+        OrderStatus, OrderType, DESTINATION_SEED_PREFIX, GLOBAL_SEED, NONCE_SEED_PREFIX,
+        ORDER_SEED_PREFIX,
+    },
+    utils::transfer_tokens,
+};
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
     token_interface::{Mint, TokenAccount, TokenInterface},
-};
-use crate::{
-    state::{
-        Order, OrderData, OrderType, NativeOrder, OrderStatus, ORDER_SEED_PREFIX,
-        Nonce, NONCE_SEED_PREFIX, OrderBookGlobal, GLOBAL_SEED, compute_order_id,
-        DESTINATION_SEED_PREFIX, Destination,
-    },
-    utils::transfer_tokens,
-    constants::{VERSION, ANCHOR_DISCRIMINATOR_SIZE},
-    error::OrderBookError,
 };
 use std::ops::Deref;
 
@@ -51,11 +51,11 @@ pub struct OpenOrder<'info> {
 
     #[account(mint::token_program = token_in_program)]
     pub token_in_mint: InterfaceAccount<'info, Mint>,
-    
+
     #[account(
         mut,
         token::mint = token_in_mint,
-        token::token_program = token_in_program,   
+        token::token_program = token_in_program,
     )]
     pub sender_token_in_account: InterfaceAccount<'info, TokenAccount>,
 
@@ -89,7 +89,7 @@ pub struct OpenOrder<'info> {
             ],
             bump
         )]
-    pub order: Account<'info, Order::<NativeOrder>>,
+    pub order: Account<'info, Order<NativeOrder>>,
 
     #[account(
         init_if_needed,
@@ -112,14 +112,23 @@ impl OpenOrder<'_> {
         // Validate the destination
         // If the destination chain is not the current chain, ensure the destination is supported
         if params.dest_chain_id != self.global_account.chain_id {
-            let destination_account = self.destination_account.as_ref().ok_or(OrderBookError::DestinationNotSupported)?;
-            require!(destination_account.is_supported, OrderBookError::DestinationNotSupported);
+            let destination_account = self
+                .destination_account
+                .as_ref()
+                .ok_or(OrderBookError::DestinationNotSupported)?;
+            require!(
+                destination_account.is_supported,
+                OrderBookError::DestinationNotSupported
+            );
         }
 
         // Validate params
         require!(params.amount_in > 0, OrderBookError::InvalidAmountIn);
         require!(params.amount_out > 0, OrderBookError::InvalidAmountOut);
-        require!(params.fill_deadline >= Clock::get()?.unix_timestamp as u64, OrderBookError::InvalidFillDeadline);
+        require!(
+            params.fill_deadline >= Clock::get()?.unix_timestamp as u64,
+            OrderBookError::InvalidFillDeadline
+        );
 
         Ok(())
     }
@@ -185,17 +194,15 @@ impl OpenOrder<'_> {
         )?;
 
         // Emit the event
-        emit_cpi!(
-            OrderOpened {
-                order_id,
-                token_in: ctx.accounts.token_in_mint.key(),
-                amount_in: params.amount_in,
-                dest_chain_id: params.dest_chain_id,
-                token_out: params.token_out,
-                amount_out: params.amount_out,
-                solver: params.solver,
-            }
-        );
+        emit_cpi!(OrderOpened {
+            order_id,
+            token_in: ctx.accounts.token_in_mint.key(),
+            amount_in: params.amount_in,
+            dest_chain_id: params.dest_chain_id,
+            token_out: params.token_out,
+            amount_out: params.amount_out,
+            solver: params.solver,
+        });
 
         Ok(())
     }

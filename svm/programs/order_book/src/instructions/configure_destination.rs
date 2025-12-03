@@ -3,10 +3,7 @@ use anchor_lang::prelude::*;
 use crate::{
     constants::ANCHOR_DISCRIMINATOR_SIZE,
     error::OrderBookError,
-    state::{
-        DESTINATION_SEED_PREFIX, Destination,
-        GLOBAL_SEED, OrderBookGlobal,
-    },
+    state::{Destination, OrderBookGlobal, DESTINATION_SEED_PREFIX, GLOBAL_SEED},
 };
 
 #[derive(Accounts)]
@@ -34,7 +31,6 @@ pub struct ConfigureDestination<'info> {
     pub system_program: Program<'info, System>,
 }
 
-
 impl ConfigureDestination<'_> {
     fn validate(&self, is_supported: bool, finality_buffer: Option<u64>) -> Result<()> {
         if is_supported {
@@ -46,7 +42,12 @@ impl ConfigureDestination<'_> {
     }
 
     #[access_control(ctx.accounts.validate(is_supported, finality_buffer))]
-    pub fn handler(ctx: Context<Self>, _dest_chain_id: u32, is_supported: bool, finality_buffer: Option<u64>) -> Result<()> {
+    pub fn handler(
+        ctx: Context<Self>,
+        _dest_chain_id: u32,
+        is_supported: bool,
+        finality_buffer: Option<u64>,
+    ) -> Result<()> {
         ctx.accounts.destination_account.set_inner(Destination {
             is_supported,
             finality_buffer: finality_buffer.unwrap_or(0),

@@ -1,6 +1,6 @@
-use super::super::{INITIAL_FUNDS, OrderBookTest, CHAIN_ID, DEST_CHAIN_ID};
-use anchor_litesvm::{AssertionHelpers, TestHelpers, Signer};
+use super::super::{OrderBookTest, CHAIN_ID, DEST_CHAIN_ID, INITIAL_FUNDS};
 use anchor_lang::prelude::Clock;
+use anchor_litesvm::{AssertionHelpers, Signer, TestHelpers};
 use anchor_spl::associated_token::get_associated_token_address;
 use std::error::Error;
 
@@ -8,7 +8,7 @@ use order_book::error::OrderBookError;
 
 mod local_orders {
     // Local order test cases
-    // [X] given the amount in is zero 
+    // [X] given the amount in is zero
     //   [X] it reverts with an InvalidAmountIn error
     // [X] given the amount out is zero
     //   [X] it reverts with an InvalidAmountOut error
@@ -28,12 +28,15 @@ mod local_orders {
 
     use super::*;
 
-    fn default_order_params(test: &OrderBookTest, sender: &str) -> order_book::instructions::open::OrderParams {
+    fn default_order_params(
+        test: &OrderBookTest,
+        sender: &str,
+    ) -> order_book::instructions::open::OrderParams {
         order_book::instructions::open::OrderParams {
             dest_chain_id: CHAIN_ID, // local order
             fill_deadline: test.ctx.svm.get_sysvar::<Clock>().unix_timestamp as u64 + 86400,
             token_out: test.mints.get("token-out-spl-6").unwrap().to_bytes(),
-            amount_in: 1_000_000, 
+            amount_in: 1_000_000,
             amount_out: 1_000_000,
             recipient: test.users.get(sender).unwrap().pubkey().to_bytes(),
             solver: test.users.get("solver").unwrap().pubkey().to_bytes(),
@@ -62,14 +65,15 @@ mod local_orders {
             &order_params,
         )?;
 
-        test.ctx.execute_instruction(ix, &[alice])?
-            .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidAmountIn));    
+        test.ctx
+            .execute_instruction(ix, &[alice])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidAmountIn));
 
         Ok(())
     }
 
     #[test]
-    fn test_local_order_amount_out_zero_reverts() -> Result<(), Box<dyn Error>> { 
+    fn test_local_order_amount_out_zero_reverts() -> Result<(), Box<dyn Error>> {
         // Setup test environment
         let mut test = OrderBookTest::new()?;
         test.initialize()?;
@@ -90,7 +94,8 @@ mod local_orders {
             &order_params,
         )?;
 
-        test.ctx.execute_instruction(ix, &[alice])?
+        test.ctx
+            .execute_instruction(ix, &[alice])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidAmountOut));
 
         Ok(())
@@ -123,7 +128,8 @@ mod local_orders {
             &order_params,
         )?;
 
-        test.ctx.execute_instruction(ix, &[alice])?
+        test.ctx
+            .execute_instruction(ix, &[alice])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidFillDeadline));
 
         Ok(())
@@ -150,10 +156,9 @@ mod local_orders {
             &order_params,
         )?;
 
-        test.ctx.execute_instruction(ix, &[alice])?
-            .assert_failure();
+        test.ctx.execute_instruction(ix, &[alice])?.assert_failure();
 
-        Ok(()) 
+        Ok(())
     }
 
     #[test]
@@ -177,10 +182,9 @@ mod local_orders {
             &order_params,
         )?;
 
-        test.ctx.execute_instruction(ix, &[bob])?
-            .assert_failure();
+        test.ctx.execute_instruction(ix, &[bob])?.assert_failure();
 
-        Ok(()) 
+        Ok(())
     }
 
     #[test]
@@ -205,10 +209,11 @@ mod local_orders {
             &order_params,
         )?;
 
-        test.ctx.execute_instruction(ix, &[sender])?
+        test.ctx
+            .execute_instruction(ix, &[sender])?
             .assert_log_error("insufficient funds");
 
-        Ok(()) 
+        Ok(())
     }
 
     #[test]
@@ -233,10 +238,11 @@ mod local_orders {
             &order_params,
         )?;
 
-        test.ctx.execute_instruction(ix, &[sender])?
+        test.ctx
+            .execute_instruction(ix, &[sender])?
             .assert_anchor_error("TokenMint");
 
-        Ok(())  
+        Ok(())
     }
 
     #[test]
@@ -264,7 +270,8 @@ mod local_orders {
         let starting_balance = test.get_token_balance(&sender_token_in_account)?;
 
         // Open the order
-        test.ctx.execute_instruction(ix, &[sender])?
+        test.ctx
+            .execute_instruction(ix, &[sender])?
             .assert_success();
 
         // Verify the order account was created with correct data
@@ -291,7 +298,7 @@ mod local_orders {
             order_params.amount_in
         );
 
-        Ok(()) 
+        Ok(())
     }
 
     #[test]
@@ -301,12 +308,7 @@ mod local_orders {
         test.initialize()?;
 
         // Approve the delegated authority to spend tokens on behalf of the sender
-        test.approve_token_delegate(
-            "token-in-spl-6",
-            "alice",
-            "bob",
-            1_000_000,
-        )?;
+        test.approve_token_delegate("token-in-spl-6", "alice", "bob", 1_000_000)?;
 
         // Setup the instruction
         let sender = test.users.get("alice").unwrap();
@@ -329,7 +331,8 @@ mod local_orders {
         let starting_balance = test.get_token_balance(&sender_token_in_account)?;
 
         // Open the order using the delegated authority
-        test.ctx.execute_instruction(ix, &[&sender, &delegated_authority])?
+        test.ctx
+            .execute_instruction(ix, &[&sender, &delegated_authority])?
             .assert_success();
 
         // Verify the order account was created with correct data
@@ -355,14 +358,13 @@ mod local_orders {
             order_params.amount_in
         );
 
-        Ok(()) 
+        Ok(())
     }
-
 }
 
 mod xchain_orders {
     // Xchain order test cases
-    // [X] given the amount in is zero 
+    // [X] given the amount in is zero
     //   [ ] it reverts with an InvalidAmountIn error
     // [X] given the amount out is zero
     //   [X] it reverts with an InvalidAmountOut error
@@ -388,12 +390,15 @@ mod xchain_orders {
 
     use super::*;
 
-    fn default_order_params(test: &OrderBookTest, sender: &str) -> order_book::instructions::open::OrderParams {
+    fn default_order_params(
+        test: &OrderBookTest,
+        sender: &str,
+    ) -> order_book::instructions::open::OrderParams {
         order_book::instructions::open::OrderParams {
             dest_chain_id: DEST_CHAIN_ID, // xchain order
             fill_deadline: test.ctx.svm.get_sysvar::<Clock>().unix_timestamp as u64 + 86400,
             token_out: test.mints.get("token-out-spl-6").unwrap().to_bytes(),
-            amount_in: 1_000_000, 
+            amount_in: 1_000_000,
             amount_out: 1_000_000,
             recipient: test.users.get(sender).unwrap().pubkey().to_bytes(),
             solver: test.users.get("solver").unwrap().pubkey().to_bytes(),
@@ -422,14 +427,15 @@ mod xchain_orders {
             &order_params,
         )?;
 
-        test.ctx.execute_instruction(ix, &[alice])?
-            .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidAmountIn));    
+        test.ctx
+            .execute_instruction(ix, &[alice])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidAmountIn));
 
         Ok(())
     }
 
     #[test]
-    fn test_xchain_order_amount_out_zero_reverts() -> Result<(), Box<dyn Error>> { 
+    fn test_xchain_order_amount_out_zero_reverts() -> Result<(), Box<dyn Error>> {
         // Setup test environment
         let mut test = OrderBookTest::new()?;
         test.initialize()?;
@@ -450,7 +456,8 @@ mod xchain_orders {
             &order_params,
         )?;
 
-        test.ctx.execute_instruction(ix, &[alice])?
+        test.ctx
+            .execute_instruction(ix, &[alice])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidAmountOut));
 
         Ok(())
@@ -483,7 +490,8 @@ mod xchain_orders {
             &order_params,
         )?;
 
-        test.ctx.execute_instruction(ix, &[alice])?
+        test.ctx
+            .execute_instruction(ix, &[alice])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidFillDeadline));
 
         Ok(())
@@ -501,7 +509,7 @@ mod xchain_orders {
 
         // Prepare order parameters
         let order_params = default_order_params(&test, "alice");
-    
+
         let (_, mut ix) = test.create_open_order_ix(
             &alice.pubkey(),
             &token_in_mint,
@@ -512,14 +520,16 @@ mod xchain_orders {
 
         ix.data[8..12].copy_from_slice(&999u32.to_be_bytes()); // mismatched chain id
 
-        test.ctx.execute_instruction(ix, &[alice])?
+        test.ctx
+            .execute_instruction(ix, &[alice])?
             .assert_anchor_error("ConstraintSeeds");
 
-        Ok(()) 
+        Ok(())
     }
 
     #[test]
-    fn test_xchain_order_destination_account_not_initialized_reverts() -> Result<(), Box<dyn Error>> {
+    fn test_xchain_order_destination_account_not_initialized_reverts() -> Result<(), Box<dyn Error>>
+    {
         // Setup test environment
         let mut test = OrderBookTest::new()?;
         test.initialize()?;
@@ -540,7 +550,8 @@ mod xchain_orders {
             &order_params,
         )?;
 
-        test.ctx.execute_instruction(ix, &[alice])?
+        test.ctx
+            .execute_instruction(ix, &[alice])?
             .assert_anchor_error("AccountNotInitialized");
         Ok(())
     }
@@ -557,7 +568,7 @@ mod xchain_orders {
         // Get accounts for the instruction
         let alice = test.users.get("alice").unwrap();
         let token_in_mint = test.mints.get("token-in-spl-6").unwrap();
-        let sender_token_in_account = test.atas.get(&("token-in-spl-6", "alice")).unwrap();        
+        let sender_token_in_account = test.atas.get(&("token-in-spl-6", "alice")).unwrap();
 
         // Prepare order parameters
         let order_params = default_order_params(&test, "alice");
@@ -570,14 +581,16 @@ mod xchain_orders {
             &order_params,
         )?;
 
-        test.ctx.execute_instruction(ix, &[alice])?
+        test.ctx
+            .execute_instruction(ix, &[alice])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::DestinationNotSupported));
 
         Ok(())
     }
 
     #[test]
-    fn test_xchain_order_sender_not_authorized_to_spend_token_in_reverts() -> Result<(), Box<dyn Error>> {
+    fn test_xchain_order_sender_not_authorized_to_spend_token_in_reverts(
+    ) -> Result<(), Box<dyn Error>> {
         // Setup test environment
         let mut test = OrderBookTest::new()?;
         test.initialize()?;
@@ -597,10 +610,9 @@ mod xchain_orders {
             &order_params,
         )?;
 
-        test.ctx.execute_instruction(ix, &[alice])?
-            .assert_failure();
+        test.ctx.execute_instruction(ix, &[alice])?.assert_failure();
 
-        Ok(()) 
+        Ok(())
     }
 
     #[test]
@@ -624,14 +636,14 @@ mod xchain_orders {
             &order_params,
         )?;
 
-        test.ctx.execute_instruction(ix, &[bob])?
-            .assert_failure();
+        test.ctx.execute_instruction(ix, &[bob])?.assert_failure();
 
         Ok(())
     }
 
     #[test]
-    fn test_xchain_order_sender_does_not_have_enough_token_in_reverts() -> Result<(), Box<dyn Error>> {
+    fn test_xchain_order_sender_does_not_have_enough_token_in_reverts() -> Result<(), Box<dyn Error>>
+    {
         // Setup test environment
         let mut test = OrderBookTest::new()?;
         test.initialize()?;
@@ -652,7 +664,8 @@ mod xchain_orders {
             &order_params,
         )?;
 
-        test.ctx.execute_instruction(ix, &[sender])?
+        test.ctx
+            .execute_instruction(ix, &[sender])?
             .assert_log_error("insufficient funds");
         Ok(())
     }
@@ -682,7 +695,8 @@ mod xchain_orders {
         let starting_balance = test.get_token_balance(&sender_token_in_account)?;
 
         // Open the order
-        test.ctx.execute_instruction(ix, &[sender])?
+        test.ctx
+            .execute_instruction(ix, &[sender])?
             .assert_success();
 
         // Verify the order account was created with correct data
@@ -719,12 +733,7 @@ mod xchain_orders {
         test.initialize()?;
 
         // Approve the delegated authority to spend tokens on behalf of the sender
-        test.approve_token_delegate(
-            "token-in-spl-6",
-            "alice",
-            "bob",
-            1_000_000,
-        )?;
+        test.approve_token_delegate("token-in-spl-6", "alice", "bob", 1_000_000)?;
 
         // Setup the instruction
         let sender = test.users.get("alice").unwrap();
@@ -747,7 +756,8 @@ mod xchain_orders {
         let starting_balance = test.get_token_balance(&sender_token_in_account)?;
 
         // Open the order using the delegated authority
-        test.ctx.execute_instruction(ix, &[&sender, &delegated_authority])?
+        test.ctx
+            .execute_instruction(ix, &[&sender, &delegated_authority])?
             .assert_success();
 
         // Verify the order account was created with correct data

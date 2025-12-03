@@ -27,33 +27,53 @@ fn test_initialize_success() -> Result<(), Box<dyn Error>> {
     let messenger_authority = test.get_user("messenger_authority").pubkey();
 
     // Verify global account doesn't exist yet
-    let global_account = test.ctx.svm.get_pda(
-        &[order_book::state::GLOBAL_SEED],
-        &order_book::ID,
+    let global_account = test
+        .ctx
+        .svm
+        .get_pda(&[order_book::state::GLOBAL_SEED], &order_book::ID);
+    assert!(
+        test.ctx.svm.get_account(&global_account).is_none(),
+        "Global account should not exist yet"
     );
-    assert!(test.ctx.svm.get_account(&global_account).is_none(), "Global account should not exist yet");
 
     // Create and execute initialize instruction
     let ix = test.create_initialize_ix(&admin.pubkey(), CHAIN_ID, &messenger_authority)?;
-    test.ctx.execute_instruction(ix, &[&admin])?
+    test.ctx
+        .execute_instruction(ix, &[&admin])?
         .assert_success();
 
     // Verify global account was created
-    assert!(test.ctx.svm.get_account(&global_account).is_some(), "Global account should exist after initialization");
+    assert!(
+        test.ctx.svm.get_account(&global_account).is_some(),
+        "Global account should exist after initialization"
+    );
 
     // Verify global account data
     let (_, global_data) = test.get_global_account()?;
-    assert_eq!(global_data.admin, admin.pubkey(), "Admin should be set correctly");
-    assert_eq!(global_data.chain_id, CHAIN_ID, "Chain ID should match input");
+    assert_eq!(
+        global_data.admin,
+        admin.pubkey(),
+        "Admin should be set correctly"
+    );
+    assert_eq!(
+        global_data.chain_id, CHAIN_ID,
+        "Chain ID should match input"
+    );
 
     // Verify messenger authority is set correctly
-    assert_eq!(global_data.messenger_authority, messenger_authority, "Messenger authority should be set correctly");
+    assert_eq!(
+        global_data.messenger_authority, messenger_authority,
+        "Messenger authority should be set correctly"
+    );
 
     // Verify bump is non-zero (bump should be valid)
     assert!(global_data.bump > 0, "Bump should be set to a valid value");
 
     // Verify reserved is zeroed
-    assert_eq!(global_data.reserved, [0u8; 128], "Reserved space should be zeroed");
+    assert_eq!(
+        global_data.reserved, [0u8; 128],
+        "Reserved space should be zeroed"
+    );
 
     Ok(())
 }
@@ -67,13 +87,21 @@ fn test_initialize_with_different_chain_id_success() -> Result<(), Box<dyn Error
 
     // Initialize with custom chain_id
     let ix = test.create_initialize_ix(&admin.pubkey(), custom_chain_id, &messenger_authority)?;
-    test.ctx.execute_instruction(ix, &[&admin])?
+    test.ctx
+        .execute_instruction(ix, &[&admin])?
         .assert_success();
 
     // Verify chain_id is set to custom value
     let (_, global_data) = test.get_global_account()?;
-    assert_eq!(global_data.chain_id, custom_chain_id, "Chain ID should match custom input");
-    assert_eq!(global_data.admin, admin.pubkey(), "Admin should be set correctly");
+    assert_eq!(
+        global_data.chain_id, custom_chain_id,
+        "Chain ID should match custom input"
+    );
+    assert_eq!(
+        global_data.admin,
+        admin.pubkey(),
+        "Admin should be set correctly"
+    );
 
     Ok(())
 }
@@ -86,13 +114,21 @@ fn test_initialize_non_admin_signer_success() -> Result<(), Box<dyn Error>> {
 
     // Alice (non-admin) initializes the order book
     let ix = test.create_initialize_ix(&alice.pubkey(), CHAIN_ID, &messenger_authority)?;
-    test.ctx.execute_instruction(ix, &[&alice])?
+    test.ctx
+        .execute_instruction(ix, &[&alice])?
         .assert_success();
 
     // Verify alice is set as admin (whoever initializes becomes admin)
     let (_, global_data) = test.get_global_account()?;
-    assert_eq!(global_data.admin, alice.pubkey(), "Signer (Alice) should be set as admin");
-    assert_eq!(global_data.chain_id, CHAIN_ID, "Chain ID should be set correctly");
+    assert_eq!(
+        global_data.admin,
+        alice.pubkey(),
+        "Signer (Alice) should be set as admin"
+    );
+    assert_eq!(
+        global_data.chain_id, CHAIN_ID,
+        "Chain ID should be set correctly"
+    );
 
     Ok(())
 }
@@ -109,7 +145,8 @@ fn test_initialize_already_initialized_reverts() -> Result<(), Box<dyn Error>> {
 
     // Attempt to initialize again
     let ix = test.create_initialize_ix(&admin.pubkey(), CHAIN_ID, &messenger_authority)?;
-    test.ctx.execute_instruction(ix, &[&admin])?
+    test.ctx
+        .execute_instruction(ix, &[&admin])?
         .assert_failure();
 
     Ok(())
@@ -122,10 +159,7 @@ fn test_initialize_wrong_global_account_pda_reverts() -> Result<(), Box<dyn Erro
     let messenger_authority = test.get_user("messenger_authority").pubkey();
 
     // Create wrong PDA (using different seeds)
-    let wrong_global_account = test.ctx.svm.get_pda(
-        &[b"wrong_seed"],
-        &order_book::ID,
-    );
+    let wrong_global_account = test.ctx.svm.get_pda(&[b"wrong_seed"], &order_book::ID);
 
     // Create instruction with wrong global_account PDA
     let accounts = order_book::accounts::Initialize {
@@ -134,7 +168,9 @@ fn test_initialize_wrong_global_account_pda_reverts() -> Result<(), Box<dyn Erro
         system_program: anchor_lang::solana_program::system_program::ID,
     };
 
-    let ix = test.ctx.program()
+    let ix = test
+        .ctx
+        .program()
         .accounts(accounts)
         .args(order_book::instruction::Initialize {
             chain_id: CHAIN_ID,
@@ -142,7 +178,8 @@ fn test_initialize_wrong_global_account_pda_reverts() -> Result<(), Box<dyn Erro
         })
         .instruction()?;
 
-    test.ctx.execute_instruction(ix, &[&admin])?
+    test.ctx
+        .execute_instruction(ix, &[&admin])?
         .assert_anchor_error("ConstraintSeeds");
 
     Ok(())

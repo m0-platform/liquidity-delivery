@@ -1,10 +1,8 @@
-use anchor_lang::prelude::*;
 use crate::{
     error::OrderBookError,
-    state::{
-        Order, NativeOrder, OrderStatus, ORDER_SEED_PREFIX,
-    }
+    state::{NativeOrder, Order, OrderStatus, ORDER_SEED_PREFIX},
 };
+use anchor_lang::prelude::*;
 
 #[event_cpi]
 #[derive(Accounts)]
@@ -18,7 +16,7 @@ pub struct RequestCancelOrder<'info> {
         bump = order.bump,
         constraint = order.data.sender == sender.key() @ OrderBookError::NotAuthorized,
     )]
-    pub order: Account<'info, Order::<NativeOrder>>,
+    pub order: Account<'info, Order<NativeOrder>>,
 }
 
 impl RequestCancelOrder<'_> {
@@ -54,7 +52,6 @@ impl RequestCancelOrder<'_> {
 
         Ok(())
     }
-
 }
 
 #[event]

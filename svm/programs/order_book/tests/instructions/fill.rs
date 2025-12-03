@@ -1,11 +1,10 @@
-use super::super::{OrderBookTest, CHAIN_ID, DEST_CHAIN_ID, messenger};
-use anchor_litesvm::{AssertionHelpers, TestHelpers, Signer};
+use super::super::{messenger, OrderBookTest, CHAIN_ID, DEST_CHAIN_ID};
 use anchor_lang::prelude::Clock;
+use anchor_litesvm::{AssertionHelpers, Signer, TestHelpers};
 use anchor_spl::associated_token::get_associated_token_address;
 use std::error::Error;
 
 use order_book::error::OrderBookError;
-
 
 mod local_orders {
     // Local order fill tests
@@ -22,7 +21,7 @@ mod local_orders {
     //   [X] given no order account exists
     //     [X] it reverts with an AccountNotInitialized Error
     //   [X] given a foreign order account exists
-    //     [X] it reverts with an AccountDidNotDeserialize error    
+    //     [X] it reverts with an AccountDidNotDeserialize error
     // [X] given the provided order_id does does not match the computed order id from the order data
     //   [X] it reverts with an ConstraintSeeds error
     // [X] given the origin chain of the order is not the current chain
@@ -41,7 +40,7 @@ mod local_orders {
     //     [X] it updates amount_out_filled and amount_in_released on the order
 
     use anchor_litesvm::Pubkey;
-    use order_book::{ORDER_SEED_PREFIX, OrderData};
+    use order_book::{OrderData, ORDER_SEED_PREFIX};
 
     // fill_native_order
     // [X] given a local order is filled with fill_foreign_order
@@ -49,12 +48,15 @@ mod local_orders {
 
     use super::*;
 
-    fn default_order_params(test: &OrderBookTest, sender: &str) -> order_book::instructions::open::OrderParams {
+    fn default_order_params(
+        test: &OrderBookTest,
+        sender: &str,
+    ) -> order_book::instructions::open::OrderParams {
         order_book::instructions::open::OrderParams {
             dest_chain_id: CHAIN_ID, // local order
             fill_deadline: test.ctx.svm.get_sysvar::<Clock>().unix_timestamp as u64 + 86400,
             token_out: test.get_mint("token-out-spl-6").clone().to_bytes(),
-            amount_in: 1_000_000, 
+            amount_in: 1_000_000,
             amount_out: 1_000_000,
             recipient: test.get_user(sender).pubkey().clone().to_bytes(),
             solver: test.get_user("solver").pubkey().clone().to_bytes(),
@@ -79,31 +81,18 @@ mod local_orders {
         let solver = test.get_user("solver");
         let token_in_mint = test.get_mint("token-in-spl-6");
 
-
-        let order_account = test.ctx.svm.get_pda(
-            &[ORDER_SEED_PREFIX, &order_id],
-            &order_book::ID
-        );
+        let order_account = test
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
         let (global_account, _) = test.get_global_account()?;
-        
+
         let token_out_mint = Pubkey::new_from_array(order_params.token_out);
         let recipient = Pubkey::new_from_array(order_params.recipient);
-        let recipient_token_out_ata = get_associated_token_address(
-            &recipient,
-            &token_out_mint,
-        );
-        let solver_token_out_ata = get_associated_token_address(
-            &solver.pubkey(),
-            &token_out_mint,
-        );
-        let order_token_in_ata = get_associated_token_address(
-            &order_account,
-            &token_in_mint,
-        );
-        let solver_token_in_ata = get_associated_token_address(
-            &solver.pubkey(),
-            &token_in_mint,
-        );
+        let recipient_token_out_ata = get_associated_token_address(&recipient, &token_out_mint);
+        let solver_token_out_ata = get_associated_token_address(&solver.pubkey(), &token_out_mint);
+        let order_token_in_ata = get_associated_token_address(&order_account, &token_in_mint);
+        let solver_token_in_ata = get_associated_token_address(&solver.pubkey(), &token_in_mint);
 
         let order_data = order_book::state::OrderData {
             version: order_book::VERSION,
@@ -117,41 +106,42 @@ mod local_orders {
             amount_in: order_params.amount_in as u128,
             amount_out: order_params.amount_out,
             recipient: order_params.recipient,
-            solver: solver.pubkey().to_bytes()
+            solver: solver.pubkey().to_bytes(),
         };
 
         let accounts = order_book::accounts::FillNativeOrder {
-                program: order_book::ID,
-                event_authority: test.get_event_authority()?,
-                solver: solver.pubkey(),
-                global_account,
-                token_out_mint,
-                solver_token_out_account: solver_token_out_ata,
-                recipient,
-                recipient_token_out_ata,
-                token_out_program: anchor_spl::token::ID,
-                associated_token_program: anchor_spl::associated_token::ID,
-                system_program: anchor_lang::solana_program::system_program::ID,
-                order: order_account,
-                token_in_mint,
-                order_token_in_ata,
-                solver_token_in_account: solver_token_in_ata,
-                token_in_program: anchor_spl::token::ID,
-            };
-        
-        let ix = test.ctx.program()
+            program: order_book::ID,
+            event_authority: test.get_event_authority()?,
+            solver: solver.pubkey(),
+            global_account,
+            token_out_mint,
+            solver_token_out_account: solver_token_out_ata,
+            recipient,
+            recipient_token_out_ata,
+            token_out_program: anchor_spl::token::ID,
+            associated_token_program: anchor_spl::associated_token::ID,
+            system_program: anchor_lang::solana_program::system_program::ID,
+            order: order_account,
+            token_in_mint,
+            order_token_in_ata,
+            solver_token_in_account: solver_token_in_ata,
+            token_in_program: anchor_spl::token::ID,
+        };
+
+        let ix = test
+            .ctx
+            .program()
             .accounts(accounts)
-            .args(
-                order_book::instruction::FillNativeOrder {
-                    order_id,
-                    order_data,
-                    fill_params: fill_params.clone(),
-                }
-            )
+            .args(order_book::instruction::FillNativeOrder {
+                order_id,
+                order_data,
+                fill_params: fill_params.clone(),
+            })
             .instruction()?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
-            .assert_log_error("AccountNotInitialized");    
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_log_error("AccountNotInitialized");
 
         Ok(())
     }
@@ -165,16 +155,13 @@ mod local_orders {
         let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
         let solver = test.get_user("solver");
         let fill_params = default_fill_params(&test);
-        
-        let ix = test.create_fill_native_order_ix(
-            &solver.pubkey(),
-            order_id,
-            &fill_params
-        )?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
+        let ix = test.create_fill_native_order_ix(&solver.pubkey(), order_id, &fill_params)?;
+
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidDestChainId));
-    
+
         Ok(())
     }
 
@@ -190,33 +177,36 @@ mod local_orders {
         // Get the order account to derive the order data
         let (_, native_order) = test.get_native_order_account(&order_id)?;
         let order_data = OrderData::new_from_native_order(native_order.data, CHAIN_ID);
-        
+
         // Get the accounts for the instruction and change the token_out mint to the wrong one
         let mut accounts = test.build_fill_native_order_accounts(&solver.pubkey(), order_id)?;
         let token_out = test.mints.get("token-out-spl-9").unwrap();
         accounts.token_out_mint = *token_out;
         // Also adjust the token accounts to match the wrong token out to avoid other false positive errors
-        accounts.recipient_token_out_ata = get_associated_token_address(&accounts.recipient, token_out);
-        accounts.solver_token_out_account = get_associated_token_address(&solver.pubkey(), token_out);
+        accounts.recipient_token_out_ata =
+            get_associated_token_address(&accounts.recipient, token_out);
+        accounts.solver_token_out_account =
+            get_associated_token_address(&solver.pubkey(), token_out);
         // Token Program is already the same
 
         // Construct the ix with the modified accounts
-        let ix = test.ctx.program()
+        let ix = test
+            .ctx
+            .program()
             .accounts(accounts)
-            .args(
-                order_book::instruction::FillNativeOrder {
-                    order_id,
-                    order_data,
-                    fill_params
-                }
-            )
+            .args(order_book::instruction::FillNativeOrder {
+                order_id,
+                order_data,
+                fill_params,
+            })
             .instruction()?;
 
         // Execute the instruction
         // Expect it to revert with an InvalidTokenOutMint error
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidTokenOutMint));
-        
+
         Ok(())
     }
 
@@ -238,28 +228,31 @@ mod local_orders {
         // Get the accounts for the ix and manually change the recipient accounts
         let mut accounts = test.build_fill_native_order_accounts(&solver.pubkey(), order_id)?;
         accounts.recipient = wrong_recipient.pubkey();
-        accounts.recipient_token_out_ata = get_associated_token_address(&wrong_recipient.pubkey(), &token_out_mint);
+        accounts.recipient_token_out_ata =
+            get_associated_token_address(&wrong_recipient.pubkey(), &token_out_mint);
 
         // Construct the ix
-        let ix = test.ctx.program()
+        let ix = test
+            .ctx
+            .program()
             .accounts(accounts)
-            .args(
-                order_book::instruction::FillNativeOrder {
-                    order_id,
-                    order_data,
-                    fill_params
-                }
-            )
+            .args(order_book::instruction::FillNativeOrder {
+                order_id,
+                order_data,
+                fill_params,
+            })
             .instruction()?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidRecipient));
 
         Ok(())
     }
 
     #[test]
-    fn fill_native_order_order_type_not_native_and_not_initialized_reverts() -> Result<(), Box<dyn Error>> {
+    fn fill_native_order_order_type_not_native_and_not_initialized_reverts(
+    ) -> Result<(), Box<dyn Error>> {
         let mut test = OrderBookTest::new()?;
         test.initialize()?;
 
@@ -282,28 +275,30 @@ mod local_orders {
             amount_in: order_params.amount_in as u128,
             amount_out: order_params.amount_out,
             recipient: order_params.recipient,
-            solver: order_params.solver
+            solver: order_params.solver,
         };
 
         let order_id = order_data.compute_order_id();
 
         // Get the accounts from the order data
-        let accounts = test.build_fill_native_order_accounts_from_order_data(&solver.pubkey(), &order_data)?;
+        let accounts =
+            test.build_fill_native_order_accounts_from_order_data(&solver.pubkey(), &order_data)?;
 
         // Construct the ix
-        let ix = test.ctx.program()
+        let ix = test
+            .ctx
+            .program()
             .accounts(accounts)
-            .args(
-                order_book::instruction::FillNativeOrder {
-                    order_id,
-                    order_data,
-                    fill_params
-                }
-            )
+            .args(order_book::instruction::FillNativeOrder {
+                order_id,
+                order_data,
+                fill_params,
+            })
             .instruction()?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
-            .assert_log_error("AccountNotInitialized");   
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_log_error("AccountNotInitialized");
 
         Ok(())
     }
@@ -332,31 +327,32 @@ mod local_orders {
             amount_in: order_params.amount_in as u128,
             amount_out: order_params.amount_out,
             recipient: order_params.recipient,
-            solver: order_params.solver
+            solver: order_params.solver,
         };
 
         let order_id = order_data.compute_order_id();
-
 
         // Partially fill the order using the correct ix (fill_foreigh_order)
         test.fill_foreign_order("solver", &order_data, fill_params.amount_out_to_fill)?;
 
         // Get the accounts from the order data for a fill native order ix
-        let accounts = test.build_fill_native_order_accounts_from_order_data(&solver.pubkey(), &order_data)?;
+        let accounts =
+            test.build_fill_native_order_accounts_from_order_data(&solver.pubkey(), &order_data)?;
 
         // Construct the ix
-        let ix = test.ctx.program()
+        let ix = test
+            .ctx
+            .program()
             .accounts(accounts)
-            .args(
-                order_book::instruction::FillNativeOrder {
-                    order_id,
-                    order_data,
-                    fill_params
-                }
-            )
+            .args(order_book::instruction::FillNativeOrder {
+                order_id,
+                order_data,
+                fill_params,
+            })
             .instruction()?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_log_error("AccountDidNotDeserialize");
 
         Ok(())
@@ -378,23 +374,24 @@ mod local_orders {
 
         let accounts = test.build_fill_native_order_accounts(&solver.pubkey(), order_id)?;
 
-        let ix = test.ctx.program()
+        let ix = test
+            .ctx
+            .program()
             .accounts(accounts)
-            .args(
-                order_book::instruction::FillNativeOrder {
-                    order_id,
-                    order_data,
-                    fill_params
-                }
-            )
+            .args(order_book::instruction::FillNativeOrder {
+                order_id,
+                order_data,
+                fill_params,
+            })
             .instruction()?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_anchor_error("InvalidOrderId");
 
         Ok(())
     }
-    
+
     #[test]
     fn fill_native_order_invalid_origin_chain_id_reverts() -> Result<(), Box<dyn Error>> {
         let mut test = OrderBookTest::new()?;
@@ -412,18 +409,19 @@ mod local_orders {
         let accounts = test.build_fill_native_order_accounts(&solver.pubkey(), order_id)?;
 
         // Construct the instruction with modified order_data
-        let ix = test.ctx.program()
+        let ix = test
+            .ctx
+            .program()
             .accounts(accounts)
-            .args(
-                order_book::instruction::FillNativeOrder {
-                    order_id,
-                    order_data,
-                    fill_params
-                }
-            )
+            .args(order_book::instruction::FillNativeOrder {
+                order_id,
+                order_data,
+                fill_params,
+            })
             .instruction()?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_anchor_error("InvalidOrderId"); // this is checked before the origin chain id
 
         Ok(())
@@ -443,27 +441,24 @@ mod local_orders {
             origin_recipient: solver.pubkey().to_bytes(),
         };
 
-        let ix = test.create_fill_native_order_ix(
-            &solver.pubkey(),
-            order_id,
-            &full_fill_params
-        )?;
-        test.ctx.execute_instruction(ix, &[&solver])?
+        let ix = test.create_fill_native_order_ix(&solver.pubkey(), order_id, &full_fill_params)?;
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_success();
 
         // Verify the order is completed
         let (_, order_data) = test.get_native_order_account(&order_id)?;
-        assert_eq!(order_data.data.status, order_book::state::OrderStatus::Completed);
+        assert_eq!(
+            order_data.data.status,
+            order_book::state::OrderStatus::Completed
+        );
 
         // Now try to fill it again
         let fill_params = default_fill_params(&test);
-        let ix = test.create_fill_native_order_ix(
-            &solver.pubkey(),
-            order_id,
-            &fill_params
-        )?;
+        let ix = test.create_fill_native_order_ix(&solver.pubkey(), order_id, &fill_params)?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::OrderNotFillable));
 
         Ok(())
@@ -482,10 +477,10 @@ mod local_orders {
         let alice_token_out_ata = test.get_ata("token-out-spl-6", "alice");
         let solver_token_out_ata = test.get_ata("token-out-spl-6", "solver");
         let solver_token_in_ata = test.get_ata("token-in-spl-6", "solver");
-        let order_account = test.ctx.svm.get_pda(
-            &[ORDER_SEED_PREFIX, &order_id],
-            &order_book::ID
-        );
+        let order_account = test
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
         let order_token_in_ata = get_associated_token_address(&order_account, &token_in_mint);
 
         // Get initial balances
@@ -500,13 +495,10 @@ mod local_orders {
             origin_recipient: solver.pubkey().to_bytes(),
         };
 
-        let ix = test.create_fill_native_order_ix(
-            &solver.pubkey(),
-            order_id,
-            &full_fill_params
-        )?;
+        let ix = test.create_fill_native_order_ix(&solver.pubkey(), order_id, &full_fill_params)?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_success();
 
         // Get final balances
@@ -552,13 +544,11 @@ mod local_orders {
             "Order status should be Completed"
         );
         assert_eq!(
-            order_data.data.amount_out_filled,
-            order_params.amount_out as u128,
+            order_data.data.amount_out_filled, order_params.amount_out as u128,
             "amount_out_filled should equal amount_out"
         );
         assert_eq!(
-            order_data.data.amount_in_released,
-            order_params.amount_in as u128,
+            order_data.data.amount_in_released, order_params.amount_in as u128,
             "amount_in_released should equal amount_in"
         );
 
@@ -578,10 +568,10 @@ mod local_orders {
         let alice_token_out_ata = test.get_ata("token-out-spl-6", "alice");
         let solver_token_out_ata = test.get_ata("token-out-spl-6", "solver");
         let solver_token_in_ata = test.get_ata("token-in-spl-6", "solver");
-        let order_account = test.ctx.svm.get_pda(
-            &[ORDER_SEED_PREFIX, &order_id],
-            &order_book::ID
-        );
+        let order_account = test
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
         let order_token_in_ata = get_associated_token_address(&order_account, &token_in_mint);
 
         // Get initial balances
@@ -598,15 +588,15 @@ mod local_orders {
         };
 
         // Calculate expected amount_in to be released (proportional)
-        let expected_amount_in_released = (amount_out_to_fill as u128 * order_params.amount_in as u128) / order_params.amount_out as u128;
+        let expected_amount_in_released = (amount_out_to_fill as u128
+            * order_params.amount_in as u128)
+            / order_params.amount_out as u128;
 
-        let ix = test.create_fill_native_order_ix(
-            &solver.pubkey(),
-            order_id,
-            &partial_fill_params
-        )?;
+        let ix =
+            test.create_fill_native_order_ix(&solver.pubkey(), order_id, &partial_fill_params)?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_success();
 
         // Get final balances
@@ -652,13 +642,11 @@ mod local_orders {
             "Order status should remain Created (not Completed)"
         );
         assert_eq!(
-            order_data.data.amount_out_filled,
-            amount_out_to_fill as u128,
+            order_data.data.amount_out_filled, amount_out_to_fill as u128,
             "amount_out_filled should equal amount_out_to_fill"
         );
         assert_eq!(
-            order_data.data.amount_in_released,
-            expected_amount_in_released,
+            order_data.data.amount_in_released, expected_amount_in_released,
             "amount_in_released should equal proportional amount"
         );
 
@@ -668,14 +656,12 @@ mod local_orders {
             origin_recipient: solver.pubkey().to_bytes(),
         };
 
-        let ix = test.create_fill_native_order_ix(
-            &solver.pubkey(),
-            order_id,
-            &second_fill_params
-        )?;
+        let ix =
+            test.create_fill_native_order_ix(&solver.pubkey(), order_id, &second_fill_params)?;
 
         test.ctx.svm.expire_blockhash();
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_success();
 
         // Verify the order is now completed
@@ -702,10 +688,10 @@ mod local_orders {
         let alice_token_out_ata = test.get_ata("token-out-spl-6", "alice");
         let solver_token_out_ata = test.get_ata("token-out-spl-6", "solver");
         let solver_token_in_ata = test.get_ata("token-in-spl-6", "solver");
-        let order_account = test.ctx.svm.get_pda(
-            &[ORDER_SEED_PREFIX, &order_id],
-            &order_book::ID
-        );
+        let order_account = test
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
         let order_token_in_ata = get_associated_token_address(&order_account, &token_in_mint);
 
         // Track cumulative fills
@@ -714,10 +700,10 @@ mod local_orders {
 
         // Perform 4 fills: 3 partial fills of 25% each, then a final fill of the remaining 25%
         let fill_amounts = vec![
-            order_params.amount_out / 4,  // 25%
-            order_params.amount_out / 4,  // 25%
-            order_params.amount_out / 4,  // 25%
-            order_params.amount_out / 4,  // 25% (final)
+            order_params.amount_out / 4, // 25%
+            order_params.amount_out / 4, // 25%
+            order_params.amount_out / 4, // 25%
+            order_params.amount_out / 4, // 25% (final)
         ];
 
         for (i, &amount_out_to_fill) in fill_amounts.iter().enumerate() {
@@ -730,7 +716,9 @@ mod local_orders {
             let order_balance_before = test.get_token_balance(&order_token_in_ata)?;
 
             // Calculate expected amount_in to be released for this fill
-            let expected_amount_in_for_this_fill = (amount_out_to_fill as u128 * order_params.amount_in as u128) / order_params.amount_out as u128;
+            let expected_amount_in_for_this_fill = (amount_out_to_fill as u128
+                * order_params.amount_in as u128)
+                / order_params.amount_out as u128;
 
             // Execute fill
             let fill_params = order_book::instructions::fill::FillParams {
@@ -738,13 +726,10 @@ mod local_orders {
                 origin_recipient: solver.pubkey().to_bytes(),
             };
 
-            let ix = test.create_fill_native_order_ix(
-                &solver.pubkey(),
-                order_id,
-                &fill_params
-            )?;
+            let ix = test.create_fill_native_order_ix(&solver.pubkey(), order_id, &fill_params)?;
 
-            test.ctx.execute_instruction(ix, &[&solver])?
+            test.ctx
+                .execute_instruction(ix, &[&solver])?
                 .assert_success();
             test.ctx.svm.expire_blockhash();
 
@@ -762,22 +747,26 @@ mod local_orders {
             assert_eq!(
                 alice_balance_after - alice_balance_before,
                 amount_out_to_fill as u64,
-                "Fill {}: Recipient should receive amount_out_to_fill", i + 1
+                "Fill {}: Recipient should receive amount_out_to_fill",
+                i + 1
             );
             assert_eq!(
                 solver_token_out_balance_before - solver_token_out_balance_after,
                 amount_out_to_fill as u64,
-                "Fill {}: Solver should pay amount_out_to_fill", i + 1
+                "Fill {}: Solver should pay amount_out_to_fill",
+                i + 1
             );
             assert_eq!(
                 solver_token_in_balance_after - solver_token_in_balance_before,
                 expected_amount_in_for_this_fill as u64,
-                "Fill {}: Solver should receive proportional amount_in", i + 1
+                "Fill {}: Solver should receive proportional amount_in",
+                i + 1
             );
             assert_eq!(
                 order_balance_before - order_balance_after,
                 expected_amount_in_for_this_fill as u64,
-                "Fill {}: Order should release proportional amount_in", i + 1
+                "Fill {}: Order should release proportional amount_in",
+                i + 1
             );
 
             // Verify order state after this fill
@@ -787,25 +776,29 @@ mod local_orders {
                 assert_eq!(
                     order_data.data.status,
                     order_book::state::OrderStatus::Completed,
-                    "Fill {}: Order should be Completed after final fill", i + 1
+                    "Fill {}: Order should be Completed after final fill",
+                    i + 1
                 );
             } else {
                 assert_eq!(
                     order_data.data.status,
                     order_book::state::OrderStatus::Created,
-                    "Fill {}: Order should remain Created", i + 1
+                    "Fill {}: Order should remain Created",
+                    i + 1
                 );
             }
 
             assert_eq!(
                 order_data.data.amount_out_filled,
                 cumulative_amount_out_filled as u128,
-                "Fill {}: Cumulative amount_out_filled should match", i + 1
+                "Fill {}: Cumulative amount_out_filled should match",
+                i + 1
             );
             assert_eq!(
                 order_data.data.amount_in_released,
                 cumulative_amount_in_released as u128,
-                "Fill {}: Cumulative amount_in_released should match", i + 1
+                "Fill {}: Cumulative amount_in_released should match",
+                i + 1
             );
         }
 
@@ -817,20 +810,18 @@ mod local_orders {
             "Order should be Completed"
         );
         assert_eq!(
-            order_data.data.amount_out_filled,
-            order_params.amount_out as u128,
+            order_data.data.amount_out_filled, order_params.amount_out as u128,
             "Total amount_out_filled should equal order amount_out"
         );
         assert_eq!(
-            order_data.data.amount_in_released,
-            order_params.amount_in as u128,
+            order_data.data.amount_in_released, order_params.amount_in as u128,
             "Total amount_in_released should equal order amount_in"
         );
 
         Ok(())
     }
 
-     #[test]
+    #[test]
     fn fill_foreign_order_reverts() -> Result<(), Box<dyn Error>> {
         let mut test = OrderBookTest::new()?;
         test.initialize()?;
@@ -838,52 +829,46 @@ mod local_orders {
         let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
         let solver = test.get_user("solver");
         let fill_params = default_fill_params(&test);
-        
+
         // Manually create the instruction to force a bad order account
         let (native_order_account, native_order_data) = test.get_native_order_account(&order_id)?;
         let (global_account, global_data) = test.get_global_account()?;
 
         let token_out_mint = Pubkey::new_from_array(native_order_data.data.token_out);
         let recipient = Pubkey::new_from_array(fill_params.origin_recipient);
-        let recipient_token_out_ata = get_associated_token_address(
-            &recipient,
-            &token_out_mint,
-        );
-        let solver_token_out_ata = get_associated_token_address(
-            &solver.pubkey(),
-            &token_out_mint,
-        );
+        let recipient_token_out_ata = get_associated_token_address(&recipient, &token_out_mint);
+        let solver_token_out_ata = get_associated_token_address(&solver.pubkey(), &token_out_mint);
 
-        let order_data = OrderData::new_from_native_order(native_order_data.data, global_data.chain_id);
+        let order_data =
+            OrderData::new_from_native_order(native_order_data.data, global_data.chain_id);
 
-        let ix = test.ctx.program()
-            .accounts(
-                order_book::accounts::FillForeignOrder {
-                    program: order_book::ID,
-                    event_authority: test.get_event_authority()?,
-                    solver: solver.pubkey(),
-                    global_account,
-                    token_out_mint,
-                    solver_token_out_account: solver_token_out_ata,
-                    recipient,
-                    recipient_token_out_ata,
-                    token_out_program: anchor_spl::token::ID,
-                    associated_token_program: anchor_spl::associated_token::ID,
-                    order: native_order_account,
-                    messenger_program: messenger::ID,
-                    system_program: anchor_lang::system_program::ID
-                }
-            )
-            .args(
-                order_book::instruction::FillForeignOrder {
-                    order_id,
-                    order_data,
-                    fill_params
-                }
-            )
+        let ix = test
+            .ctx
+            .program()
+            .accounts(order_book::accounts::FillForeignOrder {
+                program: order_book::ID,
+                event_authority: test.get_event_authority()?,
+                solver: solver.pubkey(),
+                global_account,
+                token_out_mint,
+                solver_token_out_account: solver_token_out_ata,
+                recipient,
+                recipient_token_out_ata,
+                token_out_program: anchor_spl::token::ID,
+                associated_token_program: anchor_spl::associated_token::ID,
+                order: native_order_account,
+                messenger_program: messenger::ID,
+                system_program: anchor_lang::system_program::ID,
+            })
+            .args(order_book::instruction::FillForeignOrder {
+                order_id,
+                order_data,
+                fill_params,
+            })
             .instruction()?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_anchor_error("ConstraintSpace"); // triggered before invalid type because the size of the account is too large
 
         Ok(())
@@ -935,7 +920,7 @@ mod xchain_orders {
 
     use super::*;
     use anchor_litesvm::Pubkey;
-    use order_book::{ORDER_SEED_PREFIX, OrderData};
+    use order_book::{OrderData, ORDER_SEED_PREFIX};
 
     fn default_foreign_order_data(test: &OrderBookTest, sender: &str) -> OrderData {
         OrderData {
@@ -943,7 +928,7 @@ mod xchain_orders {
             sender: test.get_user(sender).pubkey().to_bytes(),
             nonce: 0,
             origin_chain_id: DEST_CHAIN_ID, // Foreign order originates on another chain
-            dest_chain_id: CHAIN_ID, // Settles on current chain
+            dest_chain_id: CHAIN_ID,        // Settles on current chain
             fill_deadline: test.ctx.svm.get_sysvar::<Clock>().unix_timestamp as u64 + 86400,
             token_in: test.get_mint("token-in-spl-6").to_bytes(),
             token_out: test.get_mint("token-out-spl-6").to_bytes(),
@@ -970,13 +955,10 @@ mod xchain_orders {
         let solver = test.get_user("solver");
         let fill_params = default_fill_params(&test);
 
-        let ix = test.create_fill_foreign_order_ix(
-            &solver.pubkey(),
-            &order_data,
-            &fill_params
-        )?;
+        let ix = test.create_fill_foreign_order_ix(&solver.pubkey(), &order_data, &fill_params)?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidDestChainId));
 
         Ok(())
@@ -991,26 +973,30 @@ mod xchain_orders {
         let fill_params = default_fill_params(&test);
 
         // Get accounts and modify token_out_mint to wrong one
-        let mut accounts = test.build_fill_foreign_order_accounts_from_order_data(&solver.pubkey(), &order_data)?;
+        let mut accounts =
+            test.build_fill_foreign_order_accounts_from_order_data(&solver.pubkey(), &order_data)?;
         let wrong_token_out = test.get_mint("token-out-spl-9");
         accounts.token_out_mint = wrong_token_out;
         // Also adjust token accounts to match the wrong token to avoid other false positive errors
-        accounts.recipient_token_out_ata = get_associated_token_address(&accounts.recipient, &wrong_token_out);
-        accounts.solver_token_out_account = get_associated_token_address(&solver.pubkey(), &wrong_token_out);
+        accounts.recipient_token_out_ata =
+            get_associated_token_address(&accounts.recipient, &wrong_token_out);
+        accounts.solver_token_out_account =
+            get_associated_token_address(&solver.pubkey(), &wrong_token_out);
 
         let order_id = order_data.compute_order_id();
-        let ix = test.ctx.program()
+        let ix = test
+            .ctx
+            .program()
             .accounts(accounts)
-            .args(
-                order_book::instruction::FillForeignOrder {
-                    order_id,
-                    order_data,
-                    fill_params
-                }
-            )
+            .args(order_book::instruction::FillForeignOrder {
+                order_id,
+                order_data,
+                fill_params,
+            })
             .instruction()?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidTokenOutMint));
 
         Ok(())
@@ -1028,23 +1014,26 @@ mod xchain_orders {
         let token_out_mint = Pubkey::new_from_array(order_data.token_out);
 
         // Build accounts with wrong recipient
-        let mut accounts = test.build_fill_foreign_order_accounts_from_order_data(&solver.pubkey(), &order_data)?;
+        let mut accounts =
+            test.build_fill_foreign_order_accounts_from_order_data(&solver.pubkey(), &order_data)?;
         accounts.recipient = wrong_recipient.pubkey();
-        accounts.recipient_token_out_ata = get_associated_token_address(&wrong_recipient.pubkey(), &token_out_mint);
+        accounts.recipient_token_out_ata =
+            get_associated_token_address(&wrong_recipient.pubkey(), &token_out_mint);
 
         let order_id = order_data.compute_order_id();
-        let ix = test.ctx.program()
+        let ix = test
+            .ctx
+            .program()
             .accounts(accounts)
-            .args(
-                order_book::instruction::FillForeignOrder {
-                    order_id,
-                    order_data,
-                    fill_params
-                }
-            )
+            .args(order_book::instruction::FillForeignOrder {
+                order_id,
+                order_data,
+                fill_params,
+            })
             .instruction()?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidRecipient));
 
         Ok(())
@@ -1070,45 +1059,48 @@ mod xchain_orders {
         // Try to fill it with fill_foreign_order
         let (_, native_order_data) = test.get_native_order_account(&order_id)?;
         let (global_account, global_data) = test.get_global_account()?;
-        let order_data = OrderData::new_from_native_order(native_order_data.data, global_data.chain_id);
+        let order_data =
+            OrderData::new_from_native_order(native_order_data.data, global_data.chain_id);
         let solver = test.get_user("solver");
         let fill_params = default_fill_params(&test);
 
         // Build foreign order accounts pointing to the native order
-        let order_account = test.ctx.svm.get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
+        let order_account = test
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
         let token_out_mint = Pubkey::new_from_array(order_data.token_out);
         let recipient = Pubkey::new_from_array(order_data.recipient);
         let recipient_token_out_ata = get_associated_token_address(&recipient, &token_out_mint);
         let solver_token_out_ata = get_associated_token_address(&solver.pubkey(), &token_out_mint);
 
-        let ix = test.ctx.program()
-            .accounts(
-                order_book::accounts::FillForeignOrder {
-                    program: order_book::ID,
-                    event_authority: test.get_event_authority()?,
-                    solver: solver.pubkey(),
-                    global_account,
-                    token_out_mint,
-                    solver_token_out_account: solver_token_out_ata,
-                    recipient,
-                    recipient_token_out_ata,
-                    token_out_program: anchor_spl::token::ID,
-                    associated_token_program: anchor_spl::associated_token::ID,
-                    order: order_account,
-                    messenger_program: messenger::ID,
-                    system_program: anchor_lang::solana_program::system_program::ID
-                }
-            )
-            .args(
-                order_book::instruction::FillForeignOrder {
-                    order_id,
-                    order_data,
-                    fill_params
-                }
-            )
+        let ix = test
+            .ctx
+            .program()
+            .accounts(order_book::accounts::FillForeignOrder {
+                program: order_book::ID,
+                event_authority: test.get_event_authority()?,
+                solver: solver.pubkey(),
+                global_account,
+                token_out_mint,
+                solver_token_out_account: solver_token_out_ata,
+                recipient,
+                recipient_token_out_ata,
+                token_out_program: anchor_spl::token::ID,
+                associated_token_program: anchor_spl::associated_token::ID,
+                order: order_account,
+                messenger_program: messenger::ID,
+                system_program: anchor_lang::solana_program::system_program::ID,
+            })
+            .args(order_book::instruction::FillForeignOrder {
+                order_id,
+                order_data,
+                fill_params,
+            })
             .instruction()?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_anchor_error("ConstraintSpace");
 
         Ok(())
@@ -1124,20 +1116,22 @@ mod xchain_orders {
 
         let wrong_order_id = Pubkey::new_unique().to_bytes();
 
-        let accounts = test.build_fill_foreign_order_accounts_from_order_data(&solver.pubkey(), &order_data)?;
+        let accounts =
+            test.build_fill_foreign_order_accounts_from_order_data(&solver.pubkey(), &order_data)?;
 
-        let ix = test.ctx.program()
+        let ix = test
+            .ctx
+            .program()
             .accounts(accounts)
-            .args(
-                order_book::instruction::FillForeignOrder {
-                    order_id: wrong_order_id,
-                    order_data,
-                    fill_params
-                }
-            )
+            .args(order_book::instruction::FillForeignOrder {
+                order_id: wrong_order_id,
+                order_data,
+                fill_params,
+            })
             .instruction()?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_anchor_error("ConstraintSeeds");
 
         Ok(())
@@ -1154,23 +1148,28 @@ mod xchain_orders {
         let order_id = order_data.compute_order_id();
 
         // Build accounts with wrong order PDA
-        let mut accounts = test.build_fill_foreign_order_accounts_from_order_data(&solver.pubkey(), &order_data)?;
+        let mut accounts =
+            test.build_fill_foreign_order_accounts_from_order_data(&solver.pubkey(), &order_data)?;
         let wrong_order_id = [99u8; 32];
-        let wrong_order_account = test.ctx.svm.get_pda(&[ORDER_SEED_PREFIX, &wrong_order_id], &order_book::ID);
+        let wrong_order_account = test
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &wrong_order_id], &order_book::ID);
         accounts.order = wrong_order_account;
 
-        let ix = test.ctx.program()
+        let ix = test
+            .ctx
+            .program()
             .accounts(accounts)
-            .args(
-                order_book::instruction::FillForeignOrder {
-                    order_id,
-                    order_data,
-                    fill_params
-                }
-            )
+            .args(order_book::instruction::FillForeignOrder {
+                order_id,
+                order_data,
+                fill_params,
+            })
             .instruction()?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_anchor_error("ConstraintSeeds");
 
         Ok(())
@@ -1200,7 +1199,8 @@ mod xchain_orders {
         let fill_params = default_fill_params(&test);
         let ix = test.create_fill_foreign_order_ix(&solver.pubkey(), &order_data, &fill_params)?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::OrderNotFillable));
 
         Ok(())
@@ -1214,8 +1214,14 @@ mod xchain_orders {
         let order_id = order_data.compute_order_id();
 
         // Verify order doesn't exist yet
-        let order_account = test.ctx.svm.get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
-        assert!(test.ctx.svm.get_account(&order_account).is_none(), "Order should not exist yet");
+        let order_account = test
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
+        assert!(
+            test.ctx.svm.get_account(&order_account).is_none(),
+            "Order should not exist yet"
+        );
 
         // Get token account addresses
         let alice_token_out_ata = test.get_ata("token-out-spl-6", "alice");
@@ -1227,7 +1233,8 @@ mod xchain_orders {
 
         // Partial fill: 50%
         let amount_out_to_fill = order_data.amount_out as u64 / 2;
-        let expected_amount_in_released = (amount_out_to_fill as u128 * order_data.amount_in) / order_data.amount_out;
+        let expected_amount_in_released =
+            (amount_out_to_fill as u128 * order_data.amount_in) / order_data.amount_out;
 
         test.fill_foreign_order("solver", &order_data, amount_out_to_fill)?;
 
@@ -1249,9 +1256,19 @@ mod xchain_orders {
 
         // Verify order was created and initialized correctly
         let (_, foreign_order) = test.get_foreign_order_account(&order_id)?;
-        assert_eq!(foreign_order.order_type, order_book::state::OrderType::Foreign, "Order type should be Foreign");
-        assert_eq!(foreign_order.data.amount_out_filled, amount_out_to_fill as u128, "amount_out_filled should match");
-        assert_eq!(foreign_order.data.amount_in_released, expected_amount_in_released, "amount_in_released should match");
+        assert_eq!(
+            foreign_order.order_type,
+            order_book::state::OrderType::Foreign,
+            "Order type should be Foreign"
+        );
+        assert_eq!(
+            foreign_order.data.amount_out_filled, amount_out_to_fill as u128,
+            "amount_out_filled should match"
+        );
+        assert_eq!(
+            foreign_order.data.amount_in_released, expected_amount_in_released,
+            "amount_in_released should match"
+        );
 
         Ok(())
     }
@@ -1292,8 +1309,14 @@ mod xchain_orders {
 
         // Verify order is fully filled
         let (_, foreign_order) = test.get_foreign_order_account(&order_id)?;
-        assert_eq!(foreign_order.data.amount_out_filled, order_data.amount_out, "Order should be fully filled");
-        assert_eq!(foreign_order.data.amount_in_released, order_data.amount_in, "Full amount_in should be released");
+        assert_eq!(
+            foreign_order.data.amount_out_filled, order_data.amount_out,
+            "Order should be fully filled"
+        );
+        assert_eq!(
+            foreign_order.data.amount_in_released, order_data.amount_in,
+            "Full amount_in should be released"
+        );
 
         Ok(())
     }
@@ -1319,7 +1342,7 @@ mod xchain_orders {
         // Second fill: 25%
         let second_fill_amount = order_data.amount_out as u64 / 4;
         test.fill_foreign_order("solver", &order_data, second_fill_amount)?;
-        
+
         // Verify balances after second fill
         let alice_balance_after = test.get_token_balance(&alice_token_out_ata)?;
         let solver_balance_after = test.get_token_balance(&solver_token_out_ata)?;
@@ -1388,13 +1411,11 @@ mod xchain_orders {
         // Verify order is fully filled
         let (_, foreign_order) = test.get_foreign_order_account(&order_id)?;
         assert_eq!(
-            foreign_order.data.amount_out_filled,
-            order_data.amount_out,
+            foreign_order.data.amount_out_filled, order_data.amount_out,
             "Order should be fully filled"
         );
         assert_eq!(
-            foreign_order.data.amount_in_released,
-            order_data.amount_in,
+            foreign_order.data.amount_in_released, order_data.amount_in,
             "Full amount_in should be released"
         );
 
@@ -1429,7 +1450,8 @@ mod xchain_orders {
             let solver_balance_before = test.get_token_balance(&solver_token_out_ata)?;
 
             // Calculate expected amount_in for this fill
-            let expected_amount_in_for_this_fill = (amount_out_to_fill as u128 * order_data.amount_in) / order_data.amount_out;
+            let expected_amount_in_for_this_fill =
+                (amount_out_to_fill as u128 * order_data.amount_in) / order_data.amount_out;
 
             // Execute fill
             test.fill_foreign_order("solver", &order_data, amount_out_to_fill)?;
@@ -1446,12 +1468,14 @@ mod xchain_orders {
             assert_eq!(
                 alice_balance_after - alice_balance_before,
                 amount_out_to_fill,
-                "Fill {}: Recipient should receive amount_out_to_fill", i + 1
+                "Fill {}: Recipient should receive amount_out_to_fill",
+                i + 1
             );
             assert_eq!(
                 solver_balance_before - solver_balance_after,
                 amount_out_to_fill,
-                "Fill {}: Solver should pay amount_out_to_fill", i + 1
+                "Fill {}: Solver should pay amount_out_to_fill",
+                i + 1
             );
 
             // Verify order state
@@ -1459,25 +1483,25 @@ mod xchain_orders {
             assert_eq!(
                 foreign_order.data.amount_out_filled,
                 cumulative_amount_out_filled as u128,
-                "Fill {}: Cumulative amount_out_filled should match", i + 1
+                "Fill {}: Cumulative amount_out_filled should match",
+                i + 1
             );
             assert_eq!(
                 foreign_order.data.amount_in_released,
                 cumulative_amount_in_released as u128,
-                "Fill {}: Cumulative amount_in_released should match", i + 1
+                "Fill {}: Cumulative amount_in_released should match",
+                i + 1
             );
         }
 
         // Final verification
         let (_, foreign_order) = test.get_foreign_order_account(&order_id)?;
         assert_eq!(
-            foreign_order.data.amount_out_filled,
-            order_data.amount_out,
+            foreign_order.data.amount_out_filled, order_data.amount_out,
             "Order should be fully filled"
         );
         assert_eq!(
-            foreign_order.data.amount_in_released,
-            order_data.amount_in,
+            foreign_order.data.amount_in_released, order_data.amount_in,
             "Full amount_in should be released"
         );
 
@@ -1493,19 +1517,21 @@ mod xchain_orders {
         let solver = test.get_user("solver");
         let fill_params = default_fill_params(&test);
 
-        let accounts = test.build_fill_native_order_accounts_from_order_data(&solver.pubkey(), &order_data)?;
-        let ix = test.ctx.program()
+        let accounts =
+            test.build_fill_native_order_accounts_from_order_data(&solver.pubkey(), &order_data)?;
+        let ix = test
+            .ctx
+            .program()
             .accounts(accounts)
-            .args(
-                order_book::instruction::FillNativeOrder {
-                    order_id,
-                    order_data,
-                    fill_params
-                }
-            )
+            .args(order_book::instruction::FillNativeOrder {
+                order_id,
+                order_data,
+                fill_params,
+            })
             .instruction()?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_anchor_error("AccountNotInitialized");
 
         Ok(())
@@ -1524,25 +1550,25 @@ mod xchain_orders {
         // try to fill it as a native order
         let order_id = order_data.compute_order_id();
         let solver = test.get_user("solver");
-        let accounts = test.build_fill_native_order_accounts_from_order_data(&solver.pubkey(), &order_data)?;
+        let accounts =
+            test.build_fill_native_order_accounts_from_order_data(&solver.pubkey(), &order_data)?;
         let fill_params = default_fill_params(&test);
 
-        let ix = test.ctx.program()
+        let ix = test
+            .ctx
+            .program()
             .accounts(accounts)
-            .args(
-                order_book::instruction::FillNativeOrder {
-                    order_id,
-                    order_data,
-                    fill_params
-                }
-            )
+            .args(order_book::instruction::FillNativeOrder {
+                order_id,
+                order_data,
+                fill_params,
+            })
             .instruction()?;
 
-        test.ctx.execute_instruction(ix, &[&solver])?
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
             .assert_anchor_error("AccountDidNotDeserialize");
 
         Ok(())
     }
 }
-
-   
