@@ -19,13 +19,12 @@ use std::error::Error;
 //   [X] it reverts with an AccountAlreadyInitialized error
 // [X] given the global_account PDA is incorrect
 //   [X] it reverts with a ConstraintSeeds error
-// [X] given the messenger_authority PDA is incorrect
-//   [X] it reverts with a ConstraintSeeds error
 
 #[test]
 fn test_initialize_success() -> Result<(), Box<dyn Error>> {
     let mut test = OrderBookTest::new()?;
     let admin = test.get_user("admin");
+    let messenger_authority = test.get_user("messenger_authority").pubkey();
 
     // Verify global account doesn't exist yet
     let global_account = test.ctx.svm.get_pda(
@@ -35,7 +34,7 @@ fn test_initialize_success() -> Result<(), Box<dyn Error>> {
     assert!(test.ctx.svm.get_account(&global_account).is_none(), "Global account should not exist yet");
 
     // Create and execute initialize instruction
-    let ix = test.create_initialize_ix(&admin.pubkey(), CHAIN_ID)?;
+    let ix = test.create_initialize_ix(&admin.pubkey(), CHAIN_ID, &messenger_authority)?;
     test.ctx.execute_instruction(ix, &[&admin])?
         .assert_success();
 
@@ -48,11 +47,7 @@ fn test_initialize_success() -> Result<(), Box<dyn Error>> {
     assert_eq!(global_data.chain_id, CHAIN_ID, "Chain ID should match input");
 
     // Verify messenger authority is set correctly
-    let expected_messenger_authority = test.ctx.svm.get_pda(
-        &[messenger::AUTHORITY_SEED],
-        &messenger::ID,
-    );
-    assert_eq!(global_data.messenger_authority, expected_messenger_authority, "Messenger authority should be set correctly");
+    assert_eq!(global_data.messenger_authority, messenger_authority, "Messenger authority should be set correctly");
 
     // Verify bump is non-zero (bump should be valid)
     assert!(global_data.bump > 0, "Bump should be set to a valid value");
@@ -67,10 +62,11 @@ fn test_initialize_success() -> Result<(), Box<dyn Error>> {
 fn test_initialize_with_different_chain_id_success() -> Result<(), Box<dyn Error>> {
     let mut test = OrderBookTest::new()?;
     let admin = test.get_user("admin");
+    let messenger_authority = test.get_user("messenger_authority").pubkey();
     let custom_chain_id: u32 = 42;
 
     // Initialize with custom chain_id
-    let ix = test.create_initialize_ix(&admin.pubkey(), custom_chain_id)?;
+    let ix = test.create_initialize_ix(&admin.pubkey(), custom_chain_id, &messenger_authority)?;
     test.ctx.execute_instruction(ix, &[&admin])?
         .assert_success();
 
@@ -86,9 +82,10 @@ fn test_initialize_with_different_chain_id_success() -> Result<(), Box<dyn Error
 fn test_initialize_non_admin_signer_success() -> Result<(), Box<dyn Error>> {
     let mut test = OrderBookTest::new()?;
     let alice = test.get_user("alice");
+    let messenger_authority = test.get_user("messenger_authority").pubkey();
 
     // Alice (non-admin) initializes the order book
-    let ix = test.create_initialize_ix(&alice.pubkey(), CHAIN_ID)?;
+    let ix = test.create_initialize_ix(&alice.pubkey(), CHAIN_ID, &messenger_authority)?;
     test.ctx.execute_instruction(ix, &[&alice])?
         .assert_success();
 
@@ -104,13 +101,14 @@ fn test_initialize_non_admin_signer_success() -> Result<(), Box<dyn Error>> {
 fn test_initialize_already_initialized_reverts() -> Result<(), Box<dyn Error>> {
     let mut test = OrderBookTest::new()?;
     let admin = test.get_user("admin");
+    let messenger_authority = test.get_user("messenger_authority").pubkey();
 
     // First initialization
     test.initialize()?;
     test.ctx.svm.expire_blockhash();
 
     // Attempt to initialize again
-    let ix = test.create_initialize_ix(&admin.pubkey(), CHAIN_ID)?;
+    let ix = test.create_initialize_ix(&admin.pubkey(), CHAIN_ID, &messenger_authority)?;
     test.ctx.execute_instruction(ix, &[&admin])?
         .assert_failure();
 
@@ -121,6 +119,7 @@ fn test_initialize_already_initialized_reverts() -> Result<(), Box<dyn Error>> {
 fn test_initialize_wrong_global_account_pda_reverts() -> Result<(), Box<dyn Error>> {
     let mut test = OrderBookTest::new()?;
     let admin = test.get_user("admin");
+    let messenger_authority = test.get_user("messenger_authority").pubkey();
 
     // Create wrong PDA (using different seeds)
     let wrong_global_account = test.ctx.svm.get_pda(
@@ -128,51 +127,21 @@ fn test_initialize_wrong_global_account_pda_reverts() -> Result<(), Box<dyn Erro
         &order_book::ID,
     );
 
-    let messenger_authority = test.ctx.svm.get_pda(
-        &[messenger::AUTHORITY_SEED],
-        &messenger::ID,
-    );
-
     // Create instruction with wrong global_account PDA
     let accounts = order_book::accounts::Initialize {
         admin: admin.pubkey(),
         global_account: wrong_global_account,
-        messenger_authority,
         system_program: anchor_lang::solana_program::system_program::ID,
     };
 
-    let ix = test.create_initialize_ix_with_custom_accounts(accounts, CHAIN_ID)?;
-    test.ctx.execute_instruction(ix, &[&admin])?
-        .assert_anchor_error("ConstraintSeeds");
+    let ix = test.ctx.program()
+        .accounts(accounts)
+        .args(order_book::instruction::Initialize {
+            chain_id: CHAIN_ID,
+            messenger_authority,
+        })
+        .instruction()?;
 
-    Ok(())
-}
-
-#[test]
-fn test_initialize_wrong_messenger_authority() -> Result<(), Box<dyn Error>> {
-    let mut test = OrderBookTest::new()?;
-    let admin = test.get_user("admin");
-
-    let global_account = test.ctx.svm.get_pda(
-        &[order_book::state::GLOBAL_SEED],
-        &order_book::ID,
-    );
-
-    // Create wrong messenger authority PDA (using different seeds)
-    let wrong_messenger_authority = test.ctx.svm.get_pda(
-        &[b"wrong_authority"],
-        &messenger::ID,
-    );
-
-    // Create instruction with wrong messenger_authority PDA
-    let accounts = order_book::accounts::Initialize {
-        admin: admin.pubkey(),
-        global_account,
-        messenger_authority: wrong_messenger_authority,
-        system_program: anchor_lang::solana_program::system_program::ID,
-    };
-
-    let ix = test.create_initialize_ix_with_custom_accounts(accounts, CHAIN_ID)?;
     test.ctx.execute_instruction(ix, &[&admin])?
         .assert_anchor_error("ConstraintSeeds");
 

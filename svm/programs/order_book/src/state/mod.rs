@@ -30,7 +30,7 @@ pub struct OrderBookGlobal {
 pub const DESTINATION_SEED_PREFIX: &[u8] = b"destination";
 
 #[account]
-#[derive(InitSpace)]
+#[derive(Debug, InitSpace)]
 pub struct Destination {
     pub is_supported: bool,
     pub finality_buffer: u64,
