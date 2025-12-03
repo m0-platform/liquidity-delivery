@@ -1,16 +1,25 @@
-use anchor_lang::prelude::*;
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token_interface::{Mint, TokenAccount, TokenInterface}
-};
 use crate::{
     error::OrderBookError,
     state::{
-        Order, OrderType, OrderStatus, NativeOrder, OrderBookGlobal, GLOBAL_SEED, ORDER_SEED_PREFIX
+        NativeOrder, Order, OrderBookGlobal, OrderStatus, OrderType, GLOBAL_SEED, ORDER_SEED_PREFIX,
     },
     utils::transfer_tokens_from_program,
 };
-use messenger::FillReport;
+use anchor_lang::prelude::*;
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token_interface::{Mint, TokenAccount, TokenInterface},
+};
+
+#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize)]
+pub struct FillReport {
+    pub order_id: [u8; 32],
+    pub amount_in_to_release: u128,
+    pub amount_out_filled: u128,
+    pub origin_recipient: [u8; 32],
+    pub token_in: [u8; 32],
+}
+
 
 #[event_cpi]
 #[derive(Accounts)]
@@ -67,18 +76,24 @@ pub struct ReportOrderFill<'info> {
 
     pub associated_token_program: Program<'info, AssociatedToken>,
 
-    pub system_program: Program<'info, System>
+    pub system_program: Program<'info, System>,
 }
 
 impl ReportOrderFill<'_> {
     fn validate(&self, fill_report: &FillReport) -> Result<()> {
         // Validate the order type is native
-        require!(self.order.order_type == OrderType::Native, OrderBookError::InvalidOrderType);
+        require!(
+            self.order.order_type == OrderType::Native,
+            OrderBookError::InvalidOrderType
+        );
 
         let status = &self.order.data.status;
 
         // Validate the order can be filled
-        require!(status == &OrderStatus::Created || status == &OrderStatus::CancelRequested, OrderBookError::OrderNotFillable);
+        require!(
+            status == &OrderStatus::Created || status == &OrderStatus::CancelRequested,
+            OrderBookError::OrderNotFillable
+        );
 
         // Validate the fill amount is not zero
         if fill_report.amount_out_filled == 0 {
@@ -98,7 +113,9 @@ impl ReportOrderFill<'_> {
         order.amount_in_released += fill_report.amount_in_to_release as u128;
         order.amount_out_filled += fill_report.amount_out_filled as u128;
 
-        let full_fill = if order.amount_out_filled > order.amount_out || order.amount_in_released > order.amount_in {
+        let full_fill = if order.amount_out_filled > order.amount_out
+            || order.amount_in_released > order.amount_in
+        {
             // This should not be possible, but included for safety
             return err!(OrderBookError::Overfill);
         } else if order.amount_out_filled == order.amount_out {
@@ -114,10 +131,20 @@ impl ReportOrderFill<'_> {
         // Otherwise, use the reported amount
         let amount_in_to_release: u64 = if full_fill {
             // Any tokens sent to this account after the order is created are donated to the solver
-            require!(ctx.accounts.order_token_in_ata.amount >= fill_report.amount_in_to_release.try_into().map_err(|_| OrderBookError::MathOverflow)?, OrderBookError::InvalidFillAmount);
+            require!(
+                ctx.accounts.order_token_in_ata.amount
+                    >= fill_report
+                        .amount_in_to_release
+                        .try_into()
+                        .map_err(|_| OrderBookError::MathOverflow)?,
+                OrderBookError::InvalidFillAmount
+            );
             ctx.accounts.order_token_in_ata.amount
         } else {
-            fill_report.amount_in_to_release.try_into().map_err(|_| OrderBookError::MathOverflow)?
+            fill_report
+                .amount_in_to_release
+                .try_into()
+                .map_err(|_| OrderBookError::MathOverflow)?
         };
 
         // Transfer the input tokens from the order to the designated recipient

@@ -1,9 +1,8 @@
-use anchor_lang::prelude::*;
 use crate::{
     constants::ANCHOR_DISCRIMINATOR_SIZE,
-    state::{OrderBookGlobal, GLOBAL_SEED}
+    state::{OrderBookGlobal, GLOBAL_SEED},
 };
-use messenger::{AUTHORITY_SEED, ID as MESSENGER_ID};
+use anchor_lang::prelude::*;
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -19,23 +18,15 @@ pub struct Initialize<'info> {
     )]
     pub global_account: Account<'info, OrderBookGlobal>,
 
-    /// CHECK: We derive the key from the seeds. No data is read.
-    #[account(
-        seeds = [AUTHORITY_SEED],
-        seeds::program = MESSENGER_ID,
-        bump,
-    )]
-    pub messenger_authority: AccountInfo<'info>,
-
-    pub system_program: Program<'info, System>
+    pub system_program: Program<'info, System>,
 }
 
 impl Initialize<'_> {
-    pub fn handler(ctx: Context<Self>, chain_id: u32) -> Result<()> {
+    pub fn handler(ctx: Context<Self>, chain_id: u32, messenger_authority: Pubkey) -> Result<()> {
         ctx.accounts.global_account.set_inner(OrderBookGlobal {
             admin: ctx.accounts.admin.key(),
             chain_id,
-            messenger_authority: ctx.accounts.messenger_authority.key(),
+            messenger_authority,
             bump: ctx.bumps.global_account,
             reserved: [0u8; 128],
         });

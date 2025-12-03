@@ -10,9 +10,9 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-use messenger::FillReport;
-
 declare_id!("4Qgxc6VkBGaAQAikirnkApYNyy1W6asQgMHZxKgRcSL8");
+
+declare_program!(messenger);
 
 #[program]
 pub mod order_book {
@@ -20,11 +20,20 @@ pub mod order_book {
 
     // Admin actions
 
-    pub fn initialize(ctx: Context<Initialize>, chain_id: u32) -> Result<()> {
-        Initialize::handler(ctx, chain_id)
+    pub fn initialize(
+        ctx: Context<Initialize>,
+        chain_id: u32,
+        messenger_authority: Pubkey,
+    ) -> Result<()> {
+        Initialize::handler(ctx, chain_id, messenger_authority)
     }
 
-    pub fn configure_destination(ctx: Context<ConfigureDestination>, dest_chain_id: u32, is_supported: bool, finality_buffer: Option<u64>) -> Result<()> {
+    pub fn configure_destination(
+        ctx: Context<ConfigureDestination>,
+        dest_chain_id: u32,
+        is_supported: bool,
+        finality_buffer: Option<u64>,
+    ) -> Result<()> {
         ConfigureDestination::handler(ctx, dest_chain_id, is_supported, finality_buffer)
     }
 
@@ -34,7 +43,10 @@ pub mod order_book {
         OpenOrder::handler(ctx, params)
     }
 
-    pub fn request_cancel_order(ctx: Context<RequestCancelOrder>, order_id: [u8; 32]) -> Result<()> {
+    pub fn request_cancel_order(
+        ctx: Context<RequestCancelOrder>,
+        order_id: [u8; 32],
+    ) -> Result<()> {
         RequestCancelOrder::handler(ctx, order_id)
     }
 
@@ -44,11 +56,21 @@ pub mod order_book {
 
     // Solver actions
 
-    pub fn fill_native_order(ctx: Context<FillNativeOrder>, order_id: [u8; 32], order_data: OrderData, fill_params: FillParams) -> Result<()> {
+    pub fn fill_native_order(
+        ctx: Context<FillNativeOrder>,
+        order_id: [u8; 32],
+        order_data: OrderData,
+        fill_params: FillParams,
+    ) -> Result<()> {
         FillNativeOrder::handler(ctx, order_id, order_data, fill_params)
     }
 
-    pub fn fill_foreign_order(ctx: Context<FillForeignOrder>, order_id: [u8; 32], order_data: OrderData, fill_params: FillParams) -> Result<()> {
+    pub fn fill_foreign_order(
+        ctx: Context<FillForeignOrder>,
+        order_id: [u8; 32],
+        order_data: OrderData,
+        fill_params: FillParams,
+    ) -> Result<()> {
         FillForeignOrder::handler(ctx, order_id, order_data, fill_params)
     }
 

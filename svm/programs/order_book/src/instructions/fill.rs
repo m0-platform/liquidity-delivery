@@ -3,17 +3,18 @@ use anchor_spl::{
     associated_token::AssociatedToken,
     token_interface::{Mint, TokenAccount, TokenInterface}
 };
-
 use crate::{
     constants::{ANCHOR_DISCRIMINATOR_SIZE, VERSION},
     error::OrderBookError,
     state::{Order, OrderType, OrderStatus, NativeOrder, ForeignOrder, ORDER_SEED_PREFIX, OrderData, OrderBookGlobal, GLOBAL_SEED, compute_order_id},
     utils::{transfer_tokens, transfer_tokens_from_program}
 };
+
+declare_program!(messenger);
 use messenger::{
     program::Messenger,
     cpi::{send_fill_report, accounts::SendFillReport},
-    FillReport
+    types::FillReport,
 };
 
 // Handler Inputs
@@ -350,7 +351,8 @@ impl FillForeignOrder<'_> {
                 order_id,
                 amount_in_to_release: amount_in_to_release as u128,
                 amount_out_filled: amount_out_to_fill as u128,
-                origin_recipient: fill_params.origin_recipient
+                origin_recipient: fill_params.origin_recipient,
+                token_in: order_data.token_in,
             }
         )?;
 
