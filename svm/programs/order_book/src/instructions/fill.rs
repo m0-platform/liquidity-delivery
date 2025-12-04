@@ -46,7 +46,6 @@ pub struct OrderCompleted {
 #[derive(Accounts)]
 #[instruction(order_id: [u8; 32], order_data: OrderData, fill_params: FillParams)]
 pub struct FillNativeOrder<'info> {
-    // pub common: FillCommon<'info>,
     #[account(mut)]
     pub solver: Signer<'info>,
 
@@ -95,7 +94,6 @@ pub struct FillNativeOrder<'info> {
         mut,
         seeds = [ORDER_SEED_PREFIX, &order_id],
         bump = order.bump,
-        constraint = order.order_type == OrderType::Native @ OrderBookError::InvalidOrderType,
     )]
     pub order: Account<'info, Order::<NativeOrder>>,
 
