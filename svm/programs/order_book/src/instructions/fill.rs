@@ -456,9 +456,6 @@ fn validate_params(
         OrderBookError::InvalidFillAmount
     );
 
-    // Validate the origin recipient is a valid pubkey
-    let _ = Pubkey::new_from_array(fill_params.origin_recipient);
-
     // If the order solver is populated (i.e. not all zeros), validate it matches the signer
     if order_data.solver != [0u8; 32] {
         let solver_pubkey = Pubkey::new_from_array(order_data.solver);

@@ -108,17 +108,13 @@ impl ReportOrderFill<'_> {
         let order = &mut ctx.accounts.order.data;
 
         // Update the filled amounts on the order
-        // We trust the amount provided is accurate and that the destination chain
-        // does not allow overfills
         order.amount_in_released += fill_report.amount_in_to_release as u128;
         order.amount_out_filled += fill_report.amount_out_filled as u128;
 
-        let full_fill = if order.amount_out_filled > order.amount_out
-            || order.amount_in_released > order.amount_in
-        {
-            // This should not be possible, but included for safety
-            return err!(OrderBookError::Overfill);
-        } else if order.amount_out_filled == order.amount_out {
+        let full_fill = if order.amount_out_filled >= order.amount_out {
+            // The amount_in_to_release is limited to the amount in the order tokenIn ATA
+            // Therefore, we don't need to check for overfills here.
+
             // Mark the order as completed if fully filled
             order.status = OrderStatus::Completed;
             true
@@ -129,16 +125,11 @@ impl ReportOrderFill<'_> {
         // Calculate the corresponding input amount to release to the solve
         // If the order is completed by the fill, use the order token account balance
         // Otherwise, use the reported amount
+        // If the reported amount is more than the order token account balance, it will error during the transfer.
+        // This shouldn't happen in normal operation and if it does, then the transfer error will stop the ix
+        // from completing.
         let amount_in_to_release: u64 = if full_fill {
             // Any tokens sent to this account after the order is created are donated to the solver
-            require!(
-                ctx.accounts.order_token_in_ata.amount
-                    >= fill_report
-                        .amount_in_to_release
-                        .try_into()
-                        .map_err(|_| OrderBookError::MathOverflow)?,
-                OrderBookError::InvalidFillAmount
-            );
             ctx.accounts.order_token_in_ata.amount
         } else {
             fill_report
