@@ -70,7 +70,8 @@ impl ClaimRefund<'_> {
                 .destination_account
                 .as_ref()
                 .ok_or(OrderBookError::DestinationAccountRequired)?;
-            destination_account.finality_buffer
+            let current_timestamp = Clock::get()?.unix_timestamp as u64;
+            destination_account.effective_finality_buffer(current_timestamp)
         } else {
             0
         };

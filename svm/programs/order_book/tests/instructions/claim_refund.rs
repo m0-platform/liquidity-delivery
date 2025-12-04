@@ -1,5 +1,5 @@
 use super::super::{OrderBookTest, CHAIN_ID, DEST_CHAIN_ID};
-use anchor_litesvm::{AssertionHelpers, Signer, TestHelpers};
+use anchor_litesvm::{Signer, TestHelpers};
 use anchor_spl::associated_token::get_associated_token_address;
 use order_book::{error::OrderBookError, ORDER_SEED_PREFIX};
 use std::error::Error;
@@ -429,14 +429,9 @@ mod xchain_orders {
         let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
         let (_, native_order) = test.get_native_order_account(&order_id)?;
-        println!("Fill deadline: {}", native_order.data.fill_deadline);
-
-        println!("Starting time {}", test.current_time());
 
         // Warp time past fill_deadline but NOT past fill_deadline + finality buffer (which is 1000)
         test.warp_forward(200);
-
-        println!("Warped time {}", test.current_time());
 
         // Try to claim refund before finality buffer passes
         let ix = test.create_claim_refund_ix(&test.get_user("alice").pubkey(), order_id)?;
@@ -484,7 +479,7 @@ mod xchain_orders {
 
         // Warp time past fill_deadline + finality buffer
         let (_, dest_data) = test.get_destination_account(DEST_CHAIN_ID)?;
-        test.warp_forward(200 + dest_data.finality_buffer);
+        test.warp_forward(200 + dest_data.effective_finality_buffer(test.current_time()));
 
         // Build accounts but remove destination account
         let mut accounts =
@@ -516,7 +511,7 @@ mod xchain_orders {
 
         // Warp time past fill_deadline + finality buffer
         let (_, dest_data) = test.get_destination_account(DEST_CHAIN_ID)?;
-        test.warp_forward(200 + dest_data.finality_buffer);
+        test.warp_forward(200 + dest_data.effective_finality_buffer(test.current_time()));
 
         // Claim refund
         test.claim_refund("alice", order_id)?;
@@ -558,7 +553,7 @@ mod xchain_orders {
 
         // Warp time past cancel_requested_at + finality buffer
         let (_, dest_data) = test.get_destination_account(DEST_CHAIN_ID)?;
-        test.warp_forward(10 + dest_data.finality_buffer);
+        test.warp_forward(10 + dest_data.effective_finality_buffer(test.current_time()));
 
         // Claim refund
         test.claim_refund("alice", order_id)?;
@@ -616,7 +611,7 @@ mod xchain_orders {
 
         // Warp time past fill_deadline + finality buffer
         let (_, dest_data) = test.get_destination_account(DEST_CHAIN_ID)?;
-        test.warp_forward(200 + dest_data.finality_buffer);
+        test.warp_forward(200 + dest_data.effective_finality_buffer(test.current_time()));
 
         // Claim refund
         test.claim_refund("alice", order_id)?;
@@ -667,7 +662,7 @@ mod xchain_orders {
 
         // Warp time past fill_deadline + finality buffer
         let (_, dest_data) = test.get_destination_account(DEST_CHAIN_ID)?;
-        test.warp_forward(200 + dest_data.finality_buffer);
+        test.warp_forward(200 + dest_data.effective_finality_buffer(test.current_time()));
 
         // Bob claims refund on behalf of Alice (sender doesn't need to sign)
         let ix = test.create_claim_refund_ix(&test.get_user("alice").pubkey(), order_id)?;

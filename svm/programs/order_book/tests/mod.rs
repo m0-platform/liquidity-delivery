@@ -1,7 +1,7 @@
 mod instructions;
 
 use anchor_lang::{
-    prelude::{declare_program, AccountMeta, ToAccountMetas},
+    prelude::declare_program,
     solana_program::instruction::Instruction,
 };
 use anchor_litesvm::{
@@ -9,9 +9,9 @@ use anchor_litesvm::{
 };
 use anchor_spl::{
     associated_token::get_associated_token_address,
-    token::{spl_token::state::Account, TokenAccount},
+    token::TokenAccount,
 };
-use order_book::{FillParams, OrderData, ORDER_SEED_PREFIX, VERSION};
+use order_book::{OrderData, ORDER_SEED_PREFIX};
 use std::{collections::HashMap, error::Error};
 
 declare_program!(messenger);
@@ -138,6 +138,8 @@ impl OrderBookTest {
             .ctx
             .program()
             .accounts(order_book::accounts::ConfigureDestination {
+                program: order_book::ID,
+                event_authority: self.get_event_authority()?,
                 admin: admin.pubkey(),
                 global_account: self
                     .ctx
@@ -685,6 +687,8 @@ impl OrderBookTest {
             .ctx
             .program()
             .accounts(order_book::accounts::ConfigureDestination {
+                program: order_book::ID,
+                event_authority: self.get_event_authority()?,
                 admin: *admin,
                 global_account,
                 destination_account,
@@ -857,7 +861,8 @@ impl OrderBookTest {
             order_params,
         )?;
 
-        self.ctx.execute_instruction(ix, &[sender_keypair])?;
+        self.ctx.execute_instruction(ix, &[sender_keypair])?
+            .assert_success();
 
         Ok(order_id)
     }
@@ -877,7 +882,8 @@ impl OrderBookTest {
             finality_buffer,
         )?;
 
-        self.ctx.execute_instruction(ix, &[admin_keypair])?;
+        self.ctx.execute_instruction(ix, &[admin_keypair])?
+            .assert_success();
 
         Ok(())
     }
@@ -898,7 +904,8 @@ impl OrderBookTest {
         let ix =
             self.create_fill_native_order_ix(&solver_keypair.pubkey(), order_id, &fill_params)?;
 
-        self.ctx.execute_instruction(ix, &[solver_keypair])?;
+        self.ctx.execute_instruction(ix, &[solver_keypair])?
+            .assert_success();
 
         Ok(())
     }
@@ -919,7 +926,8 @@ impl OrderBookTest {
         let ix =
             self.create_fill_foreign_order_ix(&solver_keypair.pubkey(), order_data, &fill_params)?;
 
-        self.ctx.execute_instruction(ix, &[solver_keypair])?;
+        self.ctx.execute_instruction(ix, &[solver_keypair])?
+            .assert_success();
 
         Ok(())
     }
@@ -949,7 +957,8 @@ impl OrderBookTest {
 
         let ix = self.create_request_cancel_ix(&sender_keypair.pubkey(), order_id)?;
 
-        self.ctx.execute_instruction(ix, &[sender_keypair])?;
+        self.ctx.execute_instruction(ix, &[sender_keypair])?
+            .assert_success();
 
         Ok(())
     }
@@ -959,7 +968,8 @@ impl OrderBookTest {
 
         let ix = self.create_claim_refund_ix(&sender_keypair.pubkey(), order_id)?;
 
-        self.ctx.execute_instruction(ix, &[sender_keypair])?;
+        self.ctx.execute_instruction(ix, &[sender_keypair])?
+            .assert_success();
 
         Ok(())
     }

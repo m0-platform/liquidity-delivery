@@ -1,7 +1,6 @@
-use super::super::{OrderBookTest, CHAIN_ID, DEST_CHAIN_ID, INITIAL_FUNDS};
-use anchor_litesvm::{AssertionHelpers, Keypair, Signer, TestHelpers};
-use anchor_spl::associated_token::get_associated_token_address;
-use order_book::{error::OrderBookError, FillReport, ORDER_SEED_PREFIX};
+use super::super::{OrderBookTest, DEST_CHAIN_ID};
+use anchor_litesvm::Signer;
+use order_book::{error::OrderBookError, FillReport};
 use std::error::Error;
 
 // ReportOrderFill instruction tests
