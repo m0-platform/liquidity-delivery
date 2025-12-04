@@ -196,6 +196,7 @@ impl OpenOrder<'_> {
         // Emit the event
         emit_cpi!(OrderOpened {
             order_id,
+            sender,
             token_in: ctx.accounts.token_in_mint.key(),
             amount_in: params.amount_in,
             dest_chain_id: params.dest_chain_id,
@@ -211,6 +212,7 @@ impl OpenOrder<'_> {
 #[event]
 pub struct OrderOpened {
     pub order_id: [u8; 32],
+    pub sender: Pubkey,
     pub token_in: Pubkey,
     pub amount_in: u64,
     pub dest_chain_id: u32,
