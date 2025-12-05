@@ -21,15 +21,6 @@ build:
 tests:
 	@./test.sh -p $(profile)
 
-fuzz:
-	@./test.sh -t testFuzz -p $(profile)
-
-integration:
-	@./test.sh -d test/integration -p $(profile)
-
-invariant:
-	@./test.sh -d test/invariant -p $(profile)
-
 coverage:
 	FOUNDRY_PROFILE=$(profile) forge coverage --report lcov && lcov --extract lcov.info -o lcov.info 'src/*' && genhtml lcov.info -o coverage
 
