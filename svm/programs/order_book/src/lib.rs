@@ -104,5 +104,16 @@ pub mod order_book {
 
     pub fn report_order_fill(ctx: Context<ReportOrderFill>, fill_report: FillReport) -> Result<()> {
         ReportOrderFill::handler(ctx, fill_report)
+    }  
+
+    // Dummy IDL instruction
+    // Included to ensure the order types are included in the IDL build
+    #[cfg(feature = "idl-build")]
+    pub fn idl_instruction(_ctx: Context<Dummy>, foreign: ForeignOrder, native: NativeOrder) -> Result<()> {
+        Ok(())
     }
 }
+
+#[cfg(feature = "idl-build")]
+#[derive(Accounts)]
+pub struct Dummy {}
