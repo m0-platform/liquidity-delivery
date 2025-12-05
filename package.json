@@ -1,0 +1,27 @@
+{
+  "name": "@m0-foundation/liquidity-delivery",
+  "version": "1.0.0",
+  "description": "Limit order protocol for liquidity delivery within the M0 ecosystem.",
+  "author": "M^0 Labs <contact@m0.xyz>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/m0-foundation/liquidity-delivery.git"
+  },
+  "devDependencies": {
+    "@coral-xyz/anchor": "^0.31.1",
+    "@types/bn.js": "^5.1.0",
+    "@types/jest": "^29.0.3",
+    "husky": "^9.1.7",
+    "jest": "^29.0.3",
+    "lint-staged": "^16.1.2",
+    "prettier": "^3.6.2",
+    "prettier-plugin-solidity": "^2.1.0",
+    "solhint": "^6.0.0",
+    "solhint-plugin-prettier": "^0.1.0",
+    "ts-jest": "^29.0.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

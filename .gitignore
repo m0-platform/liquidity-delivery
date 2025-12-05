@@ -1,0 +1,37 @@
+# Compiler files
+evm/cache/
+evm/out/
+
+# Ignores development broadcast logs
+!/evm/broadcast
+evm/broadcast/*/31337/
+evm/broadcast/**/dry-run/
+
+# Coverage files
+coverage/
+lcov.info
+
+# Docs
+docs/
+
+# Dotenv file
+.env
+
+# Mac OS files
+.DS_Store
+
+# NPM modules
+node_modules
+
+# Soljson
+soljson-latest.js
+
+# Gas report
+gasreport.ansi
+
+# Anchor/Rust files
+.anchor
+target
+svm/target
+**/*.rs.bk
+test-ledger

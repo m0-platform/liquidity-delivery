@@ -1,0 +1,40 @@
+{
+  "name": "@m0-foundation/liquidity-delivery/evm",
+  "version": "1.0.0",
+  "description": "Limit order protocol for liquidity delivery on EVM chains.",
+  "author": "M^0 Labs <contact@m0.xyz>",
+  "scripts": {
+    "build": "make -B build",
+    "clean": "make -B clean",
+    "compile": "forge compile",
+    "coverage": "make -B coverage",
+    "deploy-local": "make -B deploy-local",
+    "deploy-sepolia": "make -B deploy-sepolia",
+    "doc": "forge doc --serve --port 4000",
+    "lint-staged": "lint-staged",
+    "prepack": "npm run clean && npm run build",
+    "prepare": "husky",
+    "prettier": "prettier --write 'script/**/*.sol' 'src/**/*.sol' 'test/**/*.sol'",
+    "slither": "forge build --build-info --skip '*/test/**' --skip '*/script/**' --force && slither --compile-force-framework foundry --ignore-compile --config-file slither.config.json --fail-high .",
+    "solhint": "solhint -f stylish 'src/**/*.sol'",
+    "solhint-fix": "solhint --fix 'src/**/*.sol'",
+    "test": "make -B tests",
+    "test-gas": "make -B gas-report",
+    "test-fuzz": "make -B fuzz",
+    "test-integration": "make -B integration",
+    "test-invariant": "make -B invariant"
+  },
+  "devDependencies": {
+    "husky": "catalog:",
+    "lint-staged": "catalog:",
+    "prettier": "catalog:",
+    "prettier-plugin-solidity": "catalog:",
+    "solhint": "catalog:",
+    "solhint-plugin-prettier": "catalog:",
+    "typescript": "catalog:"
+  },
+  "files": [
+    "src/**",
+    "out/**"
+  ]
+}
