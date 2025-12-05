@@ -3858,6 +3858,7 @@ dependencies = [
  "anchor-litesvm",
  "anchor-spl",
  "litesvm 0.8.1",
+ "solana-security-txt",
 ]
 
 [[package]]

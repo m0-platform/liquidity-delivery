@@ -1,4 +1,5 @@
 use crate::{
+    ID,
     error::OrderBookError,
     state::{
         Destination, NativeOrder, Order, OrderBookGlobal, OrderStatus, DESTINATION_SEED_PREFIX,
@@ -23,10 +24,12 @@ pub struct ClaimRefund<'info> {
     )]
     pub global_account: Account<'info, OrderBookGlobal>,
 
-    #[account(
-        seeds = [DESTINATION_SEED_PREFIX, order.data.dest_chain_id.to_be_bytes().as_ref()],
-        bump = destination_account.bump
-    )]
+    // #[account(
+    //     seeds = [DESTINATION_SEED_PREFIX, order.data.dest_chain_id.to_be_bytes().as_ref()],
+    //     bump = destination_account.bump
+    // )]
+    /// We validate the seed in the validate() function to avoid issues
+    /// with IDL generation caused by using the value nested with Order::<NativeOrder>
     pub destination_account: Option<Account<'info, Destination>>,
 
     #[account(
@@ -66,10 +69,30 @@ impl ClaimRefund<'_> {
     fn validate(&self) -> Result<()> {
         // Validate the destination account exists if the order's destination chain is not the current chain
         let finality_buffer = if self.order.data.dest_chain_id != self.global_account.chain_id {
+            // Validate the seed of the destination account
+            let (expected_destination_account, destination_bump) = Pubkey::find_program_address(
+                &[
+                    DESTINATION_SEED_PREFIX,
+                    &self.order.data.dest_chain_id.to_be_bytes(),
+                ],
+                &ID,
+            );
             let destination_account = self
                 .destination_account
                 .as_ref()
                 .ok_or(OrderBookError::DestinationAccountRequired)?;
+            require_keys_eq!(
+                destination_account.key(),
+                expected_destination_account,
+                OrderBookError::InvalidDestinationAccount
+            );
+            require_eq!(
+                destination_account.bump,
+                destination_bump,
+                OrderBookError::InvalidDestinationAccount
+            );
+
+            // Return the effective finality buffer for the destination
             let current_timestamp = Clock::get()?.unix_timestamp as u64;
             destination_account.effective_finality_buffer(current_timestamp)
         } else {

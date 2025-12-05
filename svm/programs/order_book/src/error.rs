@@ -54,4 +54,6 @@ pub enum OrderBookError {
     OrderFilled,
     #[msg("Order status is not finalized")]
     FinalityPending,
+    #[msg("Invalid destination account")]
+    InvalidDestinationAccount,
 }
