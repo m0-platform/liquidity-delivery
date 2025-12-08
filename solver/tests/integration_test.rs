@@ -275,7 +275,7 @@ async fn test_order_rejected() {
 }
 
 #[tokio::test]
-async fn test_order_processed() {
+async fn test_order_processed_token_a() {
     let suite = get_tests_suite().await;
     let contract = OrderBook::new(suite.contract_address, &suite.provider);
 
@@ -297,4 +297,29 @@ async fn test_order_processed() {
 
     suite.wait_for_log("event=\"OrderCreated\" order_id=cd7918d1ca877739e07228e799c448933806c55fa39a24d70d58c5d99c52bbf9").await;
     suite.wait_for_log("event=\"HoldSuccessfulEvent\" order_id=cd7918d1ca877739e07228e799c448933806c55fa39a24d70d58c5d99c52bbf9").await;
+}
+
+#[tokio::test]
+async fn test_order_processed_token_b() {
+    let suite = get_tests_suite().await;
+    let contract = OrderBook::new(suite.contract_address, &suite.provider);
+
+    let builder = contract.openOrder(OrderParams {
+        tokenIn: suite.tokens[1].into(),
+        destChainId: 11155111,
+        tokenOut: FixedBytes::from(decode_evm_address(suite.tokens[2])),
+        amountIn: 500000,
+        amountOut: 500000,
+        recipient: FixedBytes::from(decode_evm_address(suite.evm_signer.address())),
+        fillDeadline: u32::MAX,
+        solver: FixedBytes::from([0u8; 32]),
+    });
+
+    let _ = builder
+        .send()
+        .await
+        .expect("Failed to send openOrder transaction");
+
+    suite.wait_for_log("event=\"OrderCreated\" order_id=affa5ec6be0d5eb54cc4a3db7743b4b01e883c6605901a25e7984029b73c9e20").await;
+    suite.wait_for_log("event=\"HoldSuccessfulEvent\" order_id=affa5ec6be0d5eb54cc4a3db7743b4b01e883c6605901a25e7984029b73c9e20").await;
 }
