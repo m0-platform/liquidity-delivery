@@ -253,6 +253,10 @@ interface IOrderBook {
         bytes32 tokenIn;
     }
 
+    struct CancelReport {
+        bytes32 orderId;
+    }
+
     /**
      * @notice Parameters supplied by the filler of an order
      * @dev This struct contains parameters that are specific to the filler
@@ -263,20 +267,6 @@ interface IOrderBook {
     struct FillParams {
         uint128 amountOutToFill;
         bytes32 originRecipient;
-    }
-
-    /**
-     * @notice Configuration for a supported destination chain
-     * @param isSupported Whether orders can be created with this chain as the destination
-     * @param finalityBuffer Duration (in seconds) to wait after the fill deadline before allowing refunds
-     * @param newFinalityBuffer New duration (in seconds) to wait after the fill deadline before allowing refunds
-     * @param newFinalityBufferEffectiveTimestamp Timestamp when the new finality buffer becomes effective
-     */
-    struct Destination {
-        bool isSupported;
-        uint32 finalityBuffer;
-        uint32 newFinalityBuffer;
-        uint64 newFinalityBufferEffectiveTimestamp;
     }
 
     /**
@@ -388,27 +378,33 @@ interface IOrderBook {
      * @notice Request cancellation of an order before its fill deadline
      * @dev Must be called by the order's sender
      * @param orderId_ - ID of the order to cancel
+     * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
+     * @param messageData_ Additional message data required by some crosschain message protocols (see PortalV2 for more info)
      */
-    function requestCancelOrder(bytes32 orderId_) external;
+    function cancelOrder(bytes32 orderId_, OrderData calldata orderData_, bytes calldata messageData_) external;
 
     /**
-     * @notice Request cancellation of an order before its fill deadline
+     * @notice Request cancellation of an order before its fill deadline on behalf of the sender
      * @dev Can be called by anyone with a valid signature from the order's sender
      * @param orderId_ ID of the order to cancel
+     * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
+     * @param messageData_ Additional message data required by some crosschain message protocols (see PortalV2 for more info)
      * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelRequestDigest)
      */
-    function requestCancelOrderFor(bytes32 orderId_, bytes calldata signature_) external;
+    function cancelOrderFor(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        bytes calldata messageData_,
+        bytes calldata signature_
+    ) external;
 
-    /**
-     * @notice Refund any remaining unfilled amount of an order to the originator
-     *         after its (fill deadline or request cancellation)
-     *         timestamp + finality buffer has passed
-     * @dev    Can be called by anyone. This allows applications to gracefully
-     *         handle refunds for orders that weren't filled
-     *         Alternatively, if a user requested a refund, they can claim it here
-     * @param  orderId_ ID of the order to claim a refund for
-     */
-    function claimRefund(bytes32 orderId_) external;
+    // /**
+    //  * @notice Request cancellation of an order before its fill deadline
+    //  * @dev Can be called by anyone with a valid signature from the order's sender
+    //  * @param orderId_ ID of the order to cancel
+    //  * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelRequestDigest)
+    //  */
+    // function cancelOrderFor(bytes32 orderId_, bytes calldata signature_) external;
 
     /* ========== Filling Orders ========== */
 
@@ -443,19 +439,12 @@ interface IOrderBook {
      */
     function reportFill(FillReport calldata report_) external;
 
-    /* ========== Admin Functions ========== */
-
     /**
-     * @notice Set external chain support and finality buffer configuration
-     * @dev Must be DEFAULT_ADMIN_ROLE to call
-     * @dev The new finality buffer becomes effective after waiting for the existing buffer duration
-     *      to avoid certain race conditions that could result in lost funds for solvers
-     * @param destChainId_ The chain ID for the destination chain used by the messenger
-     * @param isSupported_ whether support for the chain should be enabled (true activates, false deactivates)
-     * @param finalityBuffer_ new duration (in seconds) to wait for messages from the destination
-     *        chain to be finalized after deadlines for safe processing
+     * @notice Report a crosschain cancellation of an order.
+     * @dev Must be called by the messenger contract
+     * @param report_ Fill data sent from the destination chain
      */
-    function setDestinationConfig(uint32 destChainId_, bool isSupported_, uint32 finalityBuffer_) external;
+    function reportCancel(CancelReport calldata report_) external;
 
     /* ========== View Functions ========== */
 
@@ -479,18 +468,6 @@ interface IOrderBook {
 
     /// @notice Returns the next nonce for the provided sender address
     function getSenderNonce(address sender_) external view returns (uint64);
-
-    /// @notice Returns whether orders can be created with the provided chain ID as the destination
-    function isDestinationSupported(uint32 destChainId_) external view returns (bool);
-
-    /**
-     * @notice Returns the configured finality buffer for the provided chain ID
-     * @dev If a chain is not supported, this will return 0
-     */
-    function getDestinationFinalityBuffer(uint32 destChainId_) external view returns (uint32);
-
-    /// @notice Returns the full destination configuration for the provided chain ID
-    function getDestinationConfig(uint32 destChainId_) external view returns (Destination memory);
 
     /* ========== EIP-712 Digest Functions ========== */
 

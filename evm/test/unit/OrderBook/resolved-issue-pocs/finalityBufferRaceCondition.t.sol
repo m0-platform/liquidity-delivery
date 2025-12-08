@@ -20,7 +20,7 @@ contract FinalityBufferRaceConditionTest is OrderBookTestBase {
 
         // Set a longer finality buffer for testing
         vm.prank(users["admin"]);
-        orderBook.setDestinationConfig(DEST_CHAIN_ID, true, INITIAL_FINALITY_BUFFER);
+        // orderBook.setDestinationConfig(DEST_CHAIN_ID, true, INITIAL_FINALITY_BUFFER);
     }
 
     /// @notice Demonstrates solver doesn't lose funds when admin decreases finalityBuffer mid-flight
@@ -53,7 +53,7 @@ contract FinalityBufferRaceConditionTest is OrderBookTestBase {
         // T=15min: Admin reduces finalityBuffer (perhaps for operational reasons)
         vm.warp(block.timestamp + 15 minutes);
         vm.prank(users["admin"]);
-        orderBook.setDestinationConfig(DEST_CHAIN_ID, true, REDUCED_FINALITY_BUFFER);
+        // orderBook.setDestinationConfig(DEST_CHAIN_ID, true, REDUCED_FINALITY_BUFFER);
 
         // T=25min: Alice can now claim refund (cancelRequestedAt + 10min has passed)
         vm.warp(cancelRequestedAt + REDUCED_FINALITY_BUFFER + 1);

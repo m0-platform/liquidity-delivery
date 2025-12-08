@@ -5,6 +5,7 @@ import { IMessenger, IOrderBook } from "../../src/interfaces/IMessenger.sol";
 
 contract MockMessenger is IMessenger {
     event FillReportSent(uint32 destinationChainId, IOrderBook.FillReport report);
+    event CancelReportSent(uint32 destinationChainId, IOrderBook.CancelReport report);
 
     address public orderBook;
 
@@ -21,6 +22,15 @@ contract MockMessenger is IMessenger {
     ) external override {
         fillReports[report.orderId] = report;
         emit FillReportSent(destinationChainId, report);
+    }
+
+    function sendCancelReport(
+        uint32 destinationChainId,
+        IOrderBook.CancelReport calldata report,
+        bytes calldata messageData
+    ) external override {
+        // No-op for this mock
+        emit CancelReportSent(destinationChainId, report);
     }
 
     function receiveFillReport(IOrderBook.FillReport calldata report) external {

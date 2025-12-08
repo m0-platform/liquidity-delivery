@@ -2,7 +2,9 @@
 pragma solidity 0.8.26;
 
 import { Test } from "../../../../lib/forge-std/src/Test.sol";
-import { ERC1967Proxy } from "../../../../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {
+    ERC1967Proxy
+} from "../../../../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { TypeConverter } from "../../../../lib/common/src/libs/TypeConverter.sol";
 
 import { OrderBook, IOrderBook } from "../../../../src/OrderBook.sol";
@@ -59,7 +61,7 @@ contract MEarnerYieldAccrualTest is Test {
         // Configure
         messenger.setOrderBook(address(orderBook));
         vm.prank(admin);
-        orderBook.setDestinationConfig(DEST_CHAIN_ID, true, FINALITY_BUFFER);
+        // orderBook.setDestinationConfig(DEST_CHAIN_ID, true, FINALITY_BUFFER);
 
         // Setup order params
         params = IOrderBook.OrderParams({
