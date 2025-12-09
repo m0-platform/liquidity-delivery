@@ -6,10 +6,12 @@ use async_trait::async_trait;
 use futures_util::StreamExt;
 use m0_liquidity_sdk::types::ChainRuntime;
 use order_book::OrderData;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
+use tokio::time::{interval, Duration};
 
 use crate::config::ChainConfig;
 use crate::error::{Result, SolverError};
@@ -27,6 +29,10 @@ pub struct EvmEventListener {
     order_store: Arc<RwLock<OrderStore>>,
     chains: Vec<ChainConfig>,
     task_handles: Arc<RwLock<Vec<JoinHandle<()>>>>,
+    /// Track seen logs by (chain_id, block_number, log_index) to deduplicate
+    seen_logs: Arc<RwLock<HashSet<(u32, u64, u64)>>>,
+    /// Track last polled block for each chain
+    last_polled_block: Arc<RwLock<HashMap<u32, u64>>>,
 }
 
 #[async_trait]
@@ -75,6 +81,8 @@ impl EvmEventListener {
             order_store: Arc::new(RwLock::new(OrderStore::new())),
             chains,
             event_bus,
+            seen_logs: Arc::new(RwLock::new(HashSet::new())),
+            last_polled_block: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -89,9 +97,9 @@ impl EvmEventListener {
         let contract_address = Address::from_str(&chain.order_book_address)
             .map_err(|e| SolverError::Component(format!("Invalid contract address: {}", e)))?;
 
-        // Create WebSocket connection
+        // Now create WebSocket connection for live events
         let ws = WsConnect::new(chain.ws_url.clone());
-        let provider = ProviderBuilder::new().connect_ws(ws).await.map_err(|e| {
+        let ws_provider = ProviderBuilder::new().connect_ws(ws).await.map_err(|e| {
             SolverError::Component(format!("Failed to connect to chain {}: {}", chain_id, e))
         })?;
 
@@ -107,7 +115,7 @@ impl EvmEventListener {
             ]);
 
         // Subscribe to logs
-        let sub = provider.subscribe_logs(&filter).await.map_err(|e| {
+        let sub = ws_provider.subscribe_logs(&filter).await.map_err(|e| {
             SolverError::Component(format!(
                 "Failed to subscribe to logs on chain {}: {}",
                 chain_id, e
@@ -122,14 +130,25 @@ impl EvmEventListener {
 
         let mut stream = sub.into_stream();
         let event_bus = self.event_bus.clone();
+        let seen_logs = self.seen_logs.clone();
 
-        // Keep the provider alive by moving it into the task
-        let handle = tokio::spawn(async move {
-            let _provider = provider; // Keep provider alive
+        // Start websocket listener task
+        let ws_handle = tokio::spawn(async move {
+            let _provider = ws_provider; // Keep provider alive
+            tracing::info!("Websocket listener task started for chain {}", chain_id);
             loop {
                 if let Some(log) = stream.next().await {
+                    // Mark log as seen
+                    if let (Some(block_number), Some(log_index)) = (log.block_number, log.log_index)
+                    {
+                        let mut seen = seen_logs.write().await;
+                        seen.insert((chain_id, block_number, log_index as u64));
+                    }
+
+                    tracing::debug!("Received log on chain {} via websocket", chain_id);
                     match Self::process_log(chain_id, &log) {
                         Ok(Some(event)) => {
+                            tracing::info!("Processed event on chain {} via websocket", chain_id);
                             if let Err(e) = event_bus.publish(event).await {
                                 tracing::error!(
                                     "Failed to publish event on chain {}: {}",
@@ -138,21 +157,161 @@ impl EvmEventListener {
                                 );
                             }
                         }
-                        Ok(None) => (),
+                        Ok(None) => {
+                            tracing::debug!("Ignored non-matching log on chain {}", chain_id);
+                        }
                         Err(e) => {
                             tracing::error!("Error processing log on chain {}: {}", chain_id, e);
                         }
+                    }
+                } else {
+                    tracing::warn!("Websocket stream ended for chain {}", chain_id);
+                    break;
+                }
+            }
+        });
+
+        // Start polling task (will fetch historical logs on first poll)
+        let poll_handle = self.start_polling_task(chain.clone()).await?;
+
+        // Store task handles
+        let task_handles = self.task_handles.clone();
+        tokio::spawn(async move {
+            let mut handles = task_handles.write().await;
+            handles.push(ws_handle);
+            handles.push(poll_handle);
+        });
+
+        Ok(())
+    }
+
+    async fn start_polling_task(&self, chain: ChainConfig) -> Result<JoinHandle<()>> {
+        let chain_id = chain.chain_id;
+        let contract_address = Address::from_str(&chain.order_book_address)
+            .map_err(|e| SolverError::Component(format!("Invalid contract address: {}", e)))?;
+
+        // Create HTTP provider for polling
+        let rpc_url = chain.rpc_url.parse().unwrap();
+        let provider = ProviderBuilder::new().connect_http(rpc_url);
+
+        let event_bus = self.event_bus.clone();
+        let seen_logs = self.seen_logs.clone();
+        let last_polled_block = self.last_polled_block.clone();
+
+        let handle = tokio::spawn(async move {
+            let mut poll_interval = interval(Duration::from_secs(30)); // Poll every 30 seconds
+            tracing::info!("Polling task started for chain {}", chain_id);
+
+            loop {
+                poll_interval.tick().await;
+
+                let from_block = {
+                    let last_polled = last_polled_block.read().await;
+                    last_polled.get(&chain_id).copied()
+                };
+
+                match provider.get_block_number().await {
+                    Ok(to_block) => {
+                        // First poll fetch last 1000 blocks
+                        let from_block = from_block.unwrap_or(to_block.saturating_sub(1000));
+
+                        tracing::debug!(
+                            chain_id = chain_id,
+                            from_block = from_block,
+                            to_block = to_block,
+                            "Polling for logs",
+                        );
+
+                        if let Err(e) = Self::fetch_historical_logs(
+                            chain_id,
+                            contract_address,
+                            from_block + 1,
+                            to_block,
+                            &provider,
+                            &event_bus,
+                            &seen_logs,
+                        )
+                        .await
+                        {
+                            tracing::error!("Failed to fetch logs for chain {}: {}", chain_id, e);
+                        } else {
+                            let mut last_polled = last_polled_block.write().await;
+                            last_polled.insert(chain_id, to_block);
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to get block number for chain {}: {}", chain_id, e);
                     }
                 }
             }
         });
 
-        // Store the task handle so we can abort it later
-        let task_handles = self.task_handles.clone();
-        tokio::spawn(async move {
-            let mut handles = task_handles.write().await;
-            handles.push(handle);
-        });
+        Ok(handle)
+    }
+
+    async fn fetch_historical_logs<P: Provider>(
+        chain_id: u32,
+        contract_address: Address,
+        from_block: u64,
+        to_block: u64,
+        provider: &P,
+        event_bus: &Arc<EventBus>,
+        seen_logs: &Arc<RwLock<HashSet<(u32, u64, u64)>>>,
+    ) -> Result<()> {
+        let filter = Filter::new()
+            .address(contract_address)
+            .from_block(from_block)
+            .to_block(to_block)
+            .event_signature(vec![
+                OrderOpened::SIGNATURE_HASH,
+                OrderFilled::SIGNATURE_HASH,
+                CancelRequested::SIGNATURE_HASH,
+                RefundClaimed::SIGNATURE_HASH,
+                OrderCompleted::SIGNATURE_HASH,
+            ]);
+
+        let logs = provider.get_logs(&filter).await.map_err(|e| {
+            SolverError::Component(format!(
+                "Failed to fetch historical logs for chain {}: {}",
+                chain_id, e
+            ))
+        })?;
+
+        tracing::info!(
+            chain_id = chain_id,
+            from_block = from_block,
+            to_block = to_block,
+            "Found {} historical logs",
+            logs.len(),
+        );
+
+        for log in logs {
+            // Mark as seen
+            if let (Some(block_number), Some(log_index)) = (log.block_number, log.log_index) {
+                let mut seen = seen_logs.write().await;
+                seen.insert((chain_id, block_number, log_index as u64));
+            }
+
+            match Self::process_log(chain_id, &log) {
+                Ok(Some(event)) => {
+                    if let Err(e) = event_bus.publish(event).await {
+                        tracing::error!(
+                            "Failed to publish historical event on chain {}: {}",
+                            chain_id,
+                            e
+                        );
+                    }
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    tracing::error!(
+                        "Error processing historical log on chain {}: {}",
+                        chain_id,
+                        e
+                    );
+                }
+            }
+        }
 
         Ok(())
     }
@@ -205,6 +364,7 @@ impl EvmEventListener {
             recipient: event.solver.into(),
             amount_out: event.amountOut,
             solver: event.solver.into(),
+            token_in: decode_evm_address(event.tokenIn),
         };
 
         Ok(SolverEvent::OrderCreated(OrderCreatedEvent::new(

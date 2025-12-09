@@ -291,8 +291,9 @@ impl InventoryManager {
             .iter()
             .map(|(asset, balance)| {
                 format!(
-                    "{}: {}",
+                    "{} ({}): {}",
                     asset.symbol,
+                    asset.chain,
                     *balance as f64 / 10_f64.powf(asset.decimals as f64)
                 )
             })
