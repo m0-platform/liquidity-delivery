@@ -103,6 +103,7 @@ impl SvmEventListener {
                         dest_chain_id: event.dest_chain_id,
                         fill_deadline: 0, // TODO: Extract from event
                         token_out: event.token_out,
+                        token_in: event.token_in.to_bytes(),
                         recipient: event.solver,
                         amount_out: 0, // TODO: Extract from event
                         solver: event.solver,

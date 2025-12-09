@@ -7,6 +7,7 @@ sol! {
     #[derive(Debug)]
     event OrderOpened(
         bytes32 indexed orderId,
+        address sender,
         address tokenIn,
         uint128 amountIn,
         uint32 indexed destChainId,

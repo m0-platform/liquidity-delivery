@@ -19,8 +19,11 @@ use alloy::{
 };
 use anchor_client::solana_sdk::signature::Keypair;
 use ctor::dtor;
-use m0_liquidity_sdk::types::Chain;
-use solver::{config::Signers, utils::decode_evm_address, Config};
+use solver::{
+    config::Signers,
+    utils::{chain_from_id, decode_evm_address},
+    Config,
+};
 use std::{process::Command, sync::Arc, time::Duration};
 use tokio::{
     sync::{broadcast, OnceCell},
@@ -73,14 +76,16 @@ struct ChainInstance {
 
 impl TestSuite {
     async fn init() -> Self {
+        println!("Initializing integration test suite...");
+
         let log_capture = tracing_capture::get_capture();
         let mut chains = Vec::new();
 
-        let evm_signer = PrivateKeySigner::random();
+        let evm_signer = PrivateKeySigner::from_bytes(&FixedBytes::from([1u8; 32])).unwrap();
         let svm_signer = Arc::new(Keypair::new());
 
         // Start Anvil nodes for each chain
-        for chain_id in [1u32, 8453u32] {
+        for (chain_id, dest_chain_id) in [(1u32, 8453u32), (8453u32, 1u32)] {
             let anvil = Anvil::new()
                 .block_time_f64(0.1)
                 .chain_id(chain_id as u64)
@@ -94,11 +99,13 @@ impl TestSuite {
             );
 
             // Send ETH from funded account to our signer
-            let funded_provider = ProviderBuilder::new().connect_anvil_with_wallet();
+            let funded_provider = ProviderBuilder::new()
+                .wallet(anvil.wallet().expect("no wallet"))
+                .connect_http(anvil.endpoint_url());
             let tx = TransactionRequest::default()
                 .with_from(funded_provider.get_accounts().await.unwrap()[0])
                 .with_to(evm_signer.address())
-                .with_value(U256::from(10_000_000_000u64));
+                .with_value(U256::from(10).pow(U256::from(18)));
             funded_provider
                 .send_transaction(tx)
                 .await
@@ -114,11 +121,31 @@ impl TestSuite {
                     .connect_http(anvil.endpoint_url()),
             ));
 
-            let contract = OrderBook::deploy(provider.clone(), 11155111, Address::new([0u8; 20]))
+            let contract = OrderBook::deploy(provider.clone(), chain_id, Address::new([0u8; 20]))
                 .await
                 .expect("Failed to deploy contract");
 
             let contract_address = *contract.address();
+
+            // Initialize the contract with admin role
+            contract
+                .initialize(evm_signer.address())
+                .send()
+                .await
+                .expect("Failed to send initialize transaction")
+                .get_receipt()
+                .await
+                .expect("Failed to confirm initialize transaction");
+
+            // Set destination config
+            contract
+                .setDestinationConfig(dest_chain_id, true, 10)
+                .send()
+                .await
+                .expect("Failed to send setDestinationConfig transaction for chain 1")
+                .get_receipt()
+                .await
+                .expect("Failed to confirm setDestinationConfig transaction for chain 1");
 
             // Deploy mock tokens for testing
             let mut tokens = Vec::new();
@@ -158,7 +185,7 @@ impl TestSuite {
                     .send()
                     .await
                     .expect("Failed to send mint transaction")
-                    .watch()
+                    .get_receipt()
                     .await
                     .expect("Failed to confirm mint transaction");
 
@@ -174,7 +201,7 @@ impl TestSuite {
                     .send()
                     .await
                     .expect("Failed to send approve transaction")
-                    .watch()
+                    .get_receipt()
                     .await
                     .expect("Failed to confirm approve transaction");
             }
@@ -206,7 +233,7 @@ impl TestSuite {
             for chain in &chains {
                 config.chains.push(solver::config::ChainConfig {
                     chain_id: chain.chain_id,
-                    chain: Chain::Sepolia,
+                    chain: chain_from_id(chain.chain_id),
                     rpc_url: chain.anvil.endpoint_url().to_string(),
                     ws_url: chain.anvil.ws_endpoint_url().to_string(),
                     order_book_address: chain.contract_address.to_string(),
@@ -284,10 +311,14 @@ async fn get_tests_suite() -> &'static TestSuite {
 async fn test_inventory_manager_loads_balances() {
     let suite = get_tests_suite().await;
 
-    assert!(suite.log_capture.contains("USDC: 100"));
-    assert!(suite.log_capture.contains("USDT: 100"));
-    assert!(suite.log_capture.contains("USDS: 100"));
-    assert!(suite.log_capture.contains("ETH: 9999.99"));
+    assert!(suite.log_capture.contains("USDC (Ethereum): 100"));
+    assert!(suite.log_capture.contains("USDT (Ethereum): 100"));
+    assert!(suite.log_capture.contains("USDS (Ethereum): 100"));
+    assert!(suite.log_capture.contains("USDC (Base): 100"));
+    assert!(suite.log_capture.contains("USDT (Base): 100"));
+    assert!(suite.log_capture.contains("USDS (Base): 100"));
+    assert!(suite.log_capture.contains("ETH (Ethereum): 0.99"));
+    assert!(suite.log_capture.contains("ETH (Base): 0.99"));
 }
 
 #[tokio::test]
@@ -298,7 +329,7 @@ async fn test_order_rejected() {
 
     let builder = contract.openOrder(OrderParams {
         tokenIn: chain.tokens[0].address,
-        destChainId: 11155111,
+        destChainId: suite.chains[1].chain_id,
         // Unsupported token
         tokenOut: FixedBytes::from([0u8; 32]),
         amountIn: 1000000,
@@ -313,7 +344,7 @@ async fn test_order_rejected() {
         .await
         .expect("Failed to send openOrder transaction");
 
-    suite.wait_for_log("event=\"OrderRejected\" order_id=3cc8eacf0fb4494f90d52f2fd566e3750b21b8b88f86b9fdce50b23df6e47212").await;
+    suite.wait_for_log("event=\"OrderRejected\" order_id=c01f9cabfe9f4ca5e44d7deb2afb7eef3e5389ec9efa10c149b85ccbcf01ceef").await;
     suite.wait_for_log("reason=Asset not supported").await;
 }
 
@@ -325,7 +356,7 @@ async fn test_order_processed_chain_a() {
 
     let builder = contract.openOrder(OrderParams {
         tokenIn: chain_a.tokens[0].address,
-        destChainId: 11155111,
+        destChainId: chain_b.chain_id,
         tokenOut: FixedBytes::from(decode_evm_address(chain_b.tokens[1].address)),
         amountIn: 1000000,
         amountOut: 1000000,
@@ -339,8 +370,8 @@ async fn test_order_processed_chain_a() {
         .await
         .expect("Failed to send openOrder transaction");
 
-    suite.wait_for_log("event=\"OrderCreated\" order_id=cd7918d1ca877739e07228e799c448933806c55fa39a24d70d58c5d99c52bbf9").await;
-    suite.wait_for_log("event=\"HoldSuccessfulEvent\" order_id=cd7918d1ca877739e07228e799c448933806c55fa39a24d70d58c5d99c52bbf9").await;
+    suite.wait_for_log("event=\"OrderCreated\" order_id=22c461dbb898e0ffad3db065928de717796c1d2b773ab58ecb91b4bdc82d6aec").await;
+    suite.wait_for_log("event=\"HoldSuccessfulEvent\" order_id=22c461dbb898e0ffad3db065928de717796c1d2b773ab58ecb91b4bdc82d6aec").await;
 }
 
 #[tokio::test]
@@ -351,7 +382,7 @@ async fn test_order_processed_chain_b() {
 
     let builder = contract.openOrder(OrderParams {
         tokenIn: chain_a.tokens[0].address,
-        destChainId: 11155111,
+        destChainId: chain_b.chain_id,
         tokenOut: FixedBytes::from(decode_evm_address(chain_b.tokens[1].address)),
         amountIn: 500000,
         amountOut: 500000,
@@ -365,6 +396,6 @@ async fn test_order_processed_chain_b() {
         .await
         .expect("Failed to send openOrder transaction");
 
-    suite.wait_for_log("event=\"OrderCreated\" order_id=affa5ec6be0d5eb54cc4a3db7743b4b01e883c6605901a25e7984029b73c9e20").await;
-    suite.wait_for_log("event=\"HoldSuccessfulEvent\" order_id=affa5ec6be0d5eb54cc4a3db7743b4b01e883c6605901a25e7984029b73c9e20").await;
+    suite.wait_for_log("event=\"OrderCreated\" order_id=b5a03f77fb3f31d440d42c19eb2fd109774b3f07169ebb4faac81f72e521fe00").await;
+    suite.wait_for_log("event=\"HoldSuccessfulEvent\" order_id=b5a03f77fb3f31d440d42c19eb2fd109774b3f07169ebb4faac81f72e521fe00").await;
 }

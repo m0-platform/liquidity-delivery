@@ -199,8 +199,7 @@ impl EvmEventListener {
         let last_polled_block = self.last_polled_block.clone();
 
         let handle = tokio::spawn(async move {
-            let mut poll_interval = interval(Duration::from_secs(30)); // Poll every 30 seconds
-            tracing::info!("Polling task started for chain {}", chain_id);
+            let mut poll_interval = interval(Duration::from_secs(5));
 
             loop {
                 poll_interval.tick().await;
@@ -286,11 +285,23 @@ impl EvmEventListener {
         );
 
         for log in logs {
-            // Mark as seen
-            if let (Some(block_number), Some(log_index)) = (log.block_number, log.log_index) {
-                let mut seen = seen_logs.write().await;
-                seen.insert((chain_id, block_number, log_index as u64));
+            let (block_number, log_index) =
+                if let (Some(block_number), Some(log_index)) = (log.block_number, log.log_index) {
+                    (block_number, log_index as u64)
+                } else {
+                    tracing::error!("log missing block number");
+                    continue;
+                };
+
+            // Check if log has been seen
+            let seen = seen_logs.read().await;
+            if seen.contains(&(chain_id, block_number, log_index as u64)) {
+                continue;
             }
+
+            // Mark as seen
+            let mut seen = seen_logs.write().await;
+            seen.insert((chain_id, block_number, log_index as u64));
 
             match Self::process_log(chain_id, &log) {
                 Ok(Some(event)) => {
