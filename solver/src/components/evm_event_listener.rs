@@ -13,7 +13,7 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tokio::time::{interval, Duration};
 
-use crate::config::ChainConfig;
+use crate::config::{ChainConfig, Network};
 use crate::error::{Result, SolverError};
 use crate::events::{
     CancelRequested, EventBus, EventHandler, EventProcessor, OrderCancelRequestEvent,
@@ -29,10 +29,9 @@ pub struct EvmEventListener {
     order_store: Arc<RwLock<OrderStore>>,
     chains: Vec<ChainConfig>,
     task_handles: Arc<RwLock<Vec<JoinHandle<()>>>>,
-    /// Track seen logs by (chain_id, block_number, log_index) to deduplicate
-    seen_logs: Arc<RwLock<HashSet<(u32, u64, u64)>>>,
-    /// Track last polled block for each chain
+    seen_logs: Arc<RwLock<HashSet<(u32, u64, u64)>>>, // (chain_id, block_number, log_index)
     last_polled_block: Arc<RwLock<HashMap<u32, u64>>>,
+    polling_interval: Duration,
 }
 
 #[async_trait]
@@ -75,7 +74,7 @@ impl EventHandler for EvmEventListener {
 }
 
 impl EvmEventListener {
-    pub fn new(event_bus: Arc<EventBus>, chains: Vec<ChainConfig>) -> Self {
+    pub fn new(event_bus: Arc<EventBus>, chains: Vec<ChainConfig>, network: Network) -> Self {
         Self {
             task_handles: Arc::new(RwLock::new(Vec::new())),
             order_store: Arc::new(RwLock::new(OrderStore::new())),
@@ -83,6 +82,11 @@ impl EvmEventListener {
             event_bus,
             seen_logs: Arc::new(RwLock::new(HashSet::new())),
             last_polled_block: Arc::new(RwLock::new(HashMap::new())),
+            polling_interval: if network == Network::Local {
+                Duration::from_millis(1000)
+            } else {
+                Duration::from_millis(5000)
+            },
         }
     }
 
@@ -135,20 +139,19 @@ impl EvmEventListener {
         // Start websocket listener task
         let ws_handle = tokio::spawn(async move {
             let _provider = ws_provider; // Keep provider alive
-            tracing::info!("Websocket listener task started for chain {}", chain_id);
             loop {
                 if let Some(log) = stream.next().await {
                     // Mark log as seen
-                    if let (Some(block_number), Some(log_index)) = (log.block_number, log.log_index)
-                    {
-                        let mut seen = seen_logs.write().await;
-                        seen.insert((chain_id, block_number, log_index as u64));
-                    }
+                    let mut seen = seen_logs.write().await;
+                    seen.insert((
+                        chain_id,
+                        log.block_number.unwrap(),
+                        log.log_index.unwrap() as u64,
+                    ));
 
                     tracing::debug!("Received log on chain {} via websocket", chain_id);
                     match Self::process_log(chain_id, &log) {
                         Ok(Some(event)) => {
-                            tracing::info!("Processed event on chain {} via websocket", chain_id);
                             if let Err(e) = event_bus.publish(event).await {
                                 tracing::error!(
                                     "Failed to publish event on chain {}: {}",
@@ -157,9 +160,7 @@ impl EvmEventListener {
                                 );
                             }
                         }
-                        Ok(None) => {
-                            tracing::debug!("Ignored non-matching log on chain {}", chain_id);
-                        }
+                        Ok(_) => {}
                         Err(e) => {
                             tracing::error!("Error processing log on chain {}: {}", chain_id, e);
                         }
@@ -197,9 +198,10 @@ impl EvmEventListener {
         let event_bus = self.event_bus.clone();
         let seen_logs = self.seen_logs.clone();
         let last_polled_block = self.last_polled_block.clone();
+        let polling_interval = self.polling_interval;
 
         let handle = tokio::spawn(async move {
-            let mut poll_interval = interval(Duration::from_secs(5));
+            let mut poll_interval = interval(polling_interval);
 
             loop {
                 poll_interval.tick().await;
@@ -214,12 +216,9 @@ impl EvmEventListener {
                         // First poll fetch last 1000 blocks
                         let from_block = from_block.unwrap_or(to_block.saturating_sub(1000));
 
-                        tracing::debug!(
-                            chain_id = chain_id,
-                            from_block = from_block,
-                            to_block = to_block,
-                            "Polling for logs",
-                        );
+                        if from_block >= to_block {
+                            continue;
+                        }
 
                         if let Err(e) = Self::fetch_historical_logs(
                             chain_id,
@@ -280,18 +279,13 @@ impl EvmEventListener {
             chain_id = chain_id,
             from_block = from_block,
             to_block = to_block,
-            "Found {} historical logs",
+            "Fetched {} historical logs",
             logs.len(),
         );
 
         for log in logs {
-            let (block_number, log_index) =
-                if let (Some(block_number), Some(log_index)) = (log.block_number, log.log_index) {
-                    (block_number, log_index as u64)
-                } else {
-                    tracing::error!("log missing block number");
-                    continue;
-                };
+            let block_number = log.block_number.unwrap();
+            let log_index = log.log_index.unwrap();
 
             // Check if log has been seen
             let seen = seen_logs.read().await;

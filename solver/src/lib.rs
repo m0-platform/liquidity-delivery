@@ -49,6 +49,7 @@ pub async fn run_solver(config: Config) -> Result<broadcast::Sender<()>, Box<dyn
     let evm_listener = Arc::new(EvmEventListener::new(
         event_bus.clone(),
         config.chains.clone(),
+        config.network,
     ));
     let svm_listener = Arc::new(SvmEventListener::new(
         event_bus.clone(),

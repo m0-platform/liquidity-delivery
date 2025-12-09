@@ -18,15 +18,14 @@ use alloy::{
     sol,
 };
 use anchor_client::solana_sdk::signature::Keypair;
-use ctor::dtor;
 use solver::{
-    config::Signers,
+    config::{Environment, Signers},
     utils::{chain_from_id, decode_evm_address},
     Config,
 };
 use std::{process::Command, sync::Arc, time::Duration};
 use tokio::{
-    sync::{broadcast, OnceCell},
+    sync::{broadcast, Mutex, OnceCell},
     time::sleep,
 };
 
@@ -47,22 +46,11 @@ sol! {
     }
 }
 
-type TestProvider = FillProvider<
-    JoinFill<
-        JoinFill<
-            Identity,
-            JoinFill<GasFiller, JoinFill<BlobGasFiller, JoinFill<NonceFiller, ChainIdFiller>>>,
-        >,
-        WalletFiller<alloy::network::EthereumWallet>,
-    >,
-    RootProvider,
->;
-
 struct TestSuite {
     chains: Vec<ChainInstance>,
-    evm_signer: PrivateKeySigner,
+    evm_signer: Mutex<PrivateKeySigner>,
     _svm_signer: Arc<Keypair>,
-    shutdown_tx: broadcast::Sender<()>,
+    _shutdown_tx: broadcast::Sender<()>,
     log_capture: tracing_capture::CaptureLayer,
 }
 
@@ -71,18 +59,18 @@ struct ChainInstance {
     chain_id: u32,
     contract_address: Address,
     tokens: Vec<Asset>,
-    provider: &'static TestProvider,
 }
 
 impl TestSuite {
     async fn init() -> Self {
-        println!("Initializing integration test suite...");
-
         let log_capture = tracing_capture::get_capture();
         let mut chains = Vec::new();
 
         let evm_signer = PrivateKeySigner::from_bytes(&FixedBytes::from([1u8; 32])).unwrap();
         let svm_signer = Arc::new(Keypair::new());
+
+        // Kill existing Anvil instances
+        let _ = Command::new("pkill").args(&["-9", "anvil"]).output();
 
         // Start Anvil nodes for each chain
         for (chain_id, dest_chain_id) in [(1u32, 8453u32), (8453u32, 1u32)] {
@@ -211,7 +199,6 @@ impl TestSuite {
                 chain_id,
                 contract_address,
                 tokens,
-                provider,
             };
 
             chains.push(instance);
@@ -226,38 +213,34 @@ impl TestSuite {
         let mock_server = mock_api::mock_api_with_assets(api_tokens).await;
 
         // Setup solver
-        let shutdown_tx = {
-            let mut config = Config::default();
+        let mut config = Config::default();
 
-            // Anvil chain configurations
-            for chain in &chains {
-                config.chains.push(solver::config::ChainConfig {
-                    chain_id: chain.chain_id,
-                    chain: chain_from_id(chain.chain_id),
-                    rpc_url: chain.anvil.endpoint_url().to_string(),
-                    ws_url: chain.anvil.ws_endpoint_url().to_string(),
-                    order_book_address: chain.contract_address.to_string(),
-                });
-            }
+        // Anvil chain configurations
+        for chain in &chains {
+            config.chains.push(solver::config::ChainConfig {
+                chain_id: chain.chain_id,
+                chain: chain_from_id(chain.chain_id),
+                rpc_url: chain.anvil.endpoint_url().to_string(),
+                ws_url: chain.anvil.ws_endpoint_url().to_string(),
+                order_book_address: chain.contract_address.to_string(),
+            });
+        }
 
-            config.liquidity_api_url = mock_server.url();
-            config.signers = Signers::new(evm_signer.clone(), svm_signer.clone());
+        config.liquidity_api_url = mock_server.url();
+        config.signers = Signers::new(evm_signer.clone(), svm_signer.clone());
 
-            let shutdown_tx = solver::run_solver(config)
-                .await
-                .expect("Failed to start solver");
+        let shutdown_tx = solver::run_solver(config)
+            .await
+            .expect("Failed to start solver");
 
-            // Let the solver boot up
-            sleep(Duration::from_millis(100)).await;
-
-            shutdown_tx
-        };
+        // Let the solver boot up
+        sleep(Duration::from_millis(100)).await;
 
         Self {
             chains,
-            evm_signer,
+            evm_signer: Mutex::new(evm_signer),
             _svm_signer: svm_signer,
-            shutdown_tx,
+            _shutdown_tx: shutdown_tx,
             log_capture,
         }
     }
@@ -280,21 +263,42 @@ impl TestSuite {
         );
     }
 
-    fn shutdown(&self) {
-        let _ = self.shutdown_tx.send(());
+    async fn create_order(
+        &self,
+        chain: &ChainInstance,
+        token_in: Address,
+        token_out: Address,
+        dest_chain_id: u32,
+        amount_in: u128,
+        amount_out: u128,
+    ) {
+        let signer = self.evm_signer.lock().await;
 
-        for chain in &self.chains {
-            let _ = Command::new("kill")
-                .arg("-SIGTERM")
-                .arg(chain.anvil.child().id().to_string())
-                .output();
-        }
+        let provider = ProviderBuilder::new()
+            .wallet(signer.clone())
+            .connect_http(chain.anvil.endpoint_url());
+
+        let contract = OrderBook::new(chain.contract_address, provider);
+
+        let builder = contract.openOrder(OrderParams {
+            tokenIn: token_in,
+            destChainId: dest_chain_id,
+            tokenOut: FixedBytes::from(decode_evm_address(token_out)),
+            amountIn: amount_in,
+            amountOut: amount_out,
+            recipient: FixedBytes::from(decode_evm_address(signer.address())),
+            fillDeadline: u32::MAX,
+            solver: FixedBytes::from([0u8; 32]),
+        });
+
+        let _ = builder
+            .send()
+            .await
+            .expect("Failed to send openOrder transaction")
+            .get_receipt()
+            .await
+            .expect("Failed to confirm mint transaction");
     }
-}
-
-#[dtor]
-fn cleanup() {
-    SHARED_INFRA.get().unwrap().shutdown();
 }
 
 // Singleton instance of the shared test infrastructure
@@ -325,24 +329,18 @@ async fn test_inventory_manager_loads_balances() {
 async fn test_order_rejected() {
     let suite = get_tests_suite().await;
     let chain = &suite.chains[0];
-    let contract = OrderBook::new(chain.contract_address, chain.provider);
 
-    let builder = contract.openOrder(OrderParams {
-        tokenIn: chain.tokens[0].address,
-        destChainId: suite.chains[1].chain_id,
-        // Unsupported token
-        tokenOut: FixedBytes::from([0u8; 32]),
-        amountIn: 1000000,
-        amountOut: 1000000,
-        recipient: FixedBytes::from(decode_evm_address(suite.evm_signer.address())),
-        fillDeadline: u32::MAX,
-        solver: FixedBytes::from([0u8; 32]),
-    });
-
-    let _ = builder
-        .send()
-        .await
-        .expect("Failed to send openOrder transaction");
+    suite
+        .create_order(
+            chain,
+            chain.tokens[0].address,
+            // Unsupported token
+            Address::new([0u8; 20]),
+            suite.chains[1].chain_id,
+            1000000,
+            1000000,
+        )
+        .await;
 
     suite.wait_for_log("event=\"OrderRejected\" order_id=c01f9cabfe9f4ca5e44d7deb2afb7eef3e5389ec9efa10c149b85ccbcf01ceef").await;
     suite.wait_for_log("reason=Asset not supported").await;
@@ -352,23 +350,17 @@ async fn test_order_rejected() {
 async fn test_order_processed_chain_a() {
     let suite = get_tests_suite().await;
     let (chain_a, chain_b) = (&suite.chains[0], &suite.chains[1]);
-    let contract = OrderBook::new(chain_a.contract_address, chain_a.provider);
 
-    let builder = contract.openOrder(OrderParams {
-        tokenIn: chain_a.tokens[0].address,
-        destChainId: chain_b.chain_id,
-        tokenOut: FixedBytes::from(decode_evm_address(chain_b.tokens[1].address)),
-        amountIn: 1000000,
-        amountOut: 1000000,
-        recipient: FixedBytes::from(decode_evm_address(suite.evm_signer.address())),
-        fillDeadline: u32::MAX,
-        solver: FixedBytes::from([0u8; 32]),
-    });
-
-    let _ = builder
-        .send()
-        .await
-        .expect("Failed to send openOrder transaction");
+    suite
+        .create_order(
+            chain_a,
+            chain_a.tokens[0].address,
+            chain_b.tokens[1].address,
+            chain_b.chain_id,
+            1000000,
+            1000000,
+        )
+        .await;
 
     suite.wait_for_log("event=\"OrderCreated\" order_id=22c461dbb898e0ffad3db065928de717796c1d2b773ab58ecb91b4bdc82d6aec").await;
     suite.wait_for_log("event=\"HoldSuccessfulEvent\" order_id=22c461dbb898e0ffad3db065928de717796c1d2b773ab58ecb91b4bdc82d6aec").await;
@@ -378,23 +370,17 @@ async fn test_order_processed_chain_a() {
 async fn test_order_processed_chain_b() {
     let suite = get_tests_suite().await;
     let (chain_a, chain_b) = (&suite.chains[1], &suite.chains[0]);
-    let contract = OrderBook::new(chain_a.contract_address, &chain_a.provider);
 
-    let builder = contract.openOrder(OrderParams {
-        tokenIn: chain_a.tokens[0].address,
-        destChainId: chain_b.chain_id,
-        tokenOut: FixedBytes::from(decode_evm_address(chain_b.tokens[1].address)),
-        amountIn: 500000,
-        amountOut: 500000,
-        recipient: FixedBytes::from(decode_evm_address(suite.evm_signer.address())),
-        fillDeadline: u32::MAX,
-        solver: FixedBytes::from([0u8; 32]),
-    });
-
-    let _ = builder
-        .send()
-        .await
-        .expect("Failed to send openOrder transaction");
+    suite
+        .create_order(
+            chain_a,
+            chain_a.tokens[0].address,
+            chain_b.tokens[1].address,
+            chain_b.chain_id,
+            500000,
+            500000,
+        )
+        .await;
 
     suite.wait_for_log("event=\"OrderCreated\" order_id=b5a03f77fb3f31d440d42c19eb2fd109774b3f07169ebb4faac81f72e521fe00").await;
     suite.wait_for_log("event=\"HoldSuccessfulEvent\" order_id=b5a03f77fb3f31d440d42c19eb2fd109774b3f07169ebb4faac81f72e521fe00").await;
