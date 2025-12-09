@@ -398,14 +398,6 @@ interface IOrderBook {
         bytes calldata signature_
     ) external;
 
-    // /**
-    //  * @notice Request cancellation of an order before its fill deadline
-    //  * @dev Can be called by anyone with a valid signature from the order's sender
-    //  * @param orderId_ ID of the order to cancel
-    //  * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelRequestDigest)
-    //  */
-    // function cancelOrderFor(bytes32 orderId_, bytes calldata signature_) external;
-
     /* ========== Filling Orders ========== */
 
     /**

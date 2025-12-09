@@ -281,9 +281,12 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     function cancelOrder(bytes32 orderId_, OrderData calldata orderData_, bytes memory messageData_) external override {
         if (orderId_ != getOrderId(orderData_)) revert OrderIdMismatch();
         // if (orderData_.version != VERSION) revert InvalidOrderVersion();
-
-        // Validate that the caller is the sender
         if (orderData_.sender.toAddress() != msg.sender) revert NotAuthorized();
+
+        // TODO: replace with status check
+        uint128 amountOutRemaining_ = orderData_.amountOut -
+            _getOrderBookStorageLocation().filledAmounts[orderId_].amountOutFilled;
+        if (amountOutRemaining_ == 0) revert OrderAlreadyFilled();
 
         _cancelOrder(orderId_, orderData_, messageData_);
     }
@@ -296,13 +299,14 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         bytes calldata signature_
     ) external override {
         if (orderId_ != getOrderId(orderData_)) revert OrderIdMismatch();
+        // if (orderData_.version != VERSION) revert InvalidOrderVersion();
 
         // Verify signature
         if (signature_.length == 64) {
             (bytes32 r, bytes32 vs) = abi.decode(signature_, (bytes32, bytes32));
-            _revertIfInvalidSignature(orderData_.sender, getCancelRequestDigest(orderId_), r, vs);
+            _revertIfInvalidSignature(orderData_.sender.toAddress(), getCancelRequestDigest(orderId_), r, vs);
         } else {
-            _revertIfInvalidSignature(orderData_.sender, getCancelRequestDigest(orderId_), signature_);
+            _revertIfInvalidSignature(orderData_.sender.toAddress(), getCancelRequestDigest(orderId_), signature_);
         }
 
         _cancelOrder(orderId_, orderData_, messageData_);
@@ -312,6 +316,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         if (orderData_.destChainId == chainId) {
             // Local orders can be immediately refunded
             Order storage order = _getOrderBookStorageLocation().localOrders[orderId_];
+
+            if (order.status != OrderStatus.Created) revert InvalidOrderStatus();
 
             _claimRefund(orderId_, order);
         } else {
@@ -324,10 +330,9 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     }
 
     function _claimRefund(bytes32 orderId_, Order storage order) internal {
-        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-
         // Calculate the refund amount
-        uint128 amountInRemaining_ = order.amountIn - $.filledAmounts[orderId_].amountInReleased;
+        uint128 amountInRemaining_ = order.amountIn -
+            _getOrderBookStorageLocation().filledAmounts[orderId_].amountInReleased;
 
         // Set the order status to completed
         order.status = OrderStatus.Completed;
@@ -377,16 +382,15 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         if (fillerParams_.amountOutToFill == 0) revert FillAmountZero();
 
         // If the solver is specified, ensure that the caller is the designated solver
-        {
-            address solver_ = orderData_.solver.toAddress();
-            if (solver_ != address(0) && solver_ != msg.sender) revert NotAuthorized();
-        }
+        address solver_ = orderData_.solver.toAddress();
+        if (solver_ != address(0) && solver_ != msg.sender) revert NotAuthorized();
 
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
 
         // Calculate fill amount as the minimum of the filler provided amount and the remaining unfilled amount
         IOrderBook.FilledAmounts storage filledAmounts = $.filledAmounts[orderId_];
 
+        // TODO: replace with status check
         uint128 amountOutRemaining_ = orderData_.amountOut - filledAmounts.amountOutFilled;
         if (amountOutRemaining_ == 0) revert OrderAlreadyFilled();
 
@@ -394,7 +398,6 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         uint128 amountOutToFill_ = fullFill_ ? amountOutRemaining_ : fillerParams_.amountOutToFill;
 
         // Calculate the corresponding of token in to release to the filler
-        // uint128 amountInRemaining_ = orderData_.amountIn - filledAmounts.amountInReleased;
         uint128 amountInToRelease_ = fullFill_
             ? orderData_.amountIn - filledAmounts.amountInReleased // remaining amount
             : ((uint256(orderData_.amountIn) * amountOutToFill_) / orderData_.amountOut).toUint128();
@@ -481,8 +484,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
     /// @inheritdoc IOrderBook
     function reportCancel(CancelReport calldata report_) external override {
-        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-        Order storage order = $.localOrders[report_.orderId];
+        Order storage order = _getOrderBookStorageLocation().localOrders[report_.orderId];
 
         // Validate the cancel report and sender
         if (msg.sender != messenger) revert NotAuthorized();
