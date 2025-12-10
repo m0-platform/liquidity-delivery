@@ -1,4 +1,5 @@
 use alloy::primitives::Address;
+use anchor_client::solana_sdk::pubkey::Pubkey;
 use m0_liquidity_sdk::types::{Chain, ChainRuntime};
 
 pub fn chain_id(chain: Chain) -> u32 {
@@ -60,4 +61,14 @@ pub fn decode_evm_address(address: Address) -> [u8; 32] {
 
 pub fn encode_evm_address(bytes: &[u8; 32]) -> Address {
     Address::from_slice(&bytes[12..32])
+}
+
+pub fn format_address(bytes: &[u8; 32]) -> String {
+    let (padding, evm_bytes) = bytes.split_at(12);
+
+    if padding.iter().all(|&b| b == 0) {
+        Address::from_slice(evm_bytes).to_string()
+    } else {
+        Pubkey::new_from_array(*bytes).to_string()
+    }
 }

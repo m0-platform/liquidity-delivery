@@ -11,17 +11,17 @@ use anchor_client::solana_sdk::commitment_config::CommitmentConfig;
 use anchor_client::solana_sdk::pubkey::Pubkey;
 use async_trait::async_trait;
 use futures_util::future::join_all;
-use m0_liquidity_sdk::types::{Asset, ChainRuntime};
+use m0_liquidity_sdk::types::{Asset, Chain, ChainRuntime};
 use slog::{debug, error, info, warn, Logger};
 use spl_token::solana_program::program_pack::Pack;
 use tokio::sync::RwLock;
 
 use crate::config::{ChainConfig, Signers};
 use crate::error::{Result, SolverError};
-use crate::events::{EventHandler, EventProcessor, SolverEvent};
+use crate::events::{EventHandler, EventProcessor, HoldSuccessfulEvent, SolverEvent};
 use crate::providers::ProviderManager;
-use crate::stores::AssetStore;
-use crate::utils::chain_runtime;
+use crate::stores::{AssetStore, OrderStore};
+use crate::utils::{chain_from_id, chain_runtime, format_address};
 use crate::Config;
 
 // Define ERC20 interface for balance checking
@@ -36,8 +36,10 @@ sol! {
 pub struct InventoryManager {
     signers: Signers,
     asset_store: Arc<RwLock<AssetStore>>,
+    order_store: Arc<RwLock<OrderStore>>,
     chains: Vec<ChainConfig>,
     balances: Arc<RwLock<HashMap<Asset, u128>>>,
+    holds: Arc<RwLock<HashMap<Chain, HashMap<String, u128>>>>,
     provider_manager: Arc<ProviderManager>,
     logger: Logger,
 }
@@ -47,8 +49,10 @@ impl InventoryManager {
         Self {
             signers: cfg.signers,
             asset_store: Arc::new(RwLock::new(AssetStore::new(cfg.liquidity_api_url))),
+            order_store: Arc::new(RwLock::new(OrderStore::new())),
             chains: cfg.chains,
             balances: Arc::new(RwLock::new(HashMap::new())),
+            holds: Arc::new(RwLock::new(HashMap::new())),
             provider_manager,
             logger,
         }
@@ -304,6 +308,7 @@ impl EventHandler for InventoryManager {
 
     async fn initialize(&self) -> Result<()> {
         self.asset_store.write().await.initialize().await?;
+        self.order_store.write().await.initialize().await?;
 
         // Load balances before starting
         self.load_svm_balances().await?;
@@ -313,7 +318,73 @@ impl EventHandler for InventoryManager {
         Ok(())
     }
 
-    async fn handle_event(&self, _event: SolverEvent) -> Result<Vec<SolverEvent>> {
+    async fn handle_event(&self, event: SolverEvent) -> Result<Vec<SolverEvent>> {
+        let store = self.order_store.read().await;
+        let _ = store.handle_event(event.clone()).await;
+
+        match event {
+            SolverEvent::RequestHold(e) => {
+                let active_holds = self
+                    .holds
+                    .read()
+                    .await
+                    .get(&e.asset.chain)
+                    .and_then(|h| h.get(&e.asset.address).cloned())
+                    .unwrap_or(0);
+
+                let current_balance = self
+                    .balances
+                    .read()
+                    .await
+                    .get(&e.asset)
+                    .cloned()
+                    .unwrap_or(0);
+
+                if current_balance - active_holds >= e.amount {
+                    let mut holds = self.holds.write().await;
+
+                    holds
+                        .entry(e.asset.chain)
+                        .or_insert_with(HashMap::new)
+                        .insert(e.asset.address.clone(), active_holds + e.amount);
+
+                    return Ok(vec![SolverEvent::HoldSuccessful(HoldSuccessfulEvent::new(
+                        e.order_id,
+                    ))]);
+                } else {
+                    // TODO: acquire inventory
+                }
+            }
+            SolverEvent::OrderCompleted(e) => {
+                // Release holds associated with the order
+                let order = self
+                    .order_store
+                    .read()
+                    .await
+                    .get_order(&e.order_id)
+                    .await
+                    .unwrap();
+
+                let address = format_address(&order.data.token_out);
+
+                let mut holds = self.holds.write().await;
+                let chain_holds = holds
+                    .entry(chain_from_id(order.data.dest_chain_id))
+                    .or_insert_with(HashMap::new);
+
+                chain_holds.insert(
+                    address.clone(),
+                    chain_holds
+                        .get(&address)
+                        .cloned()
+                        .unwrap_or(0)
+                        .saturating_sub(order.data.amount_in),
+                );
+            }
+            // TODO: release funds on OrderRejected, OrderCancelRequest, etc.
+            _ => {}
+        }
+
         Ok(vec![])
     }
 }

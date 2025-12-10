@@ -98,11 +98,11 @@ pub async fn run_solver(
     register_component(&event_logger, &event_bus, &shutdown_tx);
     register_component(&order_timer, &event_bus, &shutdown_tx);
 
-    // Give spawned tasks time to subscribe before publishing Start event
-    sleep(Duration::from_millis(100)).await;
+    // Let everything get started
+    sleep(Duration::from_millis(50)).await;
     info!(logger, "All components registered");
-
     let _ = event_bus.publish(SolverEvent::Start).await;
+    sleep(Duration::from_millis(100)).await;
 
     Ok(shutdown_tx)
 }
@@ -136,8 +136,9 @@ fn spawn_event_handler<F, Fut>(
     F: Fn(SolverEvent) -> Fut + Send + 'static,
     Fut: Future<Output = Result<Vec<SolverEvent>, SolverError>> + Send + 'static,
 {
+    let mut receiver = event_bus.subscribe();
+
     tokio::spawn(async move {
-        let mut receiver = event_bus.subscribe();
         loop {
             tokio::select! {
                 _ = shutdown_rx.recv() => {

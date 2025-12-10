@@ -31,7 +31,7 @@ impl EventHandler for EventLogger {
                     self.logger,
                     "OrderCreated";
                     "order_id" => %e.order_id,
-                    "timestamp" => e.timestamp,
+                    "event_ts" => e.timestamp,
                 );
             }
             SolverEvent::Start => {
@@ -45,7 +45,7 @@ impl EventHandler for EventLogger {
                     self.logger,
                     "OrderFill";
                     "order_id" => %e.order_id,
-                    "timestamp" => e.timestamp,
+                    "event_ts" => e.timestamp,
                     "amount" => %e.amount,
                 );
             }
@@ -54,7 +54,7 @@ impl EventHandler for EventLogger {
                     self.logger,
                     "OrderRejected";
                     "order_id" => %e.order_id,
-                    "timestamp" => e.timestamp,
+                    "event_ts" => e.timestamp,
                     "reason" => %e.reason,
                 );
             }
@@ -63,8 +63,8 @@ impl EventHandler for EventLogger {
                     self.logger,
                     "OrderCancelRequest";
                     "order_id" => %e.order_id,
-                    "timestamp" => e.timestamp,
-                    "new_fill_deadline" => e.new_fill_deadline,
+                    "event_ts" => e.timestamp,
+                    "requested_at" => e.requested_at,
                 );
             }
             SolverEvent::OrderRefundClaimed(e) => {
@@ -72,7 +72,7 @@ impl EventHandler for EventLogger {
                     self.logger,
                     "OrderRefundClaimed";
                     "order_id" => %e.order_id,
-                    "timestamp" => e.timestamp,
+                    "event_ts" => e.timestamp,
                     "sender" => %e.sender,
                     "amount_refunded" => %e.amount_refunded,
                 );
@@ -82,17 +82,25 @@ impl EventHandler for EventLogger {
                     self.logger,
                     "OrderCompleted";
                     "order_id" => %e.order_id,
-                    "timestamp" => e.timestamp,
+                    "event_ts" => e.timestamp,
                 );
             }
-            SolverEvent::RequestRebalance(e) => {
+            SolverEvent::RequestHold(e) => {
                 info!(
                     self.logger,
                     "RequestRebalance";
-                    "target_order_id" => %e.target_order_id,
-                    "timestamp" => e.timestamp,
+                    "order_id" => %e.order_id,
+                    "event_ts" => e.timestamp,
                     "asset" => ?e.asset,
                     "amount" => %e.amount,
+                );
+            }
+            SolverEvent::HoldSuccessful(e) => {
+                info!(
+                    self.logger,
+                    "HoldSuccessfulEvent";
+                    "order_id" => %e.order_id,
+                    "event_ts" => e.timestamp,
                 );
             }
         }

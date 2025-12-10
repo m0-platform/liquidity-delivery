@@ -1,10 +1,12 @@
 use async_trait::async_trait;
-use slog::Logger;
+use slog::{info, Logger};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::error::Result;
-use crate::events::{EventHandler, EventProcessor, OrderRejectEvent, SolverEvent};
+use crate::events::{
+    EventHandler, EventProcessor, OrderRejectEvent, RequestHoldEvent, SolverEvent,
+};
 use crate::stores::{AssetStore, OrderStore};
 
 pub struct OrderProcessor {
@@ -57,7 +59,16 @@ impl EventHandler for OrderProcessor {
                     ))]);
                 }
 
-                // Handle order
+                // Request hold on destination asset
+                return Ok(vec![SolverEvent::RequestHold(RequestHoldEvent::new(
+                    e.order_id,
+                    destination_asset.unwrap(),
+                    e.order.amount_in,
+                ))]);
+            }
+            SolverEvent::HoldSuccessful(_e) => {
+                // TODO: build fillOrder transaction
+                info!(self.logger, "Building fillOrder transaction");
             }
             _ => {}
         }

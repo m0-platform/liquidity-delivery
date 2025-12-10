@@ -45,6 +45,7 @@ impl EvmProvider {
     }
 
     /// Get a reference to the provider (bypasses rate limiting)
+    #[allow(dead_code)]
     pub fn priority_provider(&self) -> &EvmProviderInner {
         &self.provider
     }
@@ -64,6 +65,7 @@ impl SvmProvider {
     }
 
     /// Get a reference to the underlying client (bypasses rate limiting)
+    #[allow(dead_code)]
     pub fn priority_client(&self) -> &RpcClient {
         &self.client
     }

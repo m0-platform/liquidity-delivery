@@ -51,23 +51,9 @@ impl OrderStore {
         }
     }
 
-    pub async fn get_order(&self, order_id: &String) -> Result<Option<Order>> {
+    pub async fn get_order(&self, order_id: &String) -> Option<Order> {
         let orders = self.orders.read().await;
-        Ok(orders.get(order_id).cloned())
-    }
-
-    pub async fn get_all_orders(&self) -> Result<Vec<Order>> {
-        let orders = self.orders.read().await;
-        Ok(orders.values().cloned().collect())
-    }
-
-    pub async fn get_orders_by_state(&self, state: OrderState) -> Result<Vec<Order>> {
-        let orders = self.orders.read().await;
-        Ok(orders
-            .values()
-            .filter(|o| o.state == state)
-            .cloned()
-            .collect())
+        orders.get(order_id).cloned()
     }
 }
 

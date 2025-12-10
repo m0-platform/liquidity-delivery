@@ -18,7 +18,8 @@ pub enum SolverEvent {
     OrderCompleted(OrderCompletedEvent),
 
     // Inventory events
-    RequestRebalance(RequestRebalance),
+    RequestHold(RequestHoldEvent),
+    HoldSuccessful(HoldSuccessfulEvent),
 }
 
 /// Event: New order created
@@ -91,14 +92,14 @@ impl OrderRejectEvent {
 pub struct OrderCancelRequestEvent {
     pub order_id: String,
     pub timestamp: u64,
-    pub new_fill_deadline: u64,
+    pub requested_at: u64,
 }
 
 impl OrderCancelRequestEvent {
-    pub fn new(order_id: String, new_fill_deadline: u64) -> Self {
+    pub fn new(order_id: String, requested_at: u64) -> Self {
         Self {
             order_id,
-            new_fill_deadline,
+            requested_at,
             timestamp: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
@@ -149,11 +150,44 @@ impl OrderCompletedEvent {
     }
 }
 
-/// Event: Request inventory rebalance
+/// Event: Request hold or rebalance on asset
 #[derive(Debug, Clone)]
-pub struct RequestRebalance {
-    pub target_order_id: String,
+pub struct RequestHoldEvent {
+    pub order_id: String,
     pub timestamp: u64,
     pub asset: Asset,
     pub amount: u128,
+}
+
+impl RequestHoldEvent {
+    pub fn new(order_id: String, asset: Asset, amount: u128) -> Self {
+        Self {
+            order_id,
+            asset,
+            amount,
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        }
+    }
+}
+
+/// Event: Asset hold successful
+#[derive(Debug, Clone)]
+pub struct HoldSuccessfulEvent {
+    pub order_id: String,
+    pub timestamp: u64,
+}
+
+impl HoldSuccessfulEvent {
+    pub fn new(order_id: String) -> Self {
+        Self {
+            order_id,
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        }
+    }
 }

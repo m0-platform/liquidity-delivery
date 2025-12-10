@@ -107,6 +107,12 @@ impl EvmEventListener {
             return Ok(());
         }
 
+        info!(
+            self.logger,
+            "Starting event listener for chain";
+            "chain_id" => %chain_id,
+        );
+
         // Parse the OrderBook contract address
         let contract_address = Address::from_str(&chain.order_book_address)
             .map_err(|e| SolverError::Component(format!("Invalid contract address: {}", e)))?;
@@ -180,6 +186,7 @@ impl EvmEventListener {
             handles.push(ws_handle);
             handles.push(poll_handle);
         });
+
         info!(
             self.logger,
             "Started event listener for chain";
@@ -403,8 +410,7 @@ impl EvmEventListener {
         })?;
 
         let order_id = format!("{:x}", event.orderId);
-        let cancel_event =
-            OrderCancelRequestEvent::new(order_id, event.newFillDeadline.to::<u64>());
+        let cancel_event = OrderCancelRequestEvent::new(order_id, event.cancelRequestedAt as u64);
 
         Ok(SolverEvent::OrderCancelRequest(cancel_event))
     }

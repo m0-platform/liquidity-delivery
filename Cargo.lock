@@ -9972,6 +9972,7 @@ dependencies = [
  "m0-liquidity-sdk",
  "mockito",
  "order_book",
+ "regex",
  "serde",
  "serde_json",
  "slog",
