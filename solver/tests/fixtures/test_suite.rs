@@ -1,9 +1,7 @@
-mod mock_api;
-
 use alloy::{
     hex,
     network::TransactionBuilder,
-    node_bindings::{Anvil, AnvilInstance},
+    node_bindings::AnvilInstance,
     primitives::{Address, FixedBytes, U256},
     providers::{Provider, ProviderBuilder},
     rpc::types::TransactionRequest,
@@ -11,84 +9,24 @@ use alloy::{
     sol,
 };
 use anchor_client::solana_sdk::signature::Keypair;
+use mockito::ServerGuard;
 use regex::Regex;
-use slog::{info, Drain, Logger, OwnedKVList, Record, KV};
+use slog::{info, Drain, Logger};
 use solver::{
     common_logger_values,
     config::Signers,
     utils::{chain_from_id, decode_evm_address},
     Config,
 };
-use std::{
-    io::Write,
-    process::Command,
-    sync::{Arc, Mutex},
-    thread::sleep,
-    time::Duration,
-};
-use test_context::{test_context, AsyncTestContext};
+use std::{process::Command, sync::Arc, thread::sleep, time::Duration};
+use test_context::AsyncTestContext;
 use tokio::sync::broadcast;
 
-use crate::{mock_api::Asset, IOrderBook::OrderParams};
-
-#[derive(Clone)]
-struct LogBuffer {
-    buffer: Arc<Mutex<Vec<u8>>>,
-}
-
-impl LogBuffer {
-    fn new() -> Self {
-        Self {
-            buffer: Arc::new(Mutex::new(Vec::new())),
-        }
-    }
-
-    fn to_string(&self) -> String {
-        let buffer = self.buffer.lock().unwrap();
-        String::from_utf8_lossy(&buffer).to_string()
-    }
-}
-
-impl Drain for LogBuffer {
-    type Ok = ();
-    type Err = std::io::Error;
-
-    fn log(&self, record: &Record, values: &OwnedKVList) -> Result<Self::Ok, Self::Err> {
-        let mut buffer = self.buffer.lock().unwrap();
-
-        // Write the log message in a simple key=value format
-        write!(buffer, "{}", record.msg())?;
-
-        // Write structured fields
-        let mut serializer = KeyValueSerializer {
-            buffer: &mut *buffer,
-        };
-
-        // Serialize record values
-        let _ = values.serialize(record, &mut serializer);
-        let _ = record.kv().serialize(record, &mut serializer);
-
-        writeln!(buffer)?;
-        Ok(())
-    }
-}
-
-/// Helper to serialize key-value pairs from slog
-struct KeyValueSerializer<'a> {
-    buffer: &'a mut Vec<u8>,
-}
-
-impl<'a> slog::Serializer for KeyValueSerializer<'a> {
-    fn emit_arguments(&mut self, key: slog::Key, val: &std::fmt::Arguments) -> slog::Result {
-        write!(self.buffer, " {}={}", key, val)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-        Ok(())
-    }
-}
+use crate::common::{mock_api, Asset, LogBuffer};
 
 sol!(
     #[sol(rpc)]
-    OrderBook,
+    IOrderBook,
     "../evm/out/OrderBook.sol/OrderBook.json"
 );
 
@@ -101,22 +39,24 @@ sol! {
     }
 }
 
-struct TestSuite {
-    chains: Vec<ChainInstance>,
-    evm_signer: PrivateKeySigner,
-    evm_user: PrivateKeySigner,
+pub use IOrderBook::OrderParams;
+
+pub struct TestSuite {
+    pub chains: Vec<ChainInstance>,
+    pub evm_signer: PrivateKeySigner,
+    pub evm_user: PrivateKeySigner,
     _svm_signer: Arc<Keypair>,
-    shutdown_tx: broadcast::Sender<()>,
-    _mock_server: mock_api::SendServerGuard,
+    pub shutdown_tx: broadcast::Sender<()>,
+    _mock_server: ServerGuard,
     log_buffer: LogBuffer,
-    logger: Logger,
+    pub logger: Logger,
 }
 
-struct ChainInstance {
-    anvil: AnvilInstance,
-    chain_id: u32,
-    contract_address: Address,
-    tokens: Vec<Asset>,
+pub struct ChainInstance {
+    pub anvil: AnvilInstance,
+    pub chain_id: u32,
+    pub contract_address: Address,
+    pub tokens: Vec<Asset>,
 }
 
 impl AsyncTestContext for TestSuite {
@@ -140,7 +80,7 @@ impl AsyncTestContext for TestSuite {
 
         // Start Anvil nodes for each chain
         for (i, &chain_id) in evm_chains.iter().enumerate() {
-            let anvil = Anvil::new()
+            let anvil = alloy::node_bindings::Anvil::new()
                 .block_time_f64(0.1)
                 .chain_id(chain_id as u64)
                 .try_spawn()
@@ -171,7 +111,7 @@ impl AsyncTestContext for TestSuite {
                 .wallet(evm_signer.clone())
                 .connect_http(anvil.endpoint_url());
 
-            let contract = OrderBook::deploy(provider.clone(), chain_id, Address::new([0u8; 20]))
+            let contract = IOrderBook::deploy(provider.clone(), chain_id, Address::new([0u8; 20]))
                 .await
                 .expect("Failed to deploy contract");
 
@@ -280,7 +220,7 @@ impl AsyncTestContext for TestSuite {
             .flat_map(|chain| chain.tokens.iter().cloned())
             .collect::<Vec<Asset>>();
 
-        let (mock_server, mock_url) = mock_api::mock_api_with_assets(api_tokens).await;
+        let mock_server = mock_api::mock_api_with_assets(api_tokens).await;
 
         // Setup solver
         let mut config = Config::default();
@@ -296,7 +236,7 @@ impl AsyncTestContext for TestSuite {
             });
         }
 
-        config.liquidity_api_url = mock_url;
+        config.liquidity_api_url = mock_server.url();
         config.signers = Signers::new(evm_signer.clone(), svm_signer.clone());
 
         let shutdown_tx = solver::run_solver(config, logger.clone())
@@ -321,7 +261,6 @@ impl AsyncTestContext for TestSuite {
     }
 
     async fn teardown(self) {
-        println!("Shutting down test suite");
         let _ = self.shutdown_tx.send(());
 
         for chain in self.chains {
@@ -332,7 +271,7 @@ impl AsyncTestContext for TestSuite {
 }
 
 impl TestSuite {
-    fn contains_log(&self, pattern: &str) {
+    pub fn contains_log(&self, pattern: &str) {
         let timeout = Duration::from_secs(5);
         let poll_interval = Duration::from_millis(50);
         let start = std::time::Instant::now();
@@ -353,7 +292,7 @@ impl TestSuite {
         );
     }
 
-    async fn create_order(
+    pub async fn create_order(
         &self,
         chain: &ChainInstance,
         token_in: Address,
@@ -366,7 +305,7 @@ impl TestSuite {
             .wallet(self.evm_user.clone())
             .connect_http(chain.anvil.endpoint_url());
 
-        let contract = OrderBook::new(chain.contract_address, provider);
+        let contract = IOrderBook::new(chain.contract_address, provider);
 
         let builder = contract.openOrder(OrderParams {
             tokenIn: token_in,
@@ -391,77 +330,4 @@ impl TestSuite {
             "block_number" => receipt.block_number.unwrap_or(0)
         );
     }
-}
-
-#[test_context(TestSuite)]
-#[tokio::test]
-async fn test_inventory_manager_loads_balances(ctx: &TestSuite) {
-    ctx.contains_log(r"USDC \(Ethereum\): 100");
-    ctx.contains_log(r"USDC \(Base\): 100");
-    ctx.contains_log(r"USDT \(Ethereum\): 100");
-    ctx.contains_log(r"USDT \(Base\): 100");
-    ctx.contains_log(r"USDS \(Ethereum\): 100");
-    ctx.contains_log(r"USDS \(Base\): 100");
-    ctx.contains_log(r"ETH \(Ethereum\): 0.99");
-    ctx.contains_log(r"ETH \(Base\): 0.99");
-}
-
-#[test_context(TestSuite)]
-#[tokio::test]
-async fn test_order_rejected(ctx: &TestSuite) {
-    let chain = &ctx.chains[0];
-
-    ctx.create_order(
-        chain,
-        chain.tokens[0].address,
-        // Unsupported token
-        Address::new([0u8; 20]),
-        ctx.chains[1].chain_id,
-        1000000,
-        1000000,
-    )
-    .await;
-
-    ctx.contains_log("OrderRejected");
-    ctx.contains_log("Asset not supported");
-}
-
-#[test_context(TestSuite)]
-#[tokio::test]
-async fn test_order_processed_chain_a(ctx: &TestSuite) {
-    let (chain_a, chain_b) = (&ctx.chains[0], &ctx.chains[1]);
-
-    ctx.create_order(
-        chain_a,
-        chain_a.tokens[0].address,
-        chain_b.tokens[1].address,
-        chain_b.chain_id,
-        1000000,
-        1000000,
-    )
-    .await;
-
-    let order_id = "22c461dbb898e0ffad3db065928de717796c1d2b773ab58ecb91b4bdc82d6aec";
-    ctx.contains_log(&format!("OrderCreated .* order_id={}", order_id));
-    ctx.contains_log(&format!("HoldSuccessfulEvent .* order_id={}", order_id));
-}
-
-#[test_context(TestSuite)]
-#[tokio::test]
-async fn test_order_processed_chain_b(ctx: &TestSuite) {
-    let (chain_a, chain_b) = (&ctx.chains[1], &ctx.chains[0]);
-
-    ctx.create_order(
-        chain_a,
-        chain_a.tokens[0].address,
-        chain_b.tokens[1].address,
-        chain_b.chain_id,
-        500000,
-        500000,
-    )
-    .await;
-
-    let order_id = "b5a03f77fb3f31d440d42c19eb2fd109774b3f07169ebb4faac81f72e521fe00";
-    ctx.contains_log(&format!("OrderCreated .* order_id={}", order_id));
-    ctx.contains_log(&format!("HoldSuccessfulEvent .* order_id={}", order_id));
 }

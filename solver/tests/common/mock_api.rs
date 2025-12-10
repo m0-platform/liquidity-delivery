@@ -1,7 +1,6 @@
 use alloy::primitives::Address;
+use mockito::ServerGuard;
 use solver::utils::chain_from_id;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 #[derive(Clone, Debug)]
 pub struct Asset {
@@ -9,12 +8,6 @@ pub struct Asset {
     pub chain_id: u32,
     pub symbol: String,
 }
-
-// Wrapper to make ServerGuard Send
-pub struct SendServerGuard(Arc<Mutex<mockito::ServerGuard>>);
-
-unsafe impl Send for SendServerGuard {}
-unsafe impl Sync for SendServerGuard {}
 
 impl Asset {
     fn to_json(&self) -> String {
@@ -37,7 +30,7 @@ impl Asset {
     }
 }
 
-pub async fn mock_api_with_assets(assets: Vec<Asset>) -> (SendServerGuard, String) {
+pub async fn mock_api_with_assets(assets: Vec<Asset>) -> ServerGuard {
     let mut server = mockito::Server::new_async().await;
     let assets_response: Vec<String> = assets.into_iter().map(|a| a.to_json()).collect();
     let body = format!("[{}]", assets_response.join(","));
@@ -49,6 +42,5 @@ pub async fn mock_api_with_assets(assets: Vec<Asset>) -> (SendServerGuard, Strin
         .with_body(body)
         .create();
 
-    let url = server.url();
-    (SendServerGuard(Arc::new(Mutex::new(server))), url)
+    server
 }
