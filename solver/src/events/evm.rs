@@ -5,7 +5,7 @@ sol! {
     #![sol(rpc, alloy_sol_types = alloy::sol_types)]
 
     #[derive(Debug)]
-    event OrderOpen(
+    event OrderOpened(
         bytes32 indexed orderId,
         address tokenIn,
         uint128 amountIn,
@@ -16,14 +16,14 @@ sol! {
     );
 
     #[derive(Debug)]
-    event Fill(
+    event OrderFilled(
         bytes32 indexed orderId,
         address indexed solver,
         uint128 amountOutFilled
     );
 
     #[derive(Debug)]
-    event CancelRequest(
+    event CancelRequested(
         bytes32 indexed orderId,
         uint40 newFillDeadline
     );

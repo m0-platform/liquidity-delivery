@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use slog::Logger;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -9,13 +10,15 @@ use crate::stores::{AssetStore, OrderStore};
 pub struct OrderProcessor {
     order_store: Arc<RwLock<OrderStore>>,
     asset_store: Arc<RwLock<AssetStore>>,
+    logger: Logger,
 }
 
 impl OrderProcessor {
-    pub fn new(liquidity_api_url: String) -> Self {
+    pub fn new(liquidity_api_url: String, logger: Logger) -> Self {
         Self {
             order_store: Arc::new(RwLock::new(OrderStore::new())),
             asset_store: Arc::new(RwLock::new(AssetStore::new(liquidity_api_url))),
+            logger,
         }
     }
 }

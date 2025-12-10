@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use slog::{info, warn, Logger};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{oneshot, RwLock};
@@ -12,18 +13,21 @@ const ORDER_WARNING_THRESHOLD_SECONDS: u64 = 300;
 pub struct OrderTimer {
     active_orders: Arc<RwLock<HashMap<String, u64>>>,
     shutdown: Arc<RwLock<Option<oneshot::Sender<()>>>>,
+    logger: Logger,
 }
 
 impl OrderTimer {
-    pub fn new() -> Self {
+    pub fn new(logger: Logger) -> Self {
         Self {
             active_orders: Arc::new(RwLock::new(HashMap::new())),
             shutdown: Arc::new(RwLock::new(None)),
+            logger,
         }
     }
 
     async fn start_poller(&self) {
         let active_orders = Arc::clone(&self.active_orders);
+        let logger = self.logger.clone();
 
         let (tx, mut rx) = oneshot::channel();
         *self.shutdown.write().await = Some(tx);
@@ -43,11 +47,12 @@ impl OrderTimer {
                         for (order_id, start_time) in orders.iter() {
                             let age = now - start_time;
                             if age > ORDER_WARNING_THRESHOLD_SECONDS {
-                                tracing::warn!(
-                                    order_id = order_id,
-                                    age = age,
-                                    threshold = ORDER_WARNING_THRESHOLD_SECONDS,
-                                    "Order has been active longer than warning threshold"
+                                warn!(
+                                    logger,
+                                    "Order has been active longer than warning threshold";
+                                    "order_id" => order_id,
+                                    "age" => age,
+                                    "threshold" => ORDER_WARNING_THRESHOLD_SECONDS,
                                 );
                             }
                         }
@@ -91,17 +96,19 @@ impl EventHandler for OrderTimer {
                 match start {
                     Some(start_time) => {
                         let duration = e.timestamp - start_time;
-                        tracing::info!(
-                            order_id = e.order_id,
-                            duration = duration,
-                            "Order completion time",
+                        info!(
+                            self.logger,
+                            "Order completion time";
+                            "order_id" => &e.order_id,
+                            "duration" => duration,
                         );
                         self.active_orders.write().await.remove(&e.order_id);
                     }
                     None => {
-                        tracing::warn!(
-                            order_id = e.order_id,
-                            "Order completed but start time not found"
+                        warn!(
+                            self.logger,
+                            "Order completed but start time not found";
+                            "order_id" => &e.order_id,
                         );
                     }
                 }

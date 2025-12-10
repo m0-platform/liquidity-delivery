@@ -109,11 +109,7 @@ impl ProviderManager {
             }
         }
 
-        tracing::info!(
-            evm_chains = self.evm_providers.read().await.len(),
-            svm_chains = self.svm_providers.read().await.len(),
-            "Initialized provider manager"
-        );
+        // Initialized provider manager
 
         Ok(())
     }
@@ -139,11 +135,7 @@ impl ProviderManager {
             .await
             .insert(chain.chain_id, evm_provider);
 
-        tracing::debug!(
-            chain_id = chain.chain_id,
-            rpc_url = chain.rpc_url,
-            "Added EVM provider"
-        );
+        // Added EVM provider
 
         Ok(())
     }
@@ -162,11 +154,7 @@ impl ProviderManager {
             .await
             .insert(chain.chain_id, svm_provider);
 
-        tracing::debug!(
-            chain_id = chain.chain_id,
-            rpc_url = chain.rpc_url,
-            "Added SVM provider"
-        );
+        // Added SVM provider
 
         Ok(())
     }

@@ -1,24 +1,92 @@
 mod mock_api;
-mod tracing_capture;
 
 use alloy::{
     hex,
     network::TransactionBuilder,
     node_bindings::{Anvil, AnvilInstance},
-    primitives::{aliases::U40, Address, FixedBytes, U256},
+    primitives::{Address, FixedBytes, U256},
     providers::{Provider, ProviderBuilder},
     rpc::types::TransactionRequest,
     signers::local::PrivateKeySigner,
     sol,
 };
 use anchor_client::solana_sdk::signature::Keypair;
-use m0_liquidity_sdk::types::Chain;
-use solver::{config::Signers, utils::decode_evm_address, Config};
-use std::{sync::Arc, time::Duration};
+use slog::{info, o, Drain, Logger, OwnedKVList, Record, KV};
+use solver::{
+    common_logger_values,
+    config::Signers,
+    utils::{chain_from_id, decode_evm_address},
+    Config,
+};
+use std::{
+    io::Write,
+    process::Command,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
+use test_context::{test_context, AsyncTestContext};
 use tokio::{sync::broadcast, time::sleep};
-use tracing_capture::TestTracingGuard;
 
-use crate::{mock_api::AssetConfig, IOrderBook::OnchainOrderParams};
+use crate::{mock_api::Asset, IOrderBook::OrderParams};
+
+#[derive(Clone)]
+struct LogBuffer {
+    buffer: Arc<Mutex<Vec<u8>>>,
+}
+
+impl LogBuffer {
+    fn new() -> Self {
+        Self {
+            buffer: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    fn contains(&self, text: &str) -> bool {
+        self.to_string().contains(text)
+    }
+
+    fn to_string(&self) -> String {
+        let buffer = self.buffer.lock().unwrap();
+        String::from_utf8_lossy(&buffer).to_string()
+    }
+}
+
+impl Drain for LogBuffer {
+    type Ok = ();
+    type Err = std::io::Error;
+
+    fn log(&self, record: &Record, values: &OwnedKVList) -> Result<Self::Ok, Self::Err> {
+        let mut buffer = self.buffer.lock().unwrap();
+
+        // Write the log message in a simple key=value format
+        write!(buffer, "{}", record.msg())?;
+
+        // Write structured fields
+        let mut serializer = KeyValueSerializer {
+            buffer: &mut *buffer,
+        };
+
+        // Serialize record values
+        let _ = values.serialize(record, &mut serializer);
+        let _ = record.kv().serialize(record, &mut serializer);
+
+        writeln!(buffer)?;
+        Ok(())
+    }
+}
+
+/// Helper to serialize key-value pairs from slog
+struct KeyValueSerializer<'a> {
+    buffer: &'a mut Vec<u8>,
+}
+
+impl<'a> slog::Serializer for KeyValueSerializer<'a> {
+    fn emit_arguments(&mut self, key: slog::Key, val: &std::fmt::Arguments) -> slog::Result {
+        write!(self.buffer, " {}={}", key, val)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        Ok(())
+    }
+}
 
 sol!(
     #[sol(rpc)]
@@ -26,7 +94,6 @@ sol!(
     "../evm/out/OrderBook.sol/OrderBook.json"
 );
 
-// MockERC20 interface for calling deployed contract
 sol! {
     #[sol(rpc)]
     interface MockERC20 {
@@ -37,257 +104,324 @@ sol! {
 }
 
 struct TestSuite {
-    anvil: AnvilInstance,
-    contract_address: Address,
-    tokens: Vec<Address>,
+    chains: Vec<ChainInstance>,
     evm_signer: PrivateKeySigner,
-    svm_signer: Arc<Keypair>,
-    mock_server: mockito::ServerGuard,
-    shutdown_tx: Option<broadcast::Sender<()>>,
-    log_guard: TestTracingGuard,
+    evm_user: PrivateKeySigner,
+    _svm_signer: Arc<Keypair>,
+    shutdown_tx: broadcast::Sender<()>,
+    _mock_server: mock_api::SendServerGuard,
+    log_buffer: LogBuffer,
+    logger: Logger,
 }
-impl TestSuite {
+
+struct ChainInstance {
+    anvil: AnvilInstance,
+    chain_id: u32,
+    contract_address: Address,
+    tokens: Vec<Asset>,
+}
+
+impl AsyncTestContext for TestSuite {
     /// Create a new test suite with Anvil and deployed contracts
-    async fn new() -> Self {
-        let log_guard = tracing_capture::init_test_tracing();
+    async fn setup() -> TestSuite {
+        // Create a log buffer for capturing logs
+        let log_buffer = LogBuffer::new();
+        let logger = Logger::root(
+            slog_async::Async::new(log_buffer.clone().fuse())
+                .build()
+                .fuse(),
+            common_logger_values!(),
+        );
 
-        let anvil = Anvil::new()
-            .block_time(1)
-            .chain_id(11155111)
-            .try_spawn()
-            .expect("failed to spawn anvil node");
+        let evm_chains = vec![1, 8453];
 
-        let evm_signer: PrivateKeySigner = anvil.keys()[0].clone().into();
-        let provider = ProviderBuilder::new()
-            .wallet(evm_signer.clone())
-            .connect_http(anvil.endpoint_url());
+        let mut chains = Vec::new();
+        let evm_signer = PrivateKeySigner::from_bytes(&FixedBytes::from([1u8; 32])).unwrap();
+        let evm_user = PrivateKeySigner::from_bytes(&FixedBytes::from([2u8; 32])).unwrap();
+        let svm_signer = Arc::new(Keypair::new());
 
-        let contract = OrderBook::deploy(&provider)
-            .await
-            .expect("Failed to deploy contract");
+        // Start Anvil nodes for each chain
+        for (i, &chain_id) in evm_chains.iter().enumerate() {
+            let anvil = Anvil::new()
+                .block_time_f64(0.1)
+                .chain_id(chain_id as u64)
+                .try_spawn()
+                .expect("failed to spawn anvil node");
 
-        let contract_address = *contract.address();
+            // Send ETH from funded account to our signer and user
+            for address in [evm_signer.address(), evm_user.address()] {
+                let anvil_wallet = anvil.wallet().expect("expected anvil wallet");
 
-        // Deploy mock tokens for testing
-        let mut tokens = Vec::new();
-        let mut api_tokens = Vec::new();
+                let tx = TransactionRequest::default()
+                    .with_from(anvil_wallet.default_signer().address())
+                    .with_to(address)
+                    .with_value(U256::from(10).pow(U256::from(18)));
 
-        for i in 0..3 {
-            let bytecode_hex = "608060405234801561000f575f80fd5b50604051610a16380380610a1683398101604081905261002e91610100565b5f6100398482610201565b5060016100468382610201565b506002805460ff191660ff92909216919091179055506102bb9050565b634e487b7160e01b5f52604160045260245ffd5b5f82601f830112610086575f80fd5b81516001600160401b0381111561009f5761009f610063565b604051601f8201601f19908116603f011681016001600160401b03811182821017156100cd576100cd610063565b6040528181528382016020018510156100e4575f80fd5b8160208501602083015e5f918101602001919091529392505050565b5f805f60608486031215610112575f80fd5b83516001600160401b03811115610127575f80fd5b61013386828701610077565b602086015190945090506001600160401b03811115610150575f80fd5b61015c86828701610077565b925050604084015160ff81168114610172575f80fd5b809150509250925092565b600181811c9082168061019157607f821691505b6020821081036101af57634e487b7160e01b5f52602260045260245ffd5b50919050565b601f8211156101fc57805f5260205f20601f840160051c810160208510156101da5750805b601f840160051c820191505b818110156101f9575f81556001016101e6565b50505b505050565b81516001600160401b0381111561021a5761021a610063565b61022e81610228845461017d565b846101b5565b6020601f821160018114610260575f83156102495750848201515b5f19600385901b1c1916600184901b1784556101f9565b5f84815260208120601f198516915b8281101561028f578785015182556020948501946001909201910161026f565b50848210156102ac57868401515f19600387901b60f8161c191681555b50505050600190811b01905550565b61074e806102c85f395ff3fe608060405234801561000f575f80fd5b50600436106100b9575f3560e01c806340c10f191161007257806395d89b411161005857806395d89b411461017b578063a9059cbb14610183578063dd62ed3e14610196575f80fd5b806340c10f191461014757806370a082311461015c575f80fd5b806318160ddd116100a257806318160ddd146100fe57806323b872dd14610115578063313ce56714610128575f80fd5b806306fdde03146100bd578063095ea7b3146100db575b5f80fd5b6100c56101c0565b6040516100d29190610546565b60405180910390f35b6100ee6100e93660046105c1565b61024b565b60405190151581526020016100d2565b61010760035481565b6040519081526020016100d2565b6100ee6101233660046105e9565b6102c4565b6002546101359060ff1681565b60405160ff90911681526020016100d2565b61015a6101553660046105c1565b6103ef565b005b61010761016a366004610623565b60046020525f908152604090205481565b6100c5610491565b6100ee6101913660046105c1565b61049e565b6101076101a4366004610643565b600560209081525f928352604080842090915290825290205481565b5f80546101cc90610674565b80601f01602080910402602001604051908101604052809291908181526020018280546101f890610674565b80156102435780601f1061021a57610100808354040283529160200191610243565b820191905f5260205f20905b81548152906001019060200180831161022657829003601f168201915b505050505081565b335f81815260056020908152604080832073ffffffffffffffffffffffffffffffffffffffff8716808552925280832085905551919290917f8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925906102b29086815260200190565b60405180910390a35060015b92915050565b73ffffffffffffffffffffffffffffffffffffffff83165f9081526005602090815260408083203384529091528120805483919083906103059084906106f2565b909155505073ffffffffffffffffffffffffffffffffffffffff84165f908152600460205260408120805484929061033e9084906106f2565b909155505073ffffffffffffffffffffffffffffffffffffffff83165f9081526004602052604081208054849290610377908490610705565b925050819055508273ffffffffffffffffffffffffffffffffffffffff168473ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef846040516103dd91815260200190565b60405180910390a35060019392505050565b73ffffffffffffffffffffffffffffffffffffffff82165f9081526004602052604081208054839290610423908490610705565b925050819055508060035f82825461043b9190610705565b909155505060405181815273ffffffffffffffffffffffffffffffffffffffff8316905f907fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef9060200160405180910390a35050565b600180546101cc90610674565b335f908152600460205260408120805483919083906104be9084906106f2565b909155505073ffffffffffffffffffffffffffffffffffffffff83165f90815260046020526040812080548492906104f7908490610705565b909155505060405182815273ffffffffffffffffffffffffffffffffffffffff84169033907fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef906020016102b2565b602081525f82518060208401528060208501604085015e5f6040828501015260407fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe0601f83011684010191505092915050565b803573ffffffffffffffffffffffffffffffffffffffff811681146105bc575f80fd5b919050565b5f80604083850312156105d2575f80fd5b6105db83610599565b946020939093013593505050565b5f805f606084860312156105fb575f80fd5b61060484610599565b925061061260208501610599565b929592945050506040919091013590565b5f60208284031215610633575f80fd5b61063c82610599565b9392505050565b5f8060408385031215610654575f80fd5b61065d83610599565b915061066b60208401610599565b90509250929050565b600181811c9082168061068857607f821691505b6020821081036106bf577f4e487b71000000000000000000000000000000000000000000000000000000005f52602260045260245ffd5b50919050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52601160045260245ffd5b818103818111156102be576102be6106c5565b808201808211156102be576102be6106c556fea2646970667358221220080bc754c71e020f26b0f59c95cda3565043cff69f037aeb7276cb162d21bb4964736f6c634300081a0033";
-            let constructor_args_hex = "000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000a5465737420546f6b656e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000045445535400000000000000000000000000000000000000000000000000000000";
+                ProviderBuilder::new()
+                    .wallet(anvil_wallet)
+                    .connect_http(anvil.endpoint_url())
+                    .send_transaction(tx)
+                    .await
+                    .expect("failed to send eth")
+                    .watch()
+                    .await
+                    .expect("failed to confirm tx");
+            }
 
-            let bytecode = hex::decode(format!("{}{}", bytecode_hex, constructor_args_hex))
-                .expect("Failed to decode bytecode");
+            // Provider with our crosschain signer
+            let provider = ProviderBuilder::new()
+                .wallet(evm_signer.clone())
+                .connect_http(anvil.endpoint_url());
 
-            let tx = TransactionRequest::default().with_deploy_code(bytecode);
-
-            let receipt = provider
-                .send_transaction(tx)
+            let contract = OrderBook::deploy(provider.clone(), chain_id, Address::new([0u8; 20]))
                 .await
-                .expect("Failed to send deployment transaction")
-                .get_receipt()
-                .await
-                .expect("Failed to get deployment receipt");
+                .expect("Failed to deploy contract");
 
-            let token_address = receipt
-                .contract_address
-                .expect("Failed to get deployed contract address");
+            let &contract_address = contract.address();
 
-            // Create MockERC20 instance for interacting with the deployed contract
-            let token = MockERC20::new(token_address, &provider);
-
-            // Mint 100 tokens to the signer (100 * 10^6)
-            token
-                .mint(
-                    evm_signer.address(),
-                    U256::from(100) * U256::from(10).pow(U256::from(6)),
-                )
+            // Initialize the contract with admin role
+            contract
+                .initialize(evm_signer.address())
                 .send()
                 .await
-                .expect("Failed to send mint transaction")
-                .watch()
+                .expect("Failed to send initialize transaction")
+                .get_receipt()
                 .await
-                .expect("Failed to confirm mint transaction");
+                .expect("Failed to confirm initialize transaction");
 
-            tokens.push(token_address);
-            api_tokens.push(AssetConfig::new(
-                token_address.to_string(),
-                "Sepolia",
-                ["USDC", "USDT", "USDS"][i],
-            ));
+            // Set destination config
+            let &dest_chain = evm_chains.get((i + 1) % evm_chains.len()).unwrap_or(&8453);
+            contract
+                .setDestinationConfig(dest_chain, true, 10)
+                .send()
+                .await
+                .expect("Failed to send setDestinationConfig transaction for chain 1")
+                .get_receipt()
+                .await
+                .expect("Failed to confirm setDestinationConfig transaction for chain 1");
+
+            // Deploy mock tokens for testing
+            let mut tokens = Vec::new();
+
+            // Deploy 3 mock tokens: USDC, USDT, USDS
+            for i in 0..3 {
+                let bytecode_hex = "608060405234801561000f575f80fd5b50604051610a16380380610a1683398101604081905261002e91610100565b5f6100398482610201565b5060016100468382610201565b506002805460ff191660ff92909216919091179055506102bb9050565b634e487b7160e01b5f52604160045260245ffd5b5f82601f830112610086575f80fd5b81516001600160401b0381111561009f5761009f610063565b604051601f8201601f19908116603f011681016001600160401b03811182821017156100cd576100cd610063565b6040528181528382016020018510156100e4575f80fd5b8160208501602083015e5f918101602001919091529392505050565b5f805f60608486031215610112575f80fd5b83516001600160401b03811115610127575f80fd5b61013386828701610077565b602086015190945090506001600160401b03811115610150575f80fd5b61015c86828701610077565b925050604084015160ff81168114610172575f80fd5b809150509250925092565b600181811c9082168061019157607f821691505b6020821081036101af57634e487b7160e01b5f52602260045260245ffd5b50919050565b601f8211156101fc57805f5260205f20601f840160051c810160208510156101da5750805b601f840160051c820191505b818110156101f9575f81556001016101e6565b50505b505050565b81516001600160401b0381111561021a5761021a610063565b61022e81610228845461017d565b846101b5565b6020601f821160018114610260575f83156102495750848201515b5f19600385901b1c1916600184901b1784556101f9565b5f84815260208120601f198516915b8281101561028f578785015182556020948501946001909201910161026f565b50848210156102ac57868401515f19600387901b60f8161c191681555b50505050600190811b01905550565b61074e806102c85f395ff3fe608060405234801561000f575f80fd5b50600436106100b9575f3560e01c806340c10f191161007257806395d89b411161005857806395d89b411461017b578063a9059cbb14610183578063dd62ed3e14610196575f80fd5b806340c10f191461014757806370a082311461015c575f80fd5b806318160ddd116100a257806318160ddd146100fe57806323b872dd14610115578063313ce56714610128575f80fd5b806306fdde03146100bd578063095ea7b3146100db575b5f80fd5b6100c56101c0565b6040516100d29190610546565b60405180910390f35b6100ee6100e93660046105c1565b61024b565b60405190151581526020016100d2565b61010760035481565b6040519081526020016100d2565b6100ee6101233660046105e9565b6102c4565b6002546101359060ff1681565b60405160ff90911681526020016100d2565b61015a6101553660046105c1565b6103ef565b005b61010761016a366004610623565b60046020525f908152604090205481565b6100c5610491565b6100ee6101913660046105c1565b61049e565b6101076101a4366004610643565b600560209081525f928352604080842090915290825290205481565b5f80546101cc90610674565b80601f01602080910402602001604051908101604052809291908181526020018280546101f890610674565b80156102435780601f1061021a57610100808354040283529160200191610243565b820191905f5260205f20905b81548152906001019060200180831161022657829003601f168201915b505050505081565b335f81815260056020908152604080832073ffffffffffffffffffffffffffffffffffffffff8716808552925280832085905551919290917f8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925906102b29086815260200190565b60405180910390a35060015b92915050565b73ffffffffffffffffffffffffffffffffffffffff83165f9081526005602090815260408083203384529091528120805483919083906103059084906106f2565b909155505073ffffffffffffffffffffffffffffffffffffffff84165f908152600460205260408120805484929061033e9084906106f2565b909155505073ffffffffffffffffffffffffffffffffffffffff83165f9081526004602052604081208054849290610377908490610705565b925050819055508273ffffffffffffffffffffffffffffffffffffffff168473ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef846040516103dd91815260200190565b60405180910390a35060019392505050565b73ffffffffffffffffffffffffffffffffffffffff82165f9081526004602052604081208054839290610423908490610705565b925050819055508060035f82825461043b9190610705565b909155505060405181815273ffffffffffffffffffffffffffffffffffffffff8316905f907fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef9060200160405180910390a35050565b600180546101cc90610674565b335f908152600460205260408120805483919083906104be9084906106f2565b909155505073ffffffffffffffffffffffffffffffffffffffff83165f90815260046020526040812080548492906104f7908490610705565b909155505060405182815273ffffffffffffffffffffffffffffffffffffffff84169033907fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef906020016102b2565b602081525f82518060208401528060208501604085015e5f6040828501015260407fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffe0601f83011684010191505092915050565b803573ffffffffffffffffffffffffffffffffffffffff811681146105bc575f80fd5b919050565b5f80604083850312156105d2575f80fd5b6105db83610599565b946020939093013593505050565b5f805f606084860312156105fb575f80fd5b61060484610599565b925061061260208501610599565b929592945050506040919091013590565b5f60208284031215610633575f80fd5b61063c82610599565b9392505050565b5f8060408385031215610654575f80fd5b61065d83610599565b915061066b60208401610599565b90509250929050565b600181811c9082168061068857607f821691505b6020821081036106bf577f4e487b71000000000000000000000000000000000000000000000000000000005f52602260045260245ffd5b50919050565b7f4e487b71000000000000000000000000000000000000000000000000000000005f52601160045260245ffd5b818103818111156102be576102be6106c5565b808201808211156102be576102be6106c556fea2646970667358221220080bc754c71e020f26b0f59c95cda3565043cff69f037aeb7276cb162d21bb4964736f6c634300081a0033";
+                let constructor_args_hex = "000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000a0000000000000000000000000000000000000000000000000000000000000000600000000000000000000000000000000000000000000000000000000000000000a5465737420546f6b656e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000045445535400000000000000000000000000000000000000000000000000000000";
+
+                let bytecode = hex::decode(format!("{}{}", bytecode_hex, constructor_args_hex))
+                    .expect("Failed to decode bytecode");
+
+                let tx = TransactionRequest::default().with_deploy_code(bytecode);
+
+                // Deploy ERC20 contract
+                let receipt = provider
+                    .send_transaction(tx)
+                    .await
+                    .expect("Failed to send deployment transaction")
+                    .get_receipt()
+                    .await
+                    .expect("Failed to get deployment receipt");
+
+                let token_address = receipt
+                    .contract_address
+                    .expect("Failed to get deployed contract address");
+
+                let token = MockERC20::new(token_address, provider.clone());
+
+                // Mint 100 tokens to the signer and user
+                let amount = U256::from(100) * U256::from(10).pow(U256::from(6));
+
+                for address in [evm_signer.address(), evm_user.address()] {
+                    token
+                        .mint(address, amount)
+                        .send()
+                        .await
+                        .expect("Failed to send mint transaction")
+                        .get_receipt()
+                        .await
+                        .expect("Failed to confirm mint transaction");
+                }
+
+                tokens.push(Asset {
+                    address: token_address,
+                    chain_id,
+                    symbol: ["USDC", "USDT", "USDS"][i].to_string(),
+                });
+
+                // User need to approve spends
+                let signer_token = MockERC20::new(
+                    token_address,
+                    ProviderBuilder::new()
+                        .wallet(evm_user.clone())
+                        .connect_http(anvil.endpoint_url()),
+                );
+
+                signer_token
+                    .approve(contract_address, U256::MAX)
+                    .send()
+                    .await
+                    .expect("Failed to send approve transaction")
+                    .get_receipt()
+                    .await
+                    .expect("Failed to confirm approve transaction");
+            }
+
+            let instance = ChainInstance {
+                anvil,
+                chain_id,
+                contract_address,
+                tokens,
+            };
+
+            chains.push(instance);
         }
 
         // Create mock API with the test tokens
-        let mock_server = mock_api::mock_api_with_assets(api_tokens).await;
+        let api_tokens = chains
+            .iter()
+            .flat_map(|chain| chain.tokens.iter().cloned())
+            .collect::<Vec<Asset>>();
 
-        Self {
-            anvil,
-            contract_address,
-            tokens,
-            evm_signer,
-            svm_signer: Arc::new(Keypair::new()),
-            mock_server,
-            shutdown_tx: None,
-            log_guard,
-        }
-    }
+        let (mock_server, mock_url) = mock_api::mock_api_with_assets(api_tokens).await;
 
-    /// Start the solver with the test configuration
-    async fn start_solver(&mut self) -> &mut Self {
-        self.start_solver_with_config(|_| {}).await
-    }
-
-    /// Start the solver with custom configuration modifications
-    async fn start_solver_with_config<F>(&mut self, config_modifier: F) -> &mut Self
-    where
-        F: FnOnce(&mut Config),
-    {
+        // Setup solver
         let mut config = Config::default();
 
-        // Anvil chain configuration
-        config.chains.push(solver::config::ChainConfig {
-            chain_id: 11155111,
-            chain: Chain::Sepolia,
-            rpc_url: self.anvil.endpoint_url().to_string(),
-            ws_url: self.anvil.ws_endpoint_url().to_string(),
-            order_book_address: self.contract_address.to_string(),
-        });
+        // Anvil chain configurations
+        for chain in &chains {
+            config.chains.push(solver::config::ChainConfig {
+                chain_id: chain.chain_id,
+                chain: chain_from_id(chain.chain_id),
+                rpc_url: chain.anvil.endpoint_url().to_string(),
+                ws_url: chain.anvil.ws_endpoint_url().to_string(),
+                order_book_address: chain.contract_address.to_string(),
+            });
+        }
 
-        config.liquidity_api_url = self.mock_server.url();
-        config.signers = Signers::new(self.evm_signer.clone(), self.svm_signer.clone());
+        config.liquidity_api_url = mock_url;
+        config.signers = Signers::new(evm_signer.clone(), svm_signer.clone());
 
-        // Apply custom configuration
-        config_modifier(&mut config);
-
-        let shutdown_tx = solver::run_solver(config)
+        let shutdown_tx = solver::run_solver(config, logger.clone())
             .await
             .expect("Failed to start solver");
 
-        self.shutdown_tx = Some(shutdown_tx);
+        let suite = TestSuite {
+            chains,
+            evm_signer,
+            evm_user,
+            _svm_signer: svm_signer,
+            shutdown_tx,
+            _mock_server: mock_server,
+            log_buffer,
+            logger: logger.new(slog::o!("component" => "TestSuite")),
+        };
 
-        // Let the solver boot up
-        sleep(Duration::from_millis(10)).await;
+        // Wait for solver to start
+        suite.contains_log("Started event listener for chain").await;
 
-        self
+        suite
     }
-}
 
-impl Drop for TestSuite {
-    fn drop(&mut self) {
-        // Send shutdown signal if solver was started
-        if let Some(shutdown_tx) = self.shutdown_tx.take() {
-            let _ = shutdown_tx.send(());
+    async fn teardown(self) {
+        println!("Shutting down test suite");
+        let _ = self.shutdown_tx.send(());
+
+        for chain in self.chains {
+            let id = chain.anvil.child().id();
+            let _ = Command::new("kill").arg("-9").arg(id.to_string()).output();
         }
     }
 }
 
-#[tokio::test]
-async fn test_inventory_manager_loads_balances() {
-    let mut suite = TestSuite::new().await;
-    suite.start_solver().await;
+impl TestSuite {
+    async fn contains_log(&self, substring: &str) {
+        let timeout = Duration::from_secs(5);
+        let poll_interval = Duration::from_millis(50);
+        let start = tokio::time::Instant::now();
 
-    // Check that the Manager loaded balances for both ETH and the test tokens
-    assert!(suite.log_guard.contains("USDC: 100"));
-    assert!(suite.log_guard.contains("USDT: 100"));
-    assert!(suite.log_guard.contains("USDS: 100"));
-    assert!(suite.log_guard.contains("ETH: 9999.996"));
+        while start.elapsed() < timeout {
+            if self.log_buffer.contains(substring) {
+                return;
+            }
+            sleep(poll_interval).await;
+        }
+
+        panic!(
+            "Missing expected log substring: {}\n\n=== LOGS ===\n{}\n",
+            substring,
+            self.log_buffer.to_string()
+        );
+    }
+
+    async fn create_order(
+        &self,
+        chain: &ChainInstance,
+        token_in: Address,
+        token_out: Address,
+        dest_chain_id: u32,
+        amount_in: u128,
+        amount_out: u128,
+    ) {
+        let provider = ProviderBuilder::new()
+            .wallet(self.evm_user.clone())
+            .connect_http(chain.anvil.endpoint_url());
+
+        let contract = OrderBook::new(chain.contract_address, provider);
+
+        let builder = contract.openOrder(OrderParams {
+            tokenIn: token_in,
+            destChainId: dest_chain_id,
+            tokenOut: FixedBytes::from(decode_evm_address(token_out)),
+            amountIn: amount_in,
+            amountOut: amount_out,
+            recipient: FixedBytes::from(decode_evm_address(self.evm_signer.address())),
+            fillDeadline: u32::MAX,
+            solver: FixedBytes::from([0u8; 32]),
+        });
+
+        let receipt = builder
+            .send()
+            .await
+            .expect("Failed to send openOrder transaction")
+            .get_receipt()
+            .await
+            .expect("Failed to confirm mint transaction");
+
+        info!(self.logger, "Created order on chain {}", chain.chain_id;
+            "block_number" => receipt.block_number.unwrap_or(0)
+        );
+    }
 }
 
+#[test_context(TestSuite)]
 #[tokio::test]
-async fn test_order_rejected() {
-    let mut suite = TestSuite::new().await;
-    suite.start_solver().await;
+async fn test_inventory_manager_loads_balances(ctx: &TestSuite) {
+    ctx.contains_log("USDC (Ethereum): 100").await;
+    ctx.contains_log("USDC (Base): 100").await;
+    ctx.contains_log("USDT (Ethereum): 100").await;
+    ctx.contains_log("USDT (Base): 100").await;
+    ctx.contains_log("USDS (Ethereum): 100").await;
+    ctx.contains_log("USDS (Base): 100").await;
+    ctx.contains_log("ETH (Ethereum): 0.99").await;
+    ctx.contains_log("ETH (Base): 0.99").await;
+}
 
-    let provider = ProviderBuilder::new()
-        .wallet(suite.evm_signer.clone())
-        .connect_http(suite.anvil.endpoint_url());
+#[test_context(TestSuite)]
+#[tokio::test]
+async fn test_order_rejected(ctx: &TestSuite) {
+    let chain = &ctx.chains[0];
 
-    let contract = OrderBook::new(suite.contract_address, &provider);
-
-    // Approve the OrderBook contract to spend tokens
-    let token = MockERC20::new(suite.tokens[0], &provider);
-    token
-        .approve(suite.contract_address, U256::MAX)
-        .send()
-        .await
-        .expect("Failed to send approve transaction")
-        .watch()
-        .await
-        .expect("Failed to confirm approve transaction");
-
-    let builder = contract.openOrder(OnchainOrderParams {
-        tokenIn: suite.tokens[0].into(),
-        destChainId: 421614,
+    ctx.create_order(
+        chain,
+        chain.tokens[0].address,
         // Unsupported token
-        tokenOut: FixedBytes::from([0u8; 32]),
-        amountIn: 1000000,
-        amountOut: 1000000,
-        recipient: FixedBytes::from(decode_evm_address(suite.evm_signer.address())),
-        fillDeadline: U40::MAX,
-        solver: FixedBytes::from([0u8; 32]),
-    });
+        Address::new([0u8; 20]),
+        ctx.chains[1].chain_id,
+        1000000,
+        1000000,
+    )
+    .await;
 
-    builder
-        .send()
-        .await
-        .expect("Failed to send openOrder transaction")
-        .watch()
-        .await
-        .expect("Failed to confirm transaction");
-
-    // Let the solver run and pick up the order
-    sleep(Duration::from_millis(100)).await;
-
-    // Check that the OrderRejected event was created
-    assert!(suite.log_guard.contains("event=\"OrderRejected\" order_id=6dd444764fa0dc3229a76f38314ae608a4e69cef19bce9c636e4661c7f58117e"));
-    assert!(suite.log_guard.contains("reason=Asset not supported"));
-}
-
-#[tokio::test]
-async fn test_order_processed() {
-    let mut suite = TestSuite::new().await;
-    suite.start_solver().await;
-
-    let provider = ProviderBuilder::new()
-        .wallet(suite.evm_signer.clone())
-        .connect_http(suite.anvil.endpoint_url());
-
-    let contract = OrderBook::new(suite.contract_address, &provider);
-
-    // Approve the OrderBook contract to spend tokens
-    let token = MockERC20::new(suite.tokens[0], &provider);
-    token
-        .approve(suite.contract_address, U256::MAX)
-        .send()
-        .await
-        .expect("Failed to send approve transaction")
-        .watch()
-        .await
-        .expect("Failed to confirm approve transaction");
-
-    let builder = contract.openOrder(OnchainOrderParams {
-        tokenIn: suite.tokens[0].into(),
-        destChainId: 421614,
-        tokenOut: FixedBytes::from(decode_evm_address(suite.tokens[1])),
-        amountIn: 1000000,
-        amountOut: 1000000,
-        recipient: FixedBytes::from(decode_evm_address(suite.evm_signer.address())),
-        fillDeadline: U40::MAX,
-        solver: FixedBytes::from([0u8; 32]),
-    });
-
-    builder
-        .send()
-        .await
-        .expect("Failed to send openOrder transaction")
-        .watch()
-        .await
-        .expect("Failed to confirm transaction");
-
-    // Let the solver run and pick up the order
-    sleep(Duration::from_millis(100)).await;
-
-    // Check that the OrderRejected event was created
-    assert!(suite.log_guard.contains("event=\"OrderRejected\" order_id=6dd444764fa0dc3229a76f38314ae608a4e69cef19bce9c636e4661c7f58117f"));
-    assert!(suite.log_guard.contains("reason=Asset not supported"));
+    ctx.contains_log("OrderRejected").await;
+    ctx.contains_log("Asset not supported").await;
 }

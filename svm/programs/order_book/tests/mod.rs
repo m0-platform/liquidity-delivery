@@ -30,11 +30,11 @@ impl OrderBookTest {
         let mut ctx = AnchorLiteSVM::build_with_programs(&[
             (
                 order_book::ID,
-                include_bytes!("../../../target/deploy/order_book.so"),
+                include_bytes!("../../../../target/deploy/order_book.so"),
             ),
             (
                 portal::ID,
-                include_bytes!("../../../target/deploy/mock_portal.so"),
+                include_bytes!("../../../../target/deploy/mock_portal.so"),
             ),
         ]);
 
