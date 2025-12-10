@@ -1,14 +1,16 @@
 use async_trait::async_trait;
-use tracing::info;
+use slog::{info, Logger};
 
 use crate::error::Result;
 use crate::events::{EventHandler, SolverEvent};
 
-pub struct EventLogger {}
+pub struct EventLogger {
+    logger: Logger,
+}
 
 impl EventLogger {
-    pub fn new() -> Self {
-        Self {}
+    pub fn new(logger: Logger) -> Self {
+        Self { logger }
     }
 }
 
@@ -26,64 +28,71 @@ impl EventHandler for EventLogger {
         match event {
             SolverEvent::OrderCreated(e) => {
                 info!(
-                    event = "OrderCreated",
-                    order_id = %e.order_id,
-                    timestamp = e.timestamp,
+                    self.logger,
+                    "OrderCreated";
+                    "order_id" => %e.order_id,
+                    "timestamp" => e.timestamp,
                 );
             }
             SolverEvent::Start => {
-                info!(event = "Start");
+                info!(self.logger, "Start");
             }
             SolverEvent::Stop => {
-                info!(event = "Stop");
+                info!(self.logger, "Stop");
             }
             SolverEvent::OrderFill(e) => {
                 info!(
-                    event = "OrderFill",
-                    order_id = %e.order_id,
-                    timestamp = e.timestamp,
-                    amount = %e.amount,
+                    self.logger,
+                    "OrderFill";
+                    "order_id" => %e.order_id,
+                    "timestamp" => e.timestamp,
+                    "amount" => %e.amount,
                 );
             }
             SolverEvent::OrderRejected(e) => {
                 info!(
-                    event = "OrderRejected",
-                    order_id = %e.order_id,
-                    timestamp = e.timestamp,
-                    reason = %e.reason,
+                    self.logger,
+                    "OrderRejected";
+                    "order_id" => %e.order_id,
+                    "timestamp" => e.timestamp,
+                    "reason" => %e.reason,
                 );
             }
             SolverEvent::OrderCancelRequest(e) => {
                 info!(
-                    event = "OrderCancelRequest",
-                    order_id = %e.order_id,
-                    timestamp = e.timestamp,
-                    new_fill_deadline = e.new_fill_deadline,
+                    self.logger,
+                    "OrderCancelRequest";
+                    "order_id" => %e.order_id,
+                    "timestamp" => e.timestamp,
+                    "new_fill_deadline" => e.new_fill_deadline,
                 );
             }
             SolverEvent::OrderRefundClaimed(e) => {
                 info!(
-                    event = "OrderRefundClaimed",
-                    order_id = %e.order_id,
-                    timestamp = e.timestamp,
-                    sender = %e.sender,
-                    amount_refunded = %e.amount_refunded,
+                    self.logger,
+                    "OrderRefundClaimed";
+                    "order_id" => %e.order_id,
+                    "timestamp" => e.timestamp,
+                    "sender" => %e.sender,
+                    "amount_refunded" => %e.amount_refunded,
                 );
             }
             SolverEvent::OrderCompleted(e) => {
                 info!(
-                    event = "OrderCompleted",
-                    order_id = %e.order_id,
-                    timestamp = e.timestamp,
+                    self.logger,
+                    "OrderCompleted";
+                    "order_id" => %e.order_id,
+                    "timestamp" => e.timestamp,
                 );
             }
             SolverEvent::RequestRebalance(e) => {
                 info!(
-                    event = "RequestRebalance",
-                    target_order_id = %e.target_order_id,
-                    timestamp = e.timestamp,
-                    asset = ?e.asset,
-                    amount = %e.amount,
+                    self.logger,
+                    "RequestRebalance";
+                    "target_order_id" => %e.target_order_id,
+                    "timestamp" => e.timestamp,
+                    "asset" => ?e.asset,
+                    "amount" => %e.amount,
                 );
             }
         }

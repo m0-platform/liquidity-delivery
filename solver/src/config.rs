@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 use spl_token::solana_program::pubkey::Pubkey;
 use std::{env, sync::Arc};
 use thiserror::Error;
-use tracing_subscriber::filter::LevelFilter;
 
 use crate::utils::{chain_from_id, chain_id, supported_chains};
 
@@ -57,7 +56,6 @@ pub struct Config {
     pub network: Network,
     pub chains: Vec<ChainConfig>,
     pub liquidity_api_url: String,
-    pub log_level: LevelFilter,
     pub signers: Signers,
     pub rate_limit: RateLimitConfig,
 }
@@ -77,7 +75,6 @@ impl Default for Config {
             network: Network::Local,
             chains: Vec::new(),
             liquidity_api_url: String::from("https://api-mainnet-b325.up.railway.app"),
-            log_level: LevelFilter::INFO,
             signers: Signers::default(),
             rate_limit: RateLimitConfig::default(),
         }
@@ -105,11 +102,6 @@ impl Config {
 
         let liquidity_api_url =
             env::var("LIQUIDITY_API_URL").expect("LIQUIDITY_API_URL must be set");
-
-        let log_level = env::var("LOG_LEVEL")
-            .ok()
-            .and_then(|s| s.parse::<LevelFilter>().ok())
-            .unwrap_or(LevelFilter::INFO);
 
         // Load rate limit configuration
         let max_requests_per_second = env::var("RATE_LIMIT_MAX_RPS")
@@ -167,7 +159,6 @@ impl Config {
             network,
             chains,
             liquidity_api_url,
-            log_level,
             signers: Signers::from_env()?,
             rate_limit: RateLimitConfig {
                 max_requests_per_second,

@@ -4,6 +4,7 @@ use anchor_client::{Client, Cluster};
 use async_trait::async_trait;
 use m0_liquidity_sdk::types::ChainRuntime;
 use order_book::{OrderData, OrderOpened};
+use slog::{error, Logger};
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -21,6 +22,7 @@ pub struct SvmEventListener {
     chains: Vec<ChainConfig>,
     cluster: config::Network,
     task_handles: Arc<RwLock<Vec<JoinHandle<()>>>>,
+    logger: Logger,
 }
 
 impl SvmEventListener {
@@ -28,6 +30,7 @@ impl SvmEventListener {
         event_bus: Arc<EventBus>,
         chains: Vec<ChainConfig>,
         cluster: config::Network,
+        logger: Logger,
     ) -> Self {
         Self {
             task_handles: Arc::new(RwLock::new(Vec::new())),
@@ -35,6 +38,7 @@ impl SvmEventListener {
             chains,
             cluster,
             event_bus,
+            logger,
         }
     }
 }
@@ -82,6 +86,7 @@ impl SvmEventListener {
         let event_bus = self.event_bus.clone();
         let chain_id = chain.chain_id.clone();
         let order_book_address = chain.order_book_address.clone();
+        let logger = self.logger.clone();
 
         let handle = tokio::spawn(async move {
             let c = Cluster::from_str(&cluster.to_string()).unwrap();
@@ -101,9 +106,11 @@ impl SvmEventListener {
                         nonce: 0,          // TODO: Extract from event
                         dest_chain_id: event.dest_chain_id,
                         fill_deadline: 0, // TODO: Extract from event
+                        token_in: event.token_in.to_bytes(),
                         token_out: event.token_out,
                         recipient: event.solver,
-                        amount_out: 0, // TODO: Extract from event
+                        amount_in: event.amount_in as u128,
+                        amount_out: event.amount_out as u128,
                         solver: event.solver,
                     };
 
@@ -111,15 +118,17 @@ impl SvmEventListener {
 
                     let event_bus_clone = event_bus.clone();
                     let chain_id_for_error = chain_id.clone();
+                    let logger_clone = logger.clone();
                     tokio::spawn(async move {
                         if let Err(e) = event_bus_clone
                             .publish(SolverEvent::OrderCreated(order_event))
                             .await
                         {
-                            tracing::error!(
-                                "Failed to publish OrderEvent on {}: {}",
-                                chain_id_for_error,
-                                e
+                            error!(
+                                logger_clone,
+                                "Failed to publish OrderEvent on chain";
+                                "chain_id" => %chain_id_for_error,
+                                "error" => %e,
                             );
                         }
                     });

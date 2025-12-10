@@ -1,32 +1,32 @@
+use slog::{info, Drain, Logger};
+use solver::common_logger_values;
 use solver::config::{Config, Environment};
 use std::error::Error;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     let _ = dotenvy::dotenv();
     let config = Config::from_env()?;
 
-    if config.environment == Environment::Production {
+    // Create the root logger
+    let logger = if config.environment == Environment::Production {
         // JSON format for production
-        tracing_subscriber::registry()
-            .with(tracing_subscriber::fmt::layer().json())
-            .with(config.log_level)
-            .init();
+        let drain = slog_json::Json::default(std::io::stdout()).fuse();
+        let drain = slog_async::Async::new(drain).build().fuse();
+        Logger::root(drain, common_logger_values!())
     } else {
         // Human-readable format for development
-        tracing_subscriber::registry()
-            .with(tracing_subscriber::fmt::layer())
-            .with(config.log_level)
-            .init();
-    }
+        let decorator = slog_term::TermDecorator::new().build();
+        let drain = slog_term::FullFormat::new(decorator).build().fuse();
+        let drain = slog_async::Async::new(drain).build().fuse();
+        Logger::root(drain, common_logger_values!())
+    };
 
-    let shutdown_tx = solver::run_solver(config).await?;
+    let shutdown_tx = solver::run_solver(config, logger.clone()).await?;
 
     // Wait for SIGINT (Ctrl+C)
     tokio::signal::ctrl_c().await?;
-    tracing::info!("Received shutdown signal");
+    info!(logger, "Received shutdown signal");
     let _ = shutdown_tx.send(());
 
     // Wait for components to shutdown gracefully

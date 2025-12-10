@@ -12,6 +12,7 @@ use anchor_client::solana_sdk::pubkey::Pubkey;
 use async_trait::async_trait;
 use futures_util::future::join_all;
 use m0_liquidity_sdk::types::{Asset, ChainRuntime};
+use slog::{debug, error, info, warn, Logger};
 use spl_token::solana_program::program_pack::Pack;
 use tokio::sync::RwLock;
 
@@ -38,16 +39,18 @@ pub struct InventoryManager {
     chains: Vec<ChainConfig>,
     balances: Arc<RwLock<HashMap<Asset, u128>>>,
     provider_manager: Arc<ProviderManager>,
+    logger: Logger,
 }
 
 impl InventoryManager {
-    pub fn new(cfg: Config, provider_manager: Arc<ProviderManager>) -> Self {
+    pub fn new(cfg: Config, provider_manager: Arc<ProviderManager>, logger: Logger) -> Self {
         Self {
             signers: cfg.signers,
             asset_store: Arc::new(RwLock::new(AssetStore::new(cfg.liquidity_api_url))),
             chains: cfg.chains,
             balances: Arc::new(RwLock::new(HashMap::new())),
             provider_manager,
+            logger,
         }
     }
 
@@ -69,10 +72,11 @@ impl InventoryManager {
                 .get_assets_for_chain(chain.chain_id)
                 .await?;
 
-            tracing::debug!(
-                chain_id = chain.chain_id,
-                asset_count = assets.len(),
-                "Loading SVM balances"
+            debug!(
+                self.logger,
+                "Loading SVM balances";
+                "chain_id" => %chain.chain_id,
+                "asset_count" => assets.len(),
             );
 
             let provider = self
@@ -127,23 +131,25 @@ impl InventoryManager {
                             if amount > 0 {
                                 if let Some(asset) = mint_to_asset.get(&mint) {
                                     self.balances.write().await.insert(asset.clone(), amount);
-                                    tracing::debug!(
-                                        chain_id = chain.chain_id,
-                                        ata = %pubkey,
-                                        asset = asset.symbol,
-                                        amount = amount,
-                                        "Found svm token balance"
+                                    debug!(
+                                        self.logger,
+                                        "Found svm token balance";
+                                        "chain_id" => %chain.chain_id,
+                                        "ata" => %pubkey,
+                                        "asset" => &asset.symbol,
+                                        "amount" => amount,
                                     );
                                 }
                             }
                         }
                     }
                     Err(e) => {
-                        tracing::warn!(
-                            chain_id = chain.chain_id,
-                            token_program = token_program.to_string(),
-                            error = %e,
-                            "Failed to fetch token accounts for program"
+                        warn!(
+                            self.logger,
+                            "Failed to fetch token accounts for program";
+                            "chain_id" => %chain.chain_id,
+                            "token_program" => token_program.to_string(),
+                            "error" => %e,
                         );
                     }
                 }
@@ -160,10 +166,11 @@ impl InventoryManager {
                         .insert(AssetStore::get_native(chain.chain), lamports.into());
                 }
                 Err(e) => {
-                    tracing::error!(
-                        chain_id = chain.chain_id,
-                        error = %e,
-                        "Failed to load native SOL balance"
+                    error!(
+                        self.logger,
+                        "Failed to load native SOL balance";
+                        "chain_id" => %chain.chain_id,
+                        "error" => %e,
                     );
                 }
             }
@@ -192,10 +199,11 @@ impl InventoryManager {
                 .get_assets_for_chain(chain.chain_id)
                 .await?;
 
-            tracing::debug!(
-                chain_id = chain.chain_id,
-                asset_count = assets.len(),
-                "Loading EVM balances"
+            debug!(
+                self.logger,
+                "Loading EVM balances";
+                "chain_id" => %chain.chain_id,
+                "asset_count" => assets.len(),
             );
 
             let provider_wrapper = self
@@ -209,19 +217,12 @@ impl InventoryManager {
                 .map(|asset| {
                     let asset = asset.clone();
                     let provider_wrapper = provider_wrapper.clone();
-                    let chain_id = chain.chain_id;
 
                     async move {
                         // Parse the token address from hex string
                         let token_address = match Address::from_str(&asset.address) {
                             Ok(addr) => addr,
-                            Err(e) => {
-                                tracing::warn!(
-                                    chain_id = chain_id,
-                                    asset = ?asset.symbol,
-                                    error = %e,
-                                    "Invalid token address"
-                                );
+                            Err(_e) => {
                                 return 0;
                             }
                         };
@@ -232,16 +233,7 @@ impl InventoryManager {
 
                         match token.balanceOf(address).call().await {
                             Ok(balance) => balance.to::<u128>(),
-                            Err(e) => {
-                                tracing::warn!(
-                                    chain_id = chain_id,
-                                    asset = ?asset.symbol,
-                                    token_address = %asset.address,
-                                    error = %e,
-                                    "Failed to load ERC20 token balance"
-                                );
-                                0
-                            }
+                            Err(_e) => 0,
                         }
                     }
                 })
@@ -268,10 +260,11 @@ impl InventoryManager {
                         .insert(AssetStore::get_native(chain.chain), balance.to());
                 }
                 Err(e) => {
-                    tracing::error!(
-                        chain_id = chain.chain_id,
-                        error = %e,
-                        "Failed to load native ETH balance"
+                    error!(
+                        self.logger,
+                        "Failed to load native ETH balance";
+                        "chain_id" => %chain.chain_id,
+                        "error" => %e,
                     );
                 }
             }
@@ -287,16 +280,18 @@ impl InventoryManager {
             .iter()
             .map(|(asset, balance)| {
                 format!(
-                    "{}: {}",
+                    "{} ({}): {}",
                     asset.symbol,
+                    asset.chain,
                     *balance as f64 / 10_f64.powf(asset.decimals as f64)
                 )
             })
             .collect();
 
-        tracing::info!(
-            balances = ?balance_info,
-            "Current signer balances"
+        info!(
+            self.logger,
+            "Current signer balances";
+            "balances" => ?balance_info,
         );
     }
 }

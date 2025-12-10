@@ -6,17 +6,21 @@ use async_trait::async_trait;
 use futures_util::StreamExt;
 use m0_liquidity_sdk::types::ChainRuntime;
 use order_book::OrderData;
+use slog::{error, info, Logger};
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
+use tokio::time::interval;
 
-use crate::config::ChainConfig;
+use crate::config::{ChainConfig, Network};
 use crate::error::{Result, SolverError};
 use crate::events::{
-    CancelRequest, EventBus, EventHandler, EventProcessor, Fill, OrderCancelRequestEvent,
-    OrderCompleted, OrderCompletedEvent, OrderCreatedEvent, OrderFillEvent, OrderOpen,
-    OrderRefundClaimedEvent, RefundClaimed, SolverEvent,
+    CancelRequested, EventBus, EventHandler, EventProcessor, OrderCancelRequestEvent,
+    OrderCompleted, OrderCompletedEvent, OrderCreatedEvent, OrderFillEvent, OrderFilled,
+    OrderOpened, OrderRefundClaimedEvent, RefundClaimed, SolverEvent,
 };
 use crate::stores::OrderStore;
 use crate::utils::{chain_runtime, decode_evm_address};
@@ -27,6 +31,10 @@ pub struct EvmEventListener {
     order_store: Arc<RwLock<OrderStore>>,
     chains: Vec<ChainConfig>,
     task_handles: Arc<RwLock<Vec<JoinHandle<()>>>>,
+    logger: Logger,
+    seen_logs: Arc<RwLock<HashSet<(u32, u64, u64)>>>, // (chain_id, block_number, log_index)
+    last_polled_block: Arc<RwLock<HashMap<u32, u64>>>,
+    polling_interval: Duration,
 }
 
 #[async_trait]
@@ -47,10 +55,11 @@ impl EventHandler for EvmEventListener {
             SolverEvent::Start => {
                 for chain in self.chains.iter() {
                     if let Err(e) = self.start_event_listener(&chain).await {
-                        tracing::error!(
-                            chain_id = ?chain.chain_id,
-                            error = ?e,
-                            "Failed to start event listener",
+                        error!(
+                            self.logger,
+                            "Failed to start event listener";
+                            "chain_id" => ?chain.chain_id,
+                            "error" => ?e,
                         );
                     }
                 }
@@ -69,12 +78,25 @@ impl EventHandler for EvmEventListener {
 }
 
 impl EvmEventListener {
-    pub fn new(event_bus: Arc<EventBus>, chains: Vec<ChainConfig>) -> Self {
+    pub fn new(
+        event_bus: Arc<EventBus>,
+        chains: Vec<ChainConfig>,
+        logger: Logger,
+        network: Network,
+    ) -> Self {
         Self {
             task_handles: Arc::new(RwLock::new(Vec::new())),
             order_store: Arc::new(RwLock::new(OrderStore::new())),
             chains,
             event_bus,
+            logger,
+            seen_logs: Arc::new(RwLock::new(HashSet::new())),
+            last_polled_block: Arc::new(RwLock::new(HashMap::new())),
+            polling_interval: if network == Network::Local {
+                Duration::from_millis(1000)
+            } else {
+                Duration::from_millis(5000)
+            },
         }
     }
 
@@ -99,9 +121,9 @@ impl EvmEventListener {
         let filter = Filter::new()
             .address(contract_address)
             .event_signature(vec![
-                OrderOpen::SIGNATURE_HASH,
-                Fill::SIGNATURE_HASH,
-                CancelRequest::SIGNATURE_HASH,
+                OrderOpened::SIGNATURE_HASH,
+                OrderFilled::SIGNATURE_HASH,
+                CancelRequested::SIGNATURE_HASH,
                 RefundClaimed::SIGNATURE_HASH,
                 OrderCompleted::SIGNATURE_HASH,
             ]);
@@ -114,45 +136,196 @@ impl EvmEventListener {
             ))
         })?;
 
-        tracing::info!(
-            "Started event listener for chain {} at {}",
-            chain_id,
-            chain.ws_url
-        );
-
         let mut stream = sub.into_stream();
         let event_bus = self.event_bus.clone();
+        let logger = self.logger.clone();
 
         // Keep the provider alive by moving it into the task
-        let handle = tokio::spawn(async move {
+        let ws_handle = tokio::spawn(async move {
             let _provider = provider; // Keep provider alive
             loop {
                 if let Some(log) = stream.next().await {
                     match Self::process_log(chain_id, &log) {
                         Ok(Some(event)) => {
                             if let Err(e) = event_bus.publish(event).await {
-                                tracing::error!(
-                                    "Failed to publish event on chain {}: {}",
-                                    chain_id,
-                                    e
+                                error!(
+                                    logger,
+                                    "Failed to publish event on chain";
+                                    "chain_id" => %chain_id,
+                                    "error" => %e,
                                 );
                             }
                         }
                         Ok(None) => (),
                         Err(e) => {
-                            tracing::error!("Error processing log on chain {}: {}", chain_id, e);
+                            error!(
+                                logger,
+                                "Error processing log on chain";
+                                "chain_id" => %chain_id,
+                                "error" => %e,
+                            );
                         }
                     }
                 }
             }
         });
 
-        // Store the task handle so we can abort it later
+        // Start polling task (will fetch historical logs on first poll)
+        let poll_handle = self.start_polling_task(chain.clone()).await?;
+
+        // Store task handles
         let task_handles = self.task_handles.clone();
         tokio::spawn(async move {
             let mut handles = task_handles.write().await;
-            handles.push(handle);
+            handles.push(ws_handle);
+            handles.push(poll_handle);
         });
+        info!(
+            self.logger,
+            "Started event listener for chain";
+            "chain_id" => %chain_id,
+            "ws_url" => %chain.ws_url,
+        );
+
+        Ok(())
+    }
+
+    async fn start_polling_task(&self, chain: ChainConfig) -> Result<JoinHandle<()>> {
+        let chain_id = chain.chain_id;
+        let contract_address = Address::from_str(&chain.order_book_address)
+            .map_err(|e| SolverError::Component(format!("Invalid contract address: {}", e)))?;
+
+        // Create HTTP provider for polling
+        let rpc_url = chain.rpc_url.parse().unwrap();
+        let provider = ProviderBuilder::new().connect_http(rpc_url);
+
+        let event_bus = self.event_bus.clone();
+        let seen_logs = self.seen_logs.clone();
+        let last_polled_block = self.last_polled_block.clone();
+        let polling_interval = self.polling_interval;
+        let logger = self.logger.clone();
+
+        let handle = tokio::spawn(async move {
+            let mut poll_interval = interval(polling_interval);
+
+            loop {
+                poll_interval.tick().await;
+
+                let from_block = {
+                    let last_polled = last_polled_block.read().await;
+                    last_polled.get(&chain_id).copied()
+                };
+
+                match provider.get_block_number().await {
+                    Ok(to_block) => {
+                        // First poll fetch last 1000 blocks
+                        let from_block = from_block.unwrap_or(to_block.saturating_sub(1000));
+
+                        if from_block >= to_block {
+                            continue;
+                        }
+
+                        if let Err(e) = Self::fetch_historical_logs(
+                            chain_id,
+                            contract_address,
+                            from_block + 1,
+                            to_block,
+                            &provider,
+                            &event_bus,
+                            &seen_logs,
+                            &logger,
+                        )
+                        .await
+                        {
+                            error!(logger, "Failed to fetch logs for chain {}: {}", chain_id, e);
+                        } else {
+                            let mut last_polled = last_polled_block.write().await;
+                            last_polled.insert(chain_id, to_block);
+                        }
+                    }
+                    Err(e) => {
+                        error!(
+                            logger,
+                            "Failed to get block number for chain {}: {}", chain_id, e
+                        );
+                    }
+                }
+            }
+        });
+
+        Ok(handle)
+    }
+
+    async fn fetch_historical_logs<P: Provider>(
+        chain_id: u32,
+        contract_address: Address,
+        from_block: u64,
+        to_block: u64,
+        provider: &P,
+        event_bus: &Arc<EventBus>,
+        seen_logs: &Arc<RwLock<HashSet<(u32, u64, u64)>>>,
+        logger: &Logger,
+    ) -> Result<()> {
+        let filter = Filter::new()
+            .address(contract_address)
+            .from_block(from_block)
+            .to_block(to_block)
+            .event_signature(vec![
+                OrderOpened::SIGNATURE_HASH,
+                OrderFilled::SIGNATURE_HASH,
+                CancelRequested::SIGNATURE_HASH,
+                RefundClaimed::SIGNATURE_HASH,
+                OrderCompleted::SIGNATURE_HASH,
+            ]);
+
+        let logs = provider.get_logs(&filter).await.map_err(|e| {
+            SolverError::Component(format!(
+                "Failed to fetch historical logs for chain {}: {}",
+                chain_id, e
+            ))
+        })?;
+
+        info!(
+            logger,
+            "Fetched historical logs";
+            "count" => logs.len(),
+            "chain_id" => chain_id,
+            "from_block" => from_block,
+            "to_block" => to_block
+        );
+
+        for log in logs {
+            let block_number = log.block_number.unwrap();
+            let log_index = log.log_index.unwrap();
+
+            // Check if log has been seen
+            let seen = seen_logs.read().await;
+            if seen.contains(&(chain_id, block_number, log_index as u64)) {
+                continue;
+            }
+
+            // Mark as seen
+            let mut seen = seen_logs.write().await;
+            seen.insert((chain_id, block_number, log_index as u64));
+
+            match Self::process_log(chain_id, &log) {
+                Ok(Some(event)) => {
+                    if let Err(e) = event_bus.publish(event).await {
+                        error!(
+                            logger,
+                            "Failed to publish historical event on chain {}: {}", chain_id, e
+                        );
+                    }
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    error!(
+                        logger,
+                        "Error processing historical log on chain {}: {}", chain_id, e
+                    );
+                }
+            }
+        }
 
         Ok(())
     }
@@ -174,11 +347,11 @@ impl EvmEventListener {
         };
 
         // Match on event signature and decode
-        if event_signature == OrderOpen::SIGNATURE_HASH {
+        if event_signature == OrderOpened::SIGNATURE_HASH {
             return Ok(Some(Self::handle_order_open(chain_id, &log_data)?));
-        } else if event_signature == Fill::SIGNATURE_HASH {
+        } else if event_signature == OrderFilled::SIGNATURE_HASH {
             return Ok(Some(Self::handle_fill(&log_data)?));
-        } else if event_signature == CancelRequest::SIGNATURE_HASH {
+        } else if event_signature == CancelRequested::SIGNATURE_HASH {
             return Ok(Some(Self::handle_cancel_request(&log_data)?));
         } else if event_signature == RefundClaimed::SIGNATURE_HASH {
             return Ok(Some(Self::handle_refund_claimed(&log_data)?));
@@ -190,7 +363,7 @@ impl EvmEventListener {
     }
 
     fn handle_order_open(chain_id: u32, log: &Log) -> Result<SolverEvent> {
-        let event = OrderOpen::decode_log(log)
+        let event = OrderOpened::decode_log(log)
             .map_err(|e| SolverError::Component(format!("Failed to decode OrderOpen: {}", e)))?;
 
         let order = OrderData {
@@ -200,8 +373,10 @@ impl EvmEventListener {
             nonce: 0,          // TODO: Extract from event
             dest_chain_id: event.destChainId,
             fill_deadline: 0, // TODO: Extract from event
+            token_in: decode_evm_address(event.tokenIn),
             token_out: event.tokenOut.into(),
             recipient: event.solver.into(),
+            amount_in: event.amountIn,
             amount_out: event.amountOut,
             solver: event.solver.into(),
         };
@@ -213,7 +388,7 @@ impl EvmEventListener {
     }
 
     fn handle_fill(log: &Log) -> Result<SolverEvent> {
-        let event = Fill::decode_log(log)
+        let event = OrderFilled::decode_log(log)
             .map_err(|e| SolverError::Component(format!("Failed to decode Fill: {}", e)))?;
 
         let order_id = format!("{:x}", event.orderId);
@@ -223,7 +398,7 @@ impl EvmEventListener {
     }
 
     fn handle_cancel_request(log: &Log) -> Result<SolverEvent> {
-        let event = CancelRequest::decode_log(log).map_err(|e| {
+        let event = CancelRequested::decode_log(log).map_err(|e| {
             SolverError::Component(format!("Failed to decode CancelRequest: {}", e))
         })?;
 
