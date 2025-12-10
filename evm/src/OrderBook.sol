@@ -432,6 +432,9 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
             // If a full fill, mark the order as completed
             Order storage order = $.localOrders[orderId_];
 
+            // Validate the order status
+            if (order.status != OrderStatus.Created) revert InvalidOrderStatus();
+
             if (fullFill_) {
                 order.status = OrderStatus.Completed;
                 emit OrderCompleted(orderId_);
