@@ -1,0 +1,31 @@
+environment: development
+network: devnet
+
+liquidity_api_url: https://api-mainnet-b325.up.railway.app
+
+rpc_rate_limit:
+  max_requests_per_second: 5
+  burst_size: 10
+
+# Order configuration
+max_order_clip_size: 10000
+solver_fee_bps: 1
+
+# Keys
+evm_private_key: "0x0000000000000000000000000000000000000000000000000000000000000000"
+svm_private_key: "5J8QhU9z6fN9h3bGxZ5YjN3WkN3Yk3Z3X3k3k3k3k3k3k3k3k3k3k3k3k3k3k3k3k3k3k3k3k3k3"
+
+chains:
+  # Ethereum Sepolia
+  - chain_id: 11155111
+    enabled: true
+    rpc_url: https://sepolia.gateway.tenderly.co
+    ws_url: wss://sepolia.gateway.tenderly.co
+    order_book_address: "0x1234567890123456789012345678901234567890"
+
+  # Arbitrum Sepolia
+  - chain_id: 421614
+    enabled: true
+    rpc_url: https://arbitrum-sepolia.gateway.tenderly.co
+    ws_url: wss://arbitrum-sepolia.gateway.tenderly.co
+    order_book_address: "0x2345678901234567890123456789012345678901"

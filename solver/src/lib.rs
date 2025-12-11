@@ -48,8 +48,8 @@ pub async fn run_solver(
 
     // Initialize global provider manager
     let provider_manager = Arc::new(ProviderManager::new(
-        config.rate_limit.max_requests_per_second,
-        config.rate_limit.burst_size,
+        config.rpc_rate_limit.max_requests_per_second,
+        config.rpc_rate_limit.burst_size,
     ));
     provider_manager.initialize(&config.chains).await?;
 

@@ -5,8 +5,11 @@ use std::error::Error;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
-    let _ = dotenvy::dotenv();
-    let config = Config::from_env()?;
+    let config_path = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "config.yaml".to_string());
+
+    let config = Config::from_file(&config_path)?;
 
     // Create the root logger
     let logger = if config.environment == Environment::Production {

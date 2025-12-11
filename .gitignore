@@ -15,6 +15,9 @@ docs/
 # Dotenv file
 .env
 
+# YAML config with secrets
+solver/config.yaml
+
 # Mac OS files
 .DS_Store
 
