@@ -72,3 +72,9 @@ pub fn format_address(bytes: &[u8; 32]) -> String {
         Pubkey::new_from_array(*bytes).to_string()
     }
 }
+
+pub fn decode_order_id(order_id: &String) -> [u8; 32] {
+    let mut arr = [0u8; 32];
+    arr.copy_from_slice(&hex::decode(order_id).unwrap());
+    arr
+}

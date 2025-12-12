@@ -190,9 +190,7 @@ impl InventoryManager {
     }
 
     async fn load_evm_balances(&self) -> Result<()> {
-        let address_str = self.signers.evm_address();
-        let address = Address::from_str(&address_str)
-            .map_err(|e| SolverError::Component(format!("Invalid EVM address: {}", e)))?;
+        let address = self.signers.evm_address();
 
         // Get all EVM chains
         let evm_chains: Vec<_> = self

@@ -292,6 +292,13 @@ impl TestSuite {
         );
     }
 
+    pub fn contains_order_lifecycle(&self, order_id: &str, events: &[&str]) {
+        for &event in events {
+            let pattern = format!("{} .* order_id={}", event, order_id);
+            self.contains_log(&pattern);
+        }
+    }
+
     pub async fn create_order(
         &self,
         chain: &ChainInstance,

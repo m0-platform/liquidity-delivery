@@ -52,10 +52,16 @@ async fn test_order_processed_chain_a(ctx: &TestSuite) {
     )
     .await;
 
-    let order_id = "22c461dbb898e0ffad3db065928de717796c1d2b773ab58ecb91b4bdc82d6aec";
-    ctx.contains_log(&format!("OrderCreated .* order_id={}", order_id));
-    ctx.contains_log(&format!("HoldSuccessful .* order_id={}", order_id));
-    ctx.contains_log(&format!("RequestFillOrder .* order_id={}", order_id));
+    ctx.contains_order_lifecycle(
+        "22c461dbb898e0ffad3db065928de717796c1d2b773ab58ecb91b4bdc82d6aec",
+        &[
+            "OrderCreated",
+            "HoldSuccessful",
+            "RequestFillOrder",
+            "RequestFillOrder",
+            "FillOrderSuccessful",
+        ],
+    );
 }
 
 #[test_context(TestSuite)]
@@ -73,7 +79,14 @@ async fn test_order_processed_chain_b(ctx: &TestSuite) {
     )
     .await;
 
-    let order_id = "b5a03f77fb3f31d440d42c19eb2fd109774b3f07169ebb4faac81f72e521fe00";
-    ctx.contains_log(&format!("OrderCreated .* order_id={}", order_id));
-    ctx.contains_log(&format!("HoldSuccessful .* order_id={}", order_id));
+    ctx.contains_order_lifecycle(
+        "b5a03f77fb3f31d440d42c19eb2fd109774b3f07169ebb4faac81f72e521fe00",
+        &[
+            "OrderCreated",
+            "HoldSuccessful",
+            "RequestFillOrder",
+            "RequestFillOrder",
+            "FillOrderSuccessful",
+        ],
+    );
 }

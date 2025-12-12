@@ -1,4 +1,4 @@
-use alloy::signers::local::PrivateKeySigner;
+use alloy::{primitives::Address, signers::local::PrivateKeySigner};
 use anchor_client::solana_sdk::{signature::Keypair, signer::Signer};
 use m0_liquidity_sdk::types::Chain;
 use serde::{Deserialize, Serialize};
@@ -194,8 +194,8 @@ impl Signers {
         self.svm_private_key.pubkey()
     }
 
-    pub fn evm_address(&self) -> String {
-        self.evm_private_key.address().to_string()
+    pub fn evm_address(&self) -> Address {
+        self.evm_private_key.address()
     }
 }
 

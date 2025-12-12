@@ -1,5 +1,6 @@
 mod components;
 pub mod config;
+mod contracts;
 mod error;
 mod events;
 mod providers;

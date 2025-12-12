@@ -79,13 +79,7 @@ pub struct ProviderManager {
 }
 
 impl ProviderManager {
-    /// Create a new provider manager
-    ///
-    /// # Arguments
-    /// * `max_requests_per_second` - Maximum sustained requests per second across all chains
-    /// * `burst_size` - Maximum burst capacity
     pub fn new(max_requests_per_second: u32, burst_size: u32) -> Self {
-        // Create quota: burst_size tokens that refill at max_requests_per_second rate
         let quota = Quota::per_second(NonZeroU32::new(max_requests_per_second).unwrap())
             .allow_burst(NonZeroU32::new(burst_size).unwrap());
 
@@ -98,7 +92,6 @@ impl ProviderManager {
         }
     }
 
-    /// Initialize providers for all configured chains
     pub async fn initialize(&self, chains: &[ChainConfig]) -> Result<()> {
         for chain in chains {
             match chain_runtime(chain.chain_id) {
@@ -111,12 +104,9 @@ impl ProviderManager {
             }
         }
 
-        // Initialized provider manager
-
         Ok(())
     }
 
-    /// Add an EVM provider for a chain
     async fn add_evm_provider(&self, chain: &ChainConfig) -> Result<()> {
         let url = chain.rpc_url.parse().map_err(|e| {
             SolverError::Component(format!(
@@ -137,12 +127,9 @@ impl ProviderManager {
             .await
             .insert(chain.chain_id, evm_provider);
 
-        // Added EVM provider
-
         Ok(())
     }
 
-    /// Add an SVM provider for a chain
     async fn add_svm_provider(&self, chain: &ChainConfig) -> Result<()> {
         let client = Arc::new(RpcClient::new(&chain.rpc_url));
 
@@ -156,12 +143,9 @@ impl ProviderManager {
             .await
             .insert(chain.chain_id, svm_provider);
 
-        // Added SVM provider
-
         Ok(())
     }
 
-    /// Get an EVM provider for a chain
     pub async fn get_evm_provider(&self, chain_id: u32) -> Result<Arc<EvmProvider>> {
         self.evm_providers
             .read()
@@ -173,7 +157,6 @@ impl ProviderManager {
             })
     }
 
-    /// Get an SVM provider for a chain
     pub async fn get_svm_provider(&self, chain_id: u32) -> Result<Arc<SvmProvider>> {
         self.svm_providers
             .read()
