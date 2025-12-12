@@ -53,7 +53,7 @@ async fn test_order_processed_chain_a(ctx: &TestSuite) {
     .await;
 
     ctx.contains_order_lifecycle(
-        "22c461dbb898e0ffad3db065928de717796c1d2b773ab58ecb91b4bdc82d6aec",
+        "682d2d2fd1e49b926bd2dcd2eabc9285bc2afd9692e71cb8c02aebd916112dd8",
         &[
             "OrderCreated",
             "HoldSuccessful",

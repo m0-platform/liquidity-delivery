@@ -17,6 +17,7 @@ use tokio::time::interval;
 
 use crate::components::ComponentParams;
 use crate::config::{ChainConfig, Network};
+use crate::contracts::evm::IOrderBook;
 use crate::error::{Result, SolverError};
 use crate::events::{
     CancelRequested, EventBus, EventHandler, EventProcessor, OrderCancelRequestEvent,
@@ -143,13 +144,15 @@ impl EvmEventListener {
         let mut stream = sub.into_stream();
         let event_bus = self.event_bus.clone();
         let logger = self.logger.clone();
+        let provider_clone = provider.clone();
 
         // Keep the provider alive by moving it into the task
         let ws_handle = tokio::spawn(async move {
             let _provider = provider; // Keep provider alive
             loop {
                 if let Some(log) = stream.next().await {
-                    match Self::process_log(chain_id, &log) {
+                    match Self::process_log(chain_id, &log, contract_address, &provider_clone).await
+                    {
                         Ok(Some(event)) => {
                             if let Err(e) = event_bus.publish(event).await {
                                 error!(
@@ -313,7 +316,7 @@ impl EvmEventListener {
             let mut seen = seen_logs.write().await;
             seen.insert((chain_id, block_number, log_index as u64));
 
-            match Self::process_log(chain_id, &log) {
+            match Self::process_log(chain_id, &log, contract_address, provider).await {
                 Ok(Some(event)) => {
                     if let Err(e) = event_bus.publish(event).await {
                         error!(
@@ -335,7 +338,12 @@ impl EvmEventListener {
         Ok(())
     }
 
-    fn process_log(chain_id: u32, log: &alloy::rpc::types::Log) -> Result<Option<SolverEvent>> {
+    async fn process_log<P: Provider>(
+        chain_id: u32,
+        log: &alloy::rpc::types::Log,
+        contract_address: Address,
+        provider: &P,
+    ) -> Result<Option<SolverEvent>> {
         let topics = &log.topics();
 
         if topics.is_empty() {
@@ -344,7 +352,6 @@ impl EvmEventListener {
 
         let event_signature = topics[0];
 
-        // Convert alloy::rpc::types::Log to Log for decoding
         let log_data = Log {
             address: Address::from_slice(log.address().as_slice()),
             data: LogData::new(log.topics().to_vec(), log.data().data.clone())
@@ -353,7 +360,9 @@ impl EvmEventListener {
 
         // Match on event signature and decode
         if event_signature == OrderOpened::SIGNATURE_HASH {
-            return Ok(Some(Self::handle_order_open(chain_id, &log_data)?));
+            let event =
+                Self::handle_order_open(chain_id, &log_data, contract_address, provider).await?;
+            return Ok(Some(event));
         } else if event_signature == OrderFilled::SIGNATURE_HASH {
             return Ok(Some(Self::handle_fill(&log_data)?));
         } else if event_signature == CancelRequested::SIGNATURE_HASH {
@@ -367,20 +376,35 @@ impl EvmEventListener {
         Ok(None)
     }
 
-    fn handle_order_open(chain_id: u32, log: &Log) -> Result<SolverEvent> {
+    async fn handle_order_open<P: Provider>(
+        chain_id: u32,
+        log: &Log,
+        contract_address: Address,
+        provider: &P,
+    ) -> Result<SolverEvent> {
         let event = OrderOpened::decode_log(log)
             .map_err(|e| SolverError::Component(format!("Failed to decode OrderOpen: {}", e)))?;
 
+        let order_id = event.orderId;
+
+        // Create contract instance and call getOrder
+        let contract = IOrderBook::new(contract_address, provider);
+        let order_result = contract
+            .getOrder(order_id)
+            .call()
+            .await
+            .map_err(|e| SolverError::Component(format!("Failed to call getOrder: {}", e)))?;
+
         let order = OrderData {
-            version: 0, // TODO: Get from contract or config
+            version: order_result.version,
             origin_chain_id: chain_id,
-            sender: [0u8; 32], // TODO: Extract from event
-            nonce: 0,          // TODO: Extract from event
+            sender: decode_evm_address(event.sender),
+            nonce: order_result.nonce,
             dest_chain_id: event.destChainId,
-            fill_deadline: 0, // TODO: Extract from event
+            fill_deadline: order_result.fillDeadline as u64,
             token_in: decode_evm_address(event.tokenIn),
             token_out: event.tokenOut.into(),
-            recipient: event.solver.into(),
+            recipient: order_result.recipient.into(),
             amount_in: event.amountIn,
             amount_out: event.amountOut,
             solver: event.solver.into(),

@@ -317,12 +317,12 @@ impl TestSuite {
         let builder = contract.openOrder(OrderParams {
             tokenIn: token_in,
             destChainId: dest_chain_id,
-            tokenOut: FixedBytes::from(decode_evm_address(token_out)),
+            tokenOut: decode_evm_address(token_out).into(),
             amountIn: amount_in,
             amountOut: amount_out,
-            recipient: FixedBytes::from(decode_evm_address(self.evm_signer.address())),
+            recipient: decode_evm_address(self.evm_user.address()).into(),
             fillDeadline: u32::MAX,
-            solver: FixedBytes::from([0u8; 32]),
+            solver: [0u8; 32].into(),
         });
 
         let receipt = builder

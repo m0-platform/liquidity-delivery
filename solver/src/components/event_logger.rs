@@ -102,6 +102,7 @@ impl EventHandler for EventLogger {
                     self.logger,
                     "RequestFillOrder";
                     "order_id" => %e.order_id,
+                    "fill_amount" => %e.amount,
                 );
             }
             SolverEvent::FillOrderSuccessful(e) => {

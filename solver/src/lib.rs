@@ -80,13 +80,13 @@ pub async fn run_solver(
     order_timer.initialize().await?;
 
     // Spawn handlers for all components
-    register_component(&evm_listener, &event_bus, &shutdown_tx);
-    register_component(&evm_writer, &event_bus, &shutdown_tx);
-    register_component(&svm_listener, &event_bus, &shutdown_tx);
-    register_component(&order_processor, &event_bus, &shutdown_tx);
-    register_component(&inventory_manager, &event_bus, &shutdown_tx);
-    register_component(&event_logger, &event_bus, &shutdown_tx);
-    register_component(&order_timer, &event_bus, &shutdown_tx);
+    register_component(&evm_listener, &event_bus, &shutdown_tx, &logger);
+    register_component(&evm_writer, &event_bus, &shutdown_tx, &logger);
+    register_component(&svm_listener, &event_bus, &shutdown_tx, &logger);
+    register_component(&order_processor, &event_bus, &shutdown_tx, &logger);
+    register_component(&inventory_manager, &event_bus, &shutdown_tx, &logger);
+    register_component(&event_logger, &event_bus, &shutdown_tx, &logger);
+    register_component(&order_timer, &event_bus, &shutdown_tx, &logger);
 
     // Let everything get started
     sleep(Duration::from_millis(50)).await;
@@ -102,6 +102,7 @@ fn register_component<T>(
     component: &Arc<T>,
     event_bus: &Arc<EventBus>,
     shutdown_tx: &broadcast::Sender<()>,
+    logger: &Logger,
 ) where
     T: EventHandler + 'static,
 {
@@ -110,6 +111,7 @@ fn register_component<T>(
         component.name(),
         event_bus.clone(),
         shutdown_tx.subscribe(),
+        logger.clone(),
         move |event| {
             let c = component_clone.clone();
             async move { c.handle_event(event).await }
@@ -118,9 +120,10 @@ fn register_component<T>(
 }
 
 fn spawn_event_handler<F, Fut>(
-    _component_name: &'static str,
+    component_name: &'static str,
     event_bus: Arc<EventBus>,
     mut shutdown_rx: Receiver<()>,
+    logger: Logger,
     handler: F,
 ) where
     F: Fn(SolverEvent) -> Fut + Send + 'static,
@@ -139,7 +142,8 @@ fn spawn_event_handler<F, Fut>(
                     // Early continue on receive error
                     let event = match result {
                         Ok(event) => event,
-                        Err(_e) => {
+                        Err(e) => {
+                            slog::error!(logger, "Error receiving event"; "component" => component_name, "error" => ?e);
                             continue;
                         }
                     };
@@ -147,7 +151,8 @@ fn spawn_event_handler<F, Fut>(
                     // Handle event and get new events
                     let new_events = match handler(event).await {
                         Ok(events) => events,
-                        Err(_e) => {
+                        Err(e) => {
+                            slog::error!(logger, "Error handling event"; "component" => component_name, "error" => ?e);
                             continue;
                         }
                     };

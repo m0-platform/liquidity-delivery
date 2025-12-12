@@ -92,12 +92,13 @@ impl SvmEventListener {
             let c = Cluster::from_str(&cluster.to_string()).unwrap();
             let client = Client::new(c, Arc::new(Keypair::new()));
             let chain_id_clone = chain_id.clone();
+            let logger_for_error = logger.clone();
 
             let program = client
                 .program(Pubkey::from_str(&order_book_address).unwrap())
                 .unwrap();
 
-            program
+            if let Err(e) = program
                 .on::<OrderOpened>(move |_ctx, event| {
                     let order = OrderData {
                         version: 0, // TODO: Get from contract or config
@@ -134,7 +135,14 @@ impl SvmEventListener {
                     });
                 })
                 .await
-                .unwrap();
+            {
+                error!(
+                    logger_for_error,
+                    "Failed to subscribe to OrderOpened events";
+                    "chain_id" => %chain_id,
+                    "error" => %e,
+                );
+            }
         });
 
         // Store the task handle so we can abort it later

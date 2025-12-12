@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use alloy::primitives::Address;
 use alloy::providers::Provider;
-use alloy::sol;
 use anchor_client::solana_client::rpc_config::{RpcAccountInfoConfig, RpcProgramAccountsConfig};
 use anchor_client::solana_client::rpc_filter::{Memcmp, RpcFilterType};
 use anchor_client::solana_sdk::commitment_config::CommitmentConfig;
@@ -18,20 +17,12 @@ use tokio::sync::RwLock;
 
 use crate::components::ComponentParams;
 use crate::config::{ChainConfig, Signers};
+use crate::contracts::IERC20;
 use crate::error::{Result, SolverError};
 use crate::events::{EventHandler, EventProcessor, HoldSuccessfulEvent, SolverEvent};
 use crate::providers::ProviderManager;
 use crate::stores::{AssetStore, OrderStore};
 use crate::utils::{chain_from_id, chain_runtime, format_address};
-
-// Define ERC20 interface for balance checking
-sol! {
-    #[sol(rpc)]
-    interface IERC20 {
-        function balanceOf(address account) external view returns (uint256);
-        function decimals() external view returns (uint8);
-    }
-}
 
 pub struct InventoryManager {
     signers: Signers,
