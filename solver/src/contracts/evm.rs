@@ -1,4 +1,4 @@
-use alloy::sol;
+use alloy::{primitives::Bytes, sol, sol_types::SolError};
 
 sol! {
     #[sol(rpc)]
@@ -57,6 +57,24 @@ sol! {
             OrderData calldata orderData,
             FillParams calldata fillerParams
         ) external;
+
+        error AmountInZero();
+        error AmountOutZero();
+        error FillAmountZero();
+        error FinalityPending();
+        error InvalidDeadline();
+        error InvalidDestinationChain();
+        error InvalidFinalityBuffer();
+        error InvalidNonce();
+        error InvalidOrderStatus();
+        error InvalidOrderVersion();
+        error InvalidOriginChain();
+        error InvalidRecipient();
+        error InvalidReport();
+        error NotAuthorized();
+        error OrderExpired();
+        error OrderAlreadyFilled();
+        error OrderIdMismatch();
     }
 }
 
@@ -68,4 +86,40 @@ sol! {
         function balanceOf(address account) external view returns (uint256);
         function decimals() external view returns (uint8);
     }
+}
+
+pub fn decode_custom_err(revert_data: Option<Bytes>) -> Option<String> {
+    let data = revert_data.as_ref()?;
+
+    macro_rules! try_decode {
+        ($($error:ident),* $(,)?) => {
+            $(
+                if IOrderBook::$error::abi_decode(data).is_ok() {
+                    return Some(stringify!($error).to_string());
+                }
+            )*
+        };
+    }
+
+    try_decode!(
+        AmountInZero,
+        AmountOutZero,
+        FillAmountZero,
+        FinalityPending,
+        InvalidDeadline,
+        InvalidDestinationChain,
+        InvalidFinalityBuffer,
+        InvalidNonce,
+        InvalidOrderStatus,
+        InvalidOrderVersion,
+        InvalidOriginChain,
+        InvalidRecipient,
+        InvalidReport,
+        NotAuthorized,
+        OrderExpired,
+        OrderAlreadyFilled,
+        OrderIdMismatch,
+    );
+
+    None
 }

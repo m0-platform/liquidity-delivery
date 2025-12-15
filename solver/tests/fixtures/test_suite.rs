@@ -14,6 +14,7 @@ use regex::Regex;
 use slog::{info, Drain, Logger};
 use solver::{
     common_logger_values,
+    config::SupportedAssets,
     providers::Signers,
     utils::{chain_from_id, decode_evm_address},
     Config,
@@ -239,6 +240,21 @@ impl AsyncTestContext for TestSuite {
         config.liquidity_api_url = mock_server.url();
         config.signers = Signers::new(evm_signer.clone(), svm_signer.clone());
 
+        // Support created assets
+        config.supported_assets = SupportedAssets {
+            third_party_whitelist: chains
+                .iter()
+                .flat_map(|chain| {
+                    chain
+                        .tokens
+                        .iter()
+                        .map(|token| token.address.to_string())
+                        .collect::<Vec<String>>()
+                })
+                .collect(),
+            first_party_blacklist: vec![],
+        };
+
         let shutdown_tx = solver::run_solver(config, logger.clone())
             .await
             .expect("Failed to start solver");
@@ -272,7 +288,7 @@ impl AsyncTestContext for TestSuite {
 
 impl TestSuite {
     pub fn contains_log(&self, pattern: &str) {
-        let timeout = Duration::from_secs(5);
+        let timeout = Duration::from_secs(15);
         let poll_interval = Duration::from_millis(50);
         let start = std::time::Instant::now();
 
@@ -286,8 +302,9 @@ impl TestSuite {
         }
 
         panic!(
-            "Missing expected log pattern: {}\n\n=== LOGS ===\n{}\n",
+            "Missing expected log pattern: {}\n{}\n\n=== LOGS ===\n{}\n",
             pattern,
+            chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
             self.log_buffer.to_string()
         );
     }

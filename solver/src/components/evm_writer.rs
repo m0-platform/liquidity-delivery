@@ -7,7 +7,7 @@ use tokio::sync::RwLock;
 
 use crate::components::ComponentParams;
 use crate::config::ChainConfig;
-use crate::contracts::{IOrderBook, IERC20};
+use crate::contracts::{decode_custom_err, IOrderBook, IERC20};
 use crate::error::{Result, SolverError};
 use crate::events::{EventHandler, EventProcessor, FillOrderSuccessfulEvent, SolverEvent};
 use crate::providers::ProviderManager;
@@ -59,34 +59,15 @@ impl EvmWriter {
                 let current_allowance = allowance_result.to::<u128>();
 
                 if current_allowance < amount {
-                    // Approve difference
-                    match token_contract
+                    if let Err(err) = token_contract
                         .approve(order_book_address, U256::from(amount - current_allowance))
                         .send()
                         .await
                     {
-                        Ok(approve_tx) => match approve_tx.get_receipt().await {
-                            Ok(receipt) => {
-                                info!(
-                                    self.logger,
-                                    "Token approval confirmed";
-                                    "amount" => amount - current_allowance,
-                                    "tx_hash" => %receipt.transaction_hash,
-                                );
-                            }
-                            Err(err) => {
-                                return Err(SolverError::Component(format!(
-                                    "Failed to get approval receipt: {}",
-                                    err
-                                )));
-                            }
-                        },
-                        Err(err) => {
-                            return Err(SolverError::Component(format!(
-                                "Failed to submit approval: {}",
-                                err
-                            )));
-                        }
+                        return Err(SolverError::Component(format!(
+                            "Failed to submit approval: {}",
+                            err
+                        )));
                     }
                 }
             }
@@ -158,6 +139,38 @@ impl EventHandler for EvmWriter {
                 // Ensure spending is approved
                 self.approve_spending(&order.data.token_out, dest_chain_id, e.amount)
                     .await?;
+
+                // Simulate the transaction first
+                let fill_call = order_book.fillOrder(
+                    order_id_bytes.into(),
+                    order_data.clone(),
+                    fill_params.clone(),
+                );
+
+                match fill_call.call().await {
+                    Ok(_) => {
+                        info!(
+                            self.logger,
+                            "Fill order simulation successful";
+                            "order_id" => %e.order_id,
+                        );
+                    }
+                    Err(sim_err) => {
+                        let decoded_err = decode_custom_err(sim_err.as_revert_data());
+
+                        error!(
+                            self.logger,
+                            "Fill order simulation failed";
+                            "order_id" => %e.order_id,
+                            "error" => %sim_err,
+                            "decoded_error" => decoded_err,
+                        );
+                        return Err(SolverError::Component(format!(
+                            "Fill transaction simulation failed: {}",
+                            sim_err
+                        )));
+                    }
+                }
 
                 // Call fillOrder
                 match order_book
