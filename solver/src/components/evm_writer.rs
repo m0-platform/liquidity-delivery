@@ -1,4 +1,4 @@
-use alloy::primitives::{Address, FixedBytes, U256};
+use alloy::primitives::{Address, U256};
 use async_trait::async_trait;
 use slog::{error, info, Logger};
 use std::str::FromStr;
@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::components::ComponentParams;
-use crate::config::{ChainConfig, Signers};
+use crate::config::ChainConfig;
 use crate::contracts::{IOrderBook, IERC20};
 use crate::error::{Result, SolverError};
 use crate::events::{EventHandler, EventProcessor, FillOrderSuccessfulEvent, SolverEvent};
@@ -15,7 +15,6 @@ use crate::stores::OrderStore;
 use crate::utils::{decode_evm_address, decode_order_id, encode_evm_address};
 
 pub struct EvmWriter {
-    signers: Signers,
     order_store: Arc<RwLock<OrderStore>>,
     provider_manager: Arc<ProviderManager>,
     chains: Vec<ChainConfig>,
@@ -25,7 +24,6 @@ pub struct EvmWriter {
 impl EvmWriter {
     pub fn new(params: &ComponentParams) -> Self {
         Self {
-            signers: params.config.signers.clone(),
             order_store: Arc::new(RwLock::new(OrderStore::new())),
             provider_manager: params.provider_manager.clone(),
             chains: params.config.chains.clone(),
@@ -49,7 +47,7 @@ impl EvmWriter {
 
         let token = encode_evm_address(token);
         let token_contract = IERC20::new(token, provider);
-        let solver_address = self.signers.evm_address();
+        let solver_address = self.provider_manager.evm_address;
         let order_book_address = self.get_order_book_address(chain_id)?;
 
         match token_contract
@@ -132,7 +130,7 @@ impl EventHandler for EvmWriter {
                     .await?;
 
                 let order_id_bytes = decode_order_id(&e.order_id);
-                let solver_address = self.signers.evm_address();
+                let solver_address = self.provider_manager.evm_address;
 
                 let order_data = IOrderBook::OrderData {
                     version: order.data.version,

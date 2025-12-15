@@ -14,7 +14,7 @@ use regex::Regex;
 use slog::{info, Drain, Logger};
 use solver::{
     common_logger_values,
-    config::Signers,
+    providers::Signers,
     utils::{chain_from_id, decode_evm_address},
     Config,
 };
@@ -43,7 +43,7 @@ pub use IOrderBook::OrderParams;
 
 pub struct TestSuite {
     pub chains: Vec<ChainInstance>,
-    pub evm_signer: PrivateKeySigner,
+    _evm_signer: PrivateKeySigner,
     pub evm_user: PrivateKeySigner,
     _svm_signer: Arc<Keypair>,
     pub shutdown_tx: broadcast::Sender<()>,
@@ -245,7 +245,7 @@ impl AsyncTestContext for TestSuite {
 
         let suite = TestSuite {
             chains,
-            evm_signer,
+            _evm_signer: evm_signer,
             evm_user,
             _svm_signer: svm_signer,
             shutdown_tx,

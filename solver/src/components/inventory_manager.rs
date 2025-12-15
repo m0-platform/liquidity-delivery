@@ -16,7 +16,7 @@ use spl_token::solana_program::program_pack::Pack;
 use tokio::sync::RwLock;
 
 use crate::components::ComponentParams;
-use crate::config::{ChainConfig, Signers};
+use crate::config::ChainConfig;
 use crate::contracts::IERC20;
 use crate::error::{Result, SolverError};
 use crate::events::{EventHandler, EventProcessor, HoldSuccessfulEvent, SolverEvent};
@@ -25,7 +25,6 @@ use crate::stores::{AssetStore, OrderStore};
 use crate::utils::{chain_from_id, chain_runtime, format_address};
 
 pub struct InventoryManager {
-    signers: Signers,
     asset_store: Arc<RwLock<AssetStore>>,
     order_store: Arc<RwLock<OrderStore>>,
     chains: Vec<ChainConfig>,
@@ -42,7 +41,6 @@ impl InventoryManager {
             .new(slog::o!("component" => "InventoryManager"));
 
         Self {
-            signers: params.config.signers.clone(),
             asset_store: Arc::new(RwLock::new(AssetStore::new(
                 params.config.liquidity_api_url.clone(),
             ))),
@@ -56,7 +54,7 @@ impl InventoryManager {
     }
 
     async fn load_svm_balances(&self) -> Result<()> {
-        let address = self.signers.svm_address();
+        let address = self.provider_manager.svm_address;
 
         // Get all SVM chains
         let svm_chains: Vec<_> = self
@@ -71,7 +69,7 @@ impl InventoryManager {
                 .read()
                 .await
                 .get_assets_for_chain(chain.chain_id)
-                .await?;
+                .await;
 
             debug!(
                 self.logger,
@@ -181,7 +179,7 @@ impl InventoryManager {
     }
 
     async fn load_evm_balances(&self) -> Result<()> {
-        let address = self.signers.evm_address();
+        let address = self.provider_manager.evm_address;
 
         // Get all EVM chains
         let evm_chains: Vec<_> = self
@@ -196,7 +194,7 @@ impl InventoryManager {
                 .read()
                 .await
                 .get_assets_for_chain(chain.chain_id)
-                .await?;
+                .await;
 
             debug!(
                 self.logger,

@@ -1,12 +1,10 @@
-use alloy::{primitives::Address, signers::local::PrivateKeySigner};
-use anchor_client::solana_sdk::{signature::Keypair, signer::Signer};
-use m0_liquidity_sdk::types::Chain;
+use anchor_client::solana_sdk::signature::Keypair;
+use m0_liquidity_sdk::types::{Asset, Chain};
 use serde::{Deserialize, Serialize};
-use spl_token::solana_program::pubkey::Pubkey;
 use std::{fs, path::Path, sync::Arc};
 use thiserror::Error;
 
-use crate::utils::chain_from_id;
+use crate::{providers::Signers, utils::chain_from_id};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Environment {
@@ -60,6 +58,7 @@ pub struct Config {
     pub rpc_rate_limit: RateLimitConfig,
     pub solver_fee_bps: u32,
     pub max_order_clip_size: u64,
+    pub supported_assets: SupportedAssets,
 }
 
 #[derive(Debug, Deserialize)]
@@ -73,6 +72,7 @@ struct ConfigFile {
     rpc_rate_limit: Option<RateLimitConfig>,
     solver_fee_bps: Option<u32>,
     max_order_clip_size: Option<u64>,
+    supported_assets: Option<SupportedAssets>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -90,6 +90,38 @@ pub struct RateLimitConfig {
     pub burst_size: u32,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct SupportedAssets {
+    pub third_party_whitelist: Vec<String>,
+    pub first_party_blacklist: Vec<String>,
+}
+
+impl SupportedAssets {
+    pub fn is_asset_supported(&self, asset: &Asset) -> bool {
+        let address_lower = asset.address.to_lowercase();
+        if asset.m0_extension {
+            return !self
+                .first_party_blacklist
+                .iter()
+                .any(|a| a.to_lowercase() == address_lower);
+        } else {
+            return self
+                .third_party_whitelist
+                .iter()
+                .any(|a| a.to_lowercase() == address_lower);
+        }
+    }
+}
+
+impl Default for SupportedAssets {
+    fn default() -> Self {
+        SupportedAssets {
+            third_party_whitelist: Vec::new(),
+            first_party_blacklist: Vec::new(),
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Config {
@@ -101,6 +133,7 @@ impl Default for Config {
             rpc_rate_limit: RateLimitConfig::default(),
             solver_fee_bps: 0,
             max_order_clip_size: 10_000,
+            supported_assets: SupportedAssets::default(),
         }
     }
 }
@@ -163,6 +196,7 @@ impl Config {
             rpc_rate_limit: config_file.rpc_rate_limit.unwrap_or_default(),
             solver_fee_bps: config_file.solver_fee_bps.unwrap_or(0),
             max_order_clip_size: config_file.max_order_clip_size.unwrap_or(10_000),
+            supported_assets: config_file.supported_assets.unwrap_or_default(),
         })
     }
 }
@@ -174,38 +208,6 @@ pub struct ChainConfig {
     pub rpc_url: String,
     pub ws_url: String,
     pub order_book_address: String,
-}
-
-#[derive(Clone)]
-pub struct Signers {
-    evm_private_key: PrivateKeySigner,
-    svm_private_key: Arc<Keypair>,
-}
-
-impl Signers {
-    pub fn new(evm_private_key: PrivateKeySigner, svm_private_key: Arc<Keypair>) -> Self {
-        Signers {
-            evm_private_key,
-            svm_private_key,
-        }
-    }
-
-    pub fn svm_address(&self) -> Pubkey {
-        self.svm_private_key.pubkey()
-    }
-
-    pub fn evm_address(&self) -> Address {
-        self.evm_private_key.address()
-    }
-}
-
-impl Default for Signers {
-    fn default() -> Self {
-        Signers {
-            evm_private_key: PrivateKeySigner::random(),
-            svm_private_key: Arc::new(Keypair::new()),
-        }
-    }
 }
 
 #[derive(Error, Debug)]

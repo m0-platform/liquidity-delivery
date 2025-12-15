@@ -3,7 +3,7 @@ pub mod config;
 mod contracts;
 mod error;
 mod events;
-mod providers;
+pub mod providers;
 mod stores;
 pub mod utils;
 
@@ -48,11 +48,10 @@ pub async fn run_solver(
     let (shutdown_tx, _) = broadcast::channel::<()>(1);
 
     // Initialize global provider manager
-    let provider_manager = Arc::new(ProviderManager::new(
-        config.rpc_rate_limit.max_requests_per_second,
-        config.rpc_rate_limit.burst_size,
-    ));
-    provider_manager.initialize(&config.chains).await?;
+    let provider_manager = Arc::new(ProviderManager::new(&config));
+    provider_manager
+        .initialize(&config.chains, &config.signers)
+        .await?;
 
     let params = ComponentParams {
         event_bus: event_bus.clone(),

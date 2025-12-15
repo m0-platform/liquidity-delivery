@@ -15,6 +15,16 @@ solver_fee_bps: 1
 evm_private_key: "0x0000000000000000000000000000000000000000000000000000000000000000"
 svm_private_key: "5J8QhU9z6fN9h3bGxZ5YjN3WkN3Yk3Z3X3k3k3k3k3k3k3k3k3k3k3k3k3k3k3k3k3k3k3k3k3k3"
 
+supported_assets:
+  third_party_whitelist:
+    - "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" # USDC on Ethereum
+    - "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" # USDC on Base
+    - "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" # USDC on Arbitrum
+    - "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" # USDC on Solana
+
+  first-party-blacklist:
+    - "0xacA92E438df0B2401fF60dA7E4337B687a2435DA" # MetaMask USD
+
 chains:
   # Ethereum Sepolia
   - chain_id: 11155111

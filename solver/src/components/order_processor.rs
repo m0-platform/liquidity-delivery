@@ -1,10 +1,12 @@
 use async_trait::async_trait;
-use slog::Logger;
+use m0_liquidity_sdk::types::Asset;
+use slog::{info, Logger};
 use std::cmp::min;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::components::ComponentParams;
+use crate::config::SupportedAssets;
 use crate::error::Result;
 use crate::events::{
     EventHandler, EventProcessor, OrderRejectEvent, RequestFillOrderEvent, RequestHoldEvent,
@@ -15,6 +17,7 @@ use crate::stores::{AssetStore, OrderStore};
 pub struct OrderProcessor {
     order_store: Arc<RwLock<OrderStore>>,
     asset_store: Arc<RwLock<AssetStore>>,
+    supported_assets: SupportedAssets,
     logger: Logger,
     max_clip_size: u128,
     fee_bps: u128,
@@ -27,10 +30,30 @@ impl OrderProcessor {
             asset_store: Arc::new(RwLock::new(AssetStore::new(
                 params.config.liquidity_api_url.clone(),
             ))),
+            supported_assets: params.config.supported_assets.clone(),
             logger: params.logger.new(slog::o!("component" => "OrderProcessor")),
             max_clip_size: params.config.max_order_clip_size as u128,
             fee_bps: params.config.solver_fee_bps as u128,
         }
+    }
+
+    async fn get_supported_asset(
+        &self,
+        token_address: [u8; 32],
+        chain_id: u32,
+    ) -> std::result::Result<Asset, String> {
+        let asset_store = self.asset_store.read().await;
+
+        let asset = asset_store
+            .get_asset(token_address, chain_id)
+            .await
+            .ok_or_else(|| "Asset not supported".to_string())?;
+
+        if !self.supported_assets.is_asset_supported(&asset) {
+            return Err(format!("Asset {} not supported", asset.address));
+        }
+
+        Ok(asset)
     }
 }
 
@@ -52,24 +75,26 @@ impl EventHandler for OrderProcessor {
 
         match event {
             SolverEvent::OrderCreated(e) => {
-                let asset_store = self.asset_store.read().await;
-
-                let source_asset = (*asset_store)
-                    .get_asset(e.token_in, e.order.origin_chain_id)
-                    .await?;
-                let destination_asset = (*asset_store)
-                    .get_asset(e.order.token_out, e.order.dest_chain_id)
-                    .await?;
-
-                // Ignore orders on assets we don't support
-                if source_asset.is_none() || destination_asset.is_none() {
+                if let Err(reason) = self
+                    .get_supported_asset(e.order.token_in, e.order.origin_chain_id)
+                    .await
+                {
                     return Ok(vec![SolverEvent::OrderRejected(OrderRejectEvent::new(
-                        e.order_id,
-                        "Asset not supported".to_string(),
+                        e.order_id, reason,
                     ))]);
                 }
 
-                // TODO: get whitelist assets from config
+                let destination_asset = match self
+                    .get_supported_asset(e.order.token_out, e.order.dest_chain_id)
+                    .await
+                {
+                    Ok(asset) => asset,
+                    Err(reason) => {
+                        return Ok(vec![SolverEvent::OrderRejected(OrderRejectEvent::new(
+                            e.order_id, reason,
+                        ))]);
+                    }
+                };
 
                 // Make sure amount_out covers our fee
                 let min_amount_out = e.order.amount_in * (10_000 - self.fee_bps) / 10_000;
@@ -84,12 +109,23 @@ impl EventHandler for OrderProcessor {
                 }
 
                 // Clip large orders
-                let fill_amount = min(e.order.amount_out, self.max_clip_size);
+                let max_size = self.max_clip_size * 10u128.pow(destination_asset.decimals as u32);
+                let fill_amount = min(e.order.amount_out, max_size);
+
+                let notional = e.order.amount_out / 10u128.pow(destination_asset.decimals as u32);
+                if notional > 100_000 {
+                    info!(
+                        self.logger,
+                        "Received large order";
+                        "order_id" => e.order_id.clone(),
+                        "notional" => notional
+                    );
+                }
 
                 // Request hold on destination asset
                 return Ok(vec![SolverEvent::RequestHold(RequestHoldEvent::new(
                     e.order_id,
-                    destination_asset.unwrap(),
+                    destination_asset,
                     fill_amount,
                 ))]);
             }
