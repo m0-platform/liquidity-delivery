@@ -67,19 +67,12 @@ interface IOrderBook {
     event OrderCompleted(bytes32 orderId);
 
     /**
-     * @notice Emitted when the configuration for a destination chain is updated
+     * @notice Emitted when the support for a destination chain is updated
      * @dev This event is emitted on the origin chain
      * @param destChainId The internal chain ID of the destination chain
-     * @param newIsSupported Whether orders can be created with this chain as the destination
-     * @param newFinalityBuffer The new finality buffer duration (in seconds)
-     * @param newFinalityBufferEffectiveTimestamp The timestamp when the new finality buffer becomes effective
+     * @param isSupported Whether orders can be created with this chain as the destination
      */
-    event DestinationConfigUpdated(
-        uint32 indexed destChainId,
-        bool newIsSupported,
-        uint32 newFinalityBuffer,
-        uint64 newFinalityBufferEffectiveTimestamp
-    );
+    event DestinationSupportUpdated(uint32 indexed destChainId, bool isSupported);
 
     /* ========== Errors ========== */
     error AmountInZero();
@@ -438,6 +431,16 @@ interface IOrderBook {
      */
     function reportCancel(CancelReport calldata report_) external;
 
+    /* ========== Admin Functions ========== */
+
+    /**
+     * @notice Set external chain support for orders
+     * @dev Must be DEFAULT_ADMIN_ROLE to call
+     * @param destChainId_ The chain ID for the destination chain used by the messenger
+     * @param isSupported_ whether support for the chain should be enabled (true activates, false deactivates)
+     */
+    function setDestinationSupported(uint32 destChainId_, bool isSupported_) external;
+
     /* ========== View Functions ========== */
 
     /**
@@ -460,6 +463,9 @@ interface IOrderBook {
 
     /// @notice Returns the next nonce for the provided sender address
     function getSenderNonce(address sender_) external view returns (uint64);
+
+    /// @notice Returns whether orders can be created with the provided chain ID as the destination
+    function isDestinationSupported(uint32 destChainId_) external view returns (bool);
 
     /* ========== EIP-712 Digest Functions ========== */
 

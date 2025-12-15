@@ -1,13 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity 0.8.26;
 
-import {
-    IERC20
-} from "../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
+import { IERC20 } from "../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
 import { IERC20Extended } from "../lib/common/src/interfaces/IERC20Extended.sol";
-import {
-    AccessControlUpgradeable
-} from "../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol";
+import { AccessControlUpgradeable } from "../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import { ERC712ExtendedUpgradeable } from "../lib/common/src/ERC712ExtendedUpgradeable.sol";
 import { TypeConverter } from "../lib/common/src/libs/TypeConverter.sol";
 import { SafeERC20 } from "./libs/SafeERC20.sol";
@@ -18,6 +14,8 @@ import { IMessenger } from "./interfaces/IMessenger.sol";
 abstract contract OrderBookStorageLayout {
     /// @custom:storage-location erc7201:M0.storage.OrderBook
     struct OrderBookStorageStruct {
+        // supported destination chains
+        mapping(uint32 destChainId => bool isSupported) supportedDestinations;
         // only store full data about origin orders
         mapping(bytes32 orderId => IOrderBook.Order) localOrders;
         // store fill amounts for both origin and destination orders
@@ -182,10 +180,9 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
 
-        // Any chain can be accepted now, no need for configs
-        // // Destination chain must either be the current chain or a supported destination
-        // if (orderParams_.destChainId != chainId && !isDestinationSupported(orderParams_.destChainId))
-        //     revert InvalidDestinationChain();
+        // Destination chain must either be the current chain or a supported destination
+        if (orderParams_.destChainId != chainId && !isDestinationSupported(orderParams_.destChainId))
+            revert InvalidDestinationChain();
 
         // Create order
         uint64 nonce_ = $.senderNonces[sender_]++;
@@ -493,6 +490,26 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         _claimRefund(report_.orderId, order);
     }
 
+    /* ========== Admin Functions ========== */
+
+    /// @inheritdoc IOrderBook
+    function setDestinationSupported(
+        uint32 destChainId_,
+        bool isSupported_
+    ) external override onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (destChainId_ == chainId) revert InvalidDestinationChain();
+
+        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
+        bool isSupported = $.supportedDestinations[destChainId_];
+
+        // Don't update if the value is the same
+        if (isSupported == isSupported_) return;
+
+        $.supportedDestinations[destChainId_] = isSupported_;
+
+        emit DestinationSupportUpdated(destChainId_, isSupported_);
+    }
+
     /* ========== View Functions ========== */
 
     /// @inheritdoc IOrderBook
@@ -532,6 +549,11 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     function getSenderNonce(address sender_) external view override returns (uint64) {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         return $.senderNonces[sender_];
+    }
+
+    /// @inheritdoc IOrderBook
+    function isDestinationSupported(uint32 destChainId_) public view override returns (bool) {
+        return _getOrderBookStorageLocation().supportedDestinations[destChainId_];
     }
 
     /* ========== EIP-712 Digest Functions ========== */
