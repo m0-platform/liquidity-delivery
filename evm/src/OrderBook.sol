@@ -283,8 +283,10 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     /// @inheritdoc IOrderBook
     function cancelOrder(bytes32 orderId_, OrderData calldata orderData_, bytes memory messageData_) external override {
         // Verify sender
-        // TODO: consider allowing recipient or another designated address to cancel
-        if (orderData_.sender.toAddress() != msg.sender) revert NotAuthorized();
+        // If fill deadline hasn't passed yet, only the recipient can cancel
+        // Otherwise, anyone can cancel to allow for refunds after expiry
+        if (block.timestamp <= orderData_.fillDeadline && orderData_.recipient.toAddress() != msg.sender)
+            revert NotAuthorized();
 
         _cancelOrder(orderId_, orderData_, messageData_);
     }
@@ -299,9 +301,9 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         // Verify signature
         if (signature_.length == 64) {
             (bytes32 r, bytes32 vs) = abi.decode(signature_, (bytes32, bytes32));
-            _revertIfInvalidSignature(orderData_.sender.toAddress(), getCancelRequestDigest(orderId_), r, vs);
+            _revertIfInvalidSignature(orderData_.recipient.toAddress(), getCancelRequestDigest(orderId_), r, vs);
         } else {
-            _revertIfInvalidSignature(orderData_.sender.toAddress(), getCancelRequestDigest(orderId_), signature_);
+            _revertIfInvalidSignature(orderData_.recipient.toAddress(), getCancelRequestDigest(orderId_), signature_);
         }
 
         _cancelOrder(orderId_, orderData_, messageData_);
