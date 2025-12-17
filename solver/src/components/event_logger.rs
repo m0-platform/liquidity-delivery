@@ -28,18 +28,18 @@ impl EventHandler for EventLogger {
 
     async fn handle_event(&self, event: SolverEvent) -> Result<Vec<SolverEvent>> {
         match event {
+            SolverEvent::Start => {
+                info!(self.logger, "Start");
+            }
+            SolverEvent::Stop => {
+                info!(self.logger, "Stop");
+            }
             SolverEvent::OrderCreated(e) => {
                 info!(
                     self.logger,
                     "OrderCreated";
                     "order_id" => %e.order_id,
                 );
-            }
-            SolverEvent::Start => {
-                info!(self.logger, "Start");
-            }
-            SolverEvent::Stop => {
-                info!(self.logger, "Stop");
             }
             SolverEvent::OrderFill(e) => {
                 info!(

@@ -148,6 +148,7 @@ fn spawn_event_handler<F, Fut>(
                     };
 
                     // Handle event and get new events
+                    let start = std::time::Instant::now();
                     let new_events = match handler(event).await {
                         Ok(events) => events,
                         Err(e) => {
@@ -155,12 +156,20 @@ fn spawn_event_handler<F, Fut>(
                             continue;
                         }
                     };
+                    let elapsed = start.elapsed();
+                    if elapsed.as_secs() > 10 {
+                        slog::warn!(logger, "Event handler took too long"; "component" => component_name, "duration_secs" => elapsed.as_secs_f64());
+                    }
 
                     // Publish new events
                     for new_event in new_events {
                         let _ = event_bus.publish(new_event).await;
                     }
                 }
+            }
+
+            if receiver.len() > 3 {
+                slog::warn!(logger, "Event handler is falling behind"; "component" => component_name, "pending_events" => receiver.len());
             }
         }
     });

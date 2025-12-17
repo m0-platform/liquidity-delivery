@@ -1,18 +1,19 @@
 use alloy::primitives::{Address, U256};
 use async_trait::async_trait;
-use slog::{error, info, Logger};
+use m0_liquidity_sdk::types::ChainRuntime;
+use slog::{error, info, warn, Logger};
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
 use crate::components::ComponentParams;
 use crate::config::ChainConfig;
-use crate::contracts::{decode_custom_err, IOrderBook, IERC20};
+use crate::contracts::{IOrderBook, IERC20};
 use crate::error::{Result, SolverError};
 use crate::events::{EventHandler, EventProcessor, FillOrderSuccessfulEvent, SolverEvent};
 use crate::providers::ProviderManager;
 use crate::stores::OrderStore;
-use crate::utils::{decode_evm_address, decode_order_id, encode_evm_address};
+use crate::utils::{chain_runtime, decode_evm_address, decode_order_id, encode_evm_address};
 
 pub struct EvmWriter {
     order_store: Arc<RwLock<OrderStore>>,
@@ -50,32 +51,33 @@ impl EvmWriter {
         let solver_address = self.provider_manager.evm_address;
         let order_book_address = self.get_order_book_address(chain_id)?;
 
-        match token_contract
+        let current_allowance = token_contract
             .allowance(solver_address, order_book_address)
             .call()
             .await
-        {
-            Ok(allowance_result) => {
-                let current_allowance = allowance_result.to::<u128>();
+            .map_err(|err| {
+                SolverError::Component(format!("Failed to check spending approvals: {}", err))
+            })?
+            .to::<u128>();
 
-                if current_allowance < amount {
-                    if let Err(err) = token_contract
-                        .approve(order_book_address, U256::from(amount - current_allowance))
-                        .send()
-                        .await
-                    {
-                        return Err(SolverError::Component(format!(
-                            "Failed to submit approval: {}",
-                            err
-                        )));
-                    }
-                }
-            }
-            Err(err) => {
-                return Err(SolverError::Component(format!(
-                    "Failed to check spending approvals: {}",
-                    err
-                )));
+        if current_allowance < amount {
+            let pending_tx = token_contract
+                .approve(order_book_address, U256::from(amount))
+                .send()
+                .await
+                .map_err(|err| {
+                    SolverError::Component(format!("Failed to submit approval: {}", err))
+                })?;
+
+            let tx_hash = *pending_tx.tx_hash();
+
+            if let Err(err) = pending_tx.get_receipt().await {
+                warn!(
+                    self.logger,
+                    "Failed to get approval transaction receipt";
+                    "tx_hash" => %tx_hash,
+                    "error" => %err,
+                );
             }
         }
 
@@ -103,6 +105,10 @@ impl EventHandler for EvmWriter {
             SolverEvent::RequestFillOrder(e) => {
                 let order = store.get_order(&e.order_id).await?;
                 let dest_chain_id = order.data.dest_chain_id;
+
+                if chain_runtime(dest_chain_id) != ChainRuntime::Evm {
+                    return Ok(vec![]);
+                }
 
                 let order_book_address = self.get_order_book_address(dest_chain_id)?;
                 let provider_wrapper = self
@@ -139,38 +145,6 @@ impl EventHandler for EvmWriter {
                 // Ensure spending is approved
                 self.approve_spending(&order.data.token_out, dest_chain_id, e.amount)
                     .await?;
-
-                // Simulate the transaction first
-                let fill_call = order_book.fillOrder(
-                    order_id_bytes.into(),
-                    order_data.clone(),
-                    fill_params.clone(),
-                );
-
-                match fill_call.call().await {
-                    Ok(_) => {
-                        info!(
-                            self.logger,
-                            "Fill order simulation successful";
-                            "order_id" => %e.order_id,
-                        );
-                    }
-                    Err(sim_err) => {
-                        let decoded_err = decode_custom_err(sim_err.as_revert_data());
-
-                        error!(
-                            self.logger,
-                            "Fill order simulation failed";
-                            "order_id" => %e.order_id,
-                            "error" => %sim_err,
-                            "decoded_error" => decoded_err,
-                        );
-                        return Err(SolverError::Component(format!(
-                            "Fill transaction simulation failed: {}",
-                            sim_err
-                        )));
-                    }
-                }
 
                 // Call fillOrder
                 match order_book

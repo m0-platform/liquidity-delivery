@@ -10,6 +10,7 @@ use crate::{providers::Signers, utils::chain_from_id};
 pub enum Environment {
     Development,
     Production,
+    Local,
 }
 
 impl Environment {
@@ -17,8 +18,15 @@ impl Environment {
         match s.to_lowercase().as_str() {
             "development" | "dev" => Ok(Environment::Development),
             "production" | "prod" => Ok(Environment::Production),
+            "local" | "localnet" => Ok(Environment::Local),
             _ => Err(ConfigError::InvalidEnvironment(s.to_string())),
         }
+    }
+}
+
+impl Default for Environment {
+    fn default() -> Self {
+        Environment::Development
     }
 }
 

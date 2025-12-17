@@ -7,14 +7,18 @@ use test_context::test_context;
 #[test_context(TestSuite)]
 #[tokio::test]
 async fn test_inventory_manager_loads_balances(ctx: &TestSuite) {
-    ctx.contains_log(r"USDC \(Ethereum\): 100");
-    ctx.contains_log(r"USDC \(Base\): 100");
-    ctx.contains_log(r"USDT \(Ethereum\): 100");
-    ctx.contains_log(r"USDT \(Base\): 100");
-    ctx.contains_log(r"USDS \(Ethereum\): 100");
-    ctx.contains_log(r"USDS \(Base\): 100");
-    ctx.contains_log(r"ETH \(Ethereum\): 0.99");
-    ctx.contains_log(r"ETH \(Base\): 0.99");
+    for log in [
+        r"USDC \(Ethereum\): 999999999999900",
+        r"USDC \(Base\): 999999999999900",
+        r"USDT \(Ethereum\): 999999999999900",
+        r"USDT \(Base\): 999999999999900",
+        r"USDS \(Ethereum\): 999999999999900",
+        r"USDS \(Base\): 999999999999900",
+        r"ETH \(Ethereum\): 0.99",
+        r"ETH \(Base\): 0.99",
+    ] {
+        ctx.contains_log(log).await;
+    }
 }
 
 #[test_context(TestSuite)]
@@ -33,8 +37,8 @@ async fn test_order_rejected(ctx: &TestSuite) {
     )
     .await;
 
-    ctx.contains_log("OrderRejected");
-    ctx.contains_log("Asset not supported");
+    ctx.contains_log("OrderRejected").await;
+    ctx.contains_log("Asset not supported").await;
 }
 
 #[test_context(TestSuite)]
@@ -53,15 +57,15 @@ async fn test_order_processed_chain_a(ctx: &TestSuite) {
     .await;
 
     ctx.contains_order_lifecycle(
-        "682d2d2fd1e49b926bd2dcd2eabc9285bc2afd9692e71cb8c02aebd916112dd8",
+        "77bf9f8455c1d9dcd84b9f15a8f3ddd6cd3788a7df3aea845525be85a87dcc62",
         &[
             "OrderCreated",
             "HoldSuccessful",
             "RequestFillOrder",
-            "RequestFillOrder",
             "FillOrderSuccessful",
         ],
-    );
+    )
+    .await;
 }
 
 #[test_context(TestSuite)]
@@ -80,13 +84,13 @@ async fn test_order_processed_chain_b(ctx: &TestSuite) {
     .await;
 
     ctx.contains_order_lifecycle(
-        "b5a03f77fb3f31d440d42c19eb2fd109774b3f07169ebb4faac81f72e521fe00",
+        "191fe545a21e074a407c6a8c5b34bfbc3925ccd67926384756c60fce8cbad58b",
         &[
             "OrderCreated",
             "HoldSuccessful",
             "RequestFillOrder",
-            "RequestFillOrder",
             "FillOrderSuccessful",
         ],
-    );
+    )
+    .await;
 }

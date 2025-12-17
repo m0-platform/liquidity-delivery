@@ -50,6 +50,12 @@ sol! {
             bytes32 originRecipient;
         }
 
+        #[derive(Debug)]
+        struct FilledAmounts {
+            uint128 amountInReleased;
+            uint128 amountOutFilled;
+        }
+
         function getOrder(bytes32 orderId) external view returns (Order memory);
 
         function fillOrder(
@@ -57,6 +63,8 @@ sol! {
             OrderData calldata orderData,
             FillParams calldata fillerParams
         ) external;
+
+        function getFilledAmounts(bytes32 orderId_) external view override returns (FilledAmounts memory);
 
         error AmountInZero();
         error AmountOutZero();
