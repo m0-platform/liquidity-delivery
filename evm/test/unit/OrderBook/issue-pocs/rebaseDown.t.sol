@@ -61,7 +61,7 @@ contract RebaseDownTest is Test {
         // Configure
         messenger.setOrderBook(address(orderBook));
         vm.prank(admin);
-        //(DEST_CHAIN_ID, true, FINALITY_BUFFER);
+        orderBook.setDestinationSupported(DEST_CHAIN_ID, true);
 
         // Setup order params
         params = IOrderBook.OrderParams({
@@ -110,31 +110,25 @@ contract RebaseDownTest is Test {
         );
     }
 
-    /// @notice Test claimRefund behavior when token rebases down
+    /// @notice Test reportCancel behavior when token rebases down
     /// @dev Verify whether refund also fails when balance < amountIn
-    function test_rebaseDown_claimRefundReverts() public {
+    function test_rebaseDown_reportCancelReverts() public {
         // 1. Create order - OrderBook receives 100e6 tokens
         vm.startPrank(alice);
         rebaseToken.approve(address(orderBook), AMOUNT_IN);
         bytes32 orderId = orderBook.openOrder(params);
         vm.stopPrank();
 
-        // 2. Request cancellation
-        vm.prank(alice);
-        orderBook.requestCancelOrder(orderId);
-
-        // 3. Rebase DOWN by 10%
+        // 2. Rebase DOWN by 10%
         rebaseToken.rebaseDownAccount(address(orderBook), 1000);
 
         // Verify balance decreased
         assertEq(rebaseToken.balanceOf(address(orderBook)), 90e6);
 
-        // 4. Warp past finality buffer
-        IOrderBook.Order memory order = orderBook.getOrder(orderId);
-        vm.warp(order.cancelRequestedAt + FINALITY_BUFFER + 1);
-
-        // 5. Attempt claimRefund - should revert because OrderBook has insufficient balance
+        // 3. Simulate cancel report arriving from destination chain
+        //    reportCancel triggers refund which should fail due to insufficient balance
+        vm.prank(address(messenger));
         vm.expectRevert(); // Will revert due to insufficient balance
-        orderBook.claimRefund(orderId);
+        orderBook.reportCancel(IOrderBook.CancelReport({ orderId: orderId }));
     }
 }

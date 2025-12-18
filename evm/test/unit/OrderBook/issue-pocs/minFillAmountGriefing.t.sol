@@ -46,6 +46,7 @@ contract RoundingEdgeCaseTest is OrderBookTestBase {
                 sender: order.sender.toBytes32(),
                 nonce: order.nonce,
                 destChainId: order.destChainId,
+                createdAt: uint64(order.createdAt),
                 fillDeadline: order.fillDeadline,
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,

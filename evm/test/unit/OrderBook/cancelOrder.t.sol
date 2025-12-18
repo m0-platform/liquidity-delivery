@@ -1,0 +1,227 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity 0.8.26;
+
+import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
+
+import { OrderBookTestBase } from "./OrderBookTestBase.t.sol";
+import { IOrderBook } from "../../../src/interfaces/IOrderBook.sol";
+
+contract CancelOrderTest is OrderBookTestBase {
+    using TypeConverter for *;
+
+    // Test cases
+    // [X] given the order does not exist
+    //   [X] it reverts with an InvalidOrderStatus error
+    // [X] given the order exists but already cancelled
+    //   [X] it reverts with an InvalidOrderStatus error
+    // [X] given the order exists but already filled (local)
+    //   [X] it reverts with an InvalidOrderStatus error
+    // [X] given the order exists but has already filled (cross-chain)
+    //   [X] it reverts with an InvalidOrderStatus error
+    // [X] given the orderId does not match computed OrderData hash
+    //   [X] it reverts with an OrderIdMismatch error
+    // [X] given the createdAt timestamp is in the future
+    //   [X] it reverts with an InvalidTimestamp error
+    // [X] given the caller is not the recipient AND current time <= fillDeadline
+    //   [X] it reverts with a NotAuthorized error
+    // [X] given the current time > fillDeadline
+    //   [X] anyone can cancel and trigger refund
+    // [X] given the order can be cancelled by recipient
+    //   [X] given the destination chain is different to the current chain (i.e. cross-chain order)
+    //     [X] it updates the order status to Cancelled
+    //     [X] it sends a CancelReport to the origin chain via messenger
+    //     [X] it emits an OrderCancelled event
+    //   [X] given the destination chain is the current chain (i.e. local order)
+    //     [X] it immediately refunds the order amount in to the order sender
+    //     [X] it sets the order status to Cancelled
+    //     [X] it emits an OrderCancelled event
+    //     [X] it emits a RefundClaimed event
+
+    function setUp() public override {
+        super.setUp();
+
+        // open a cross-chain order for alice with recipient = alice
+        _placeOrder(users["alice"], params);
+    }
+
+    function test_givenOrderDoesNotExist_reverts() public {
+        IOrderBook.Order memory order = orderBook.getOrder(_getOrderIdFromParams(users["alice"], 0, params));
+        IOrderBook.OrderData memory orderData = _getOrderDataFromOrder(bytes32(0), order);
+        orderData.nonce = 999; // Wrong nonce to create a non-existent order ID
+        bytes32 fakeOrderId = orderBook.getOrderId(orderData);
+
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
+        orderBook.cancelOrder(fakeOrderId, orderData, new bytes(0));
+    }
+
+    function test_givenOrderIsAlreadyCancelled_reverts() public {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        IOrderBook.OrderData memory orderData = _getOrderDataFromOrder(orderId, order);
+
+        // Cancel the order first (recipient can cancel)
+        vm.prank(users["alice"]);
+        orderBook.cancelOrder(orderId, orderData, new bytes(0));
+
+        // Try to cancel again
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
+        orderBook.cancelOrder(orderId, orderData, new bytes(0));
+    }
+
+    function test_givenLocalOrderHasBeenFilled_reverts() public {
+        // Open a local order for alice
+        params.destChainId = CHAIN_ID;
+        bytes32 orderId = _placeOrder(users["alice"], params);
+
+        // Fill the order
+        _fillOrder(users["solver"], orderId, params.amountOut);
+
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        IOrderBook.OrderData memory orderData = _getOrderDataFromOrder(orderId, order);
+
+        // Try to cancel the order
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
+        orderBook.cancelOrder(orderId, orderData, new bytes(0));
+    }
+
+    function test_givenCrosschainOrderHasBeenFilled_reverts() public {
+        // Report fill from destination chain
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+        _reportFill(users["solver"], orderId, params.amountOut, params.amountIn);
+
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        IOrderBook.OrderData memory orderData = _getOrderDataFromOrder(orderId, order);
+
+        // Try to cancel the order
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
+        orderBook.cancelOrder(orderId, orderData, new bytes(0));
+    }
+
+    function test_givenOrderIdMismatch_reverts() public {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        IOrderBook.OrderData memory orderData = _getOrderDataFromOrder(orderId, order);
+
+        // Use wrong orderId
+        bytes32 wrongOrderId = bytes32("wrong order id");
+
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.OrderIdMismatch.selector));
+        orderBook.cancelOrder(wrongOrderId, orderData, new bytes(0));
+    }
+
+    function test_givenCreatedAtInFuture_reverts() public {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        IOrderBook.OrderData memory orderData = _getOrderDataFromOrder(orderId, order);
+
+        // Set createdAt to future timestamp
+        orderData.createdAt = uint64(block.timestamp + 1 hours);
+        bytes32 futureOrderId = orderBook.getOrderId(orderData);
+
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidTimestamp.selector));
+        orderBook.cancelOrder(futureOrderId, orderData, new bytes(0));
+    }
+
+    function test_givenCallerNotRecipientBeforeDeadline_reverts() public {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        IOrderBook.OrderData memory orderData = _getOrderDataFromOrder(orderId, order);
+
+        // Bob tries to cancel before deadline (bob is not the recipient)
+        vm.prank(users["bob"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.NotAuthorized.selector));
+        orderBook.cancelOrder(orderId, orderData, new bytes(0));
+    }
+
+    function test_givenAfterFillDeadline_anyoneCanCancel() public {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        IOrderBook.OrderData memory orderData = _getOrderDataFromOrder(orderId, order);
+
+        // Warp past fill deadline
+        vm.warp(order.fillDeadline + 1);
+
+        // Bob (not recipient) can now cancel
+        vm.prank(users["bob"]);
+        vm.expectEmit(true, false, false, false);
+        emit IOrderBook.OrderCancelled(orderId);
+        orderBook.cancelOrder(orderId, orderData, new bytes(0));
+
+        IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
+        assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Cancelled), "order status should be Cancelled");
+    }
+
+    function test_givenCrosschainOrder_success() public {
+        // For this test, we simulate being on the DESTINATION chain canceling an order
+        // that originated from a different chain (DEST_CHAIN_ID).
+        // We construct orderData with originChainId = DEST_CHAIN_ID (not current chain)
+        // and the order doesn't exist on this chain yet (DoesNotExist status is allowed for xchain)
+
+        IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
+            version: 1,
+            originChainId: DEST_CHAIN_ID, // Order originated from another chain
+            sender: users["alice"].toBytes32(),
+            nonce: 0,
+            destChainId: CHAIN_ID, // This chain is the destination
+            createdAt: uint64(block.timestamp),
+            fillDeadline: params.fillDeadline,
+            amountIn: params.amountIn,
+            amountOut: params.amountOut,
+            tokenIn: address(tokenIn).toBytes32(),
+            tokenOut: params.tokenOut,
+            recipient: users["alice"].toBytes32(),
+            solver: params.solver
+        });
+        bytes32 orderId = orderBook.getOrderId(orderData);
+
+        // Order doesn't exist on this chain (DoesNotExist status) - this is valid for cross-chain cancel
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.DoesNotExist));
+
+        vm.prank(users["alice"]);
+        vm.expectEmit(true, false, false, false);
+        emit IOrderBook.OrderCancelled(orderId);
+        orderBook.cancelOrder(orderId, orderData, new bytes(0));
+
+        IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
+        assertEq(
+            uint8(updatedOrder.status),
+            uint8(IOrderBook.OrderStatus.Cancelled),
+            "order status should be Cancelled"
+        );
+
+        // Verify cancel report was sent to messenger
+        assertTrue(messenger.isCancelReported(orderId), "cancel report should have been sent");
+    }
+
+    function test_givenLocalOrder_success() public {
+        // Open a local order for alice
+        params.destChainId = CHAIN_ID;
+        bytes32 orderId = _placeOrder(users["alice"], params);
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        IOrderBook.OrderData memory orderData = _getOrderDataFromOrder(orderId, order);
+
+        uint256 aliceStartingBalance = tokenIn.balanceOf(users["alice"]);
+
+        vm.prank(users["alice"]);
+        vm.expectEmit(true, false, false, true);
+        emit IOrderBook.RefundClaimed(orderId, users["alice"], params.amountIn);
+        vm.expectEmit(true, false, false, false);
+        emit IOrderBook.OrderCancelled(orderId);
+        orderBook.cancelOrder(orderId, orderData, new bytes(0));
+
+        IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
+        assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Cancelled), "order status should be Cancelled");
+        assertEq(
+            tokenIn.balanceOf(users["alice"]),
+            aliceStartingBalance + params.amountIn,
+            "alice should be refunded the amountIn"
+        );
+    }
+}

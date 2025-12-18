@@ -61,7 +61,7 @@ contract FeeOnTransferTest is Test {
         // Configure
         messenger.setOrderBook(address(orderBook));
         vm.prank(admin);
-        // orderBook.setDestinationConfig(DEST_CHAIN_ID, true, FINALITY_BUFFER);
+        orderBook.setDestinationSupported(DEST_CHAIN_ID, true);
 
         // Setup order params
         params = IOrderBook.OrderParams({
@@ -116,21 +116,15 @@ contract FeeOnTransferTest is Test {
         bytes32 orderId = orderBook.openOrder(params);
         vm.stopPrank();
 
-        // 2. Request cancellation
-        vm.prank(alice);
-        orderBook.requestCancelOrder(orderId);
-
-        // 3. Enable 1% fee on the token
+        // 2. Enable 1% fee on the token before refund
         feeToken.setFeePercent(100); // 100 basis points = 1%
-
-        // 4. Warp past finality buffer
-        IOrderBook.Order memory order = orderBook.getOrder(orderId);
-        vm.warp(order.cancelRequestedAt + FINALITY_BUFFER + 1);
 
         uint256 aliceBalanceBefore = feeToken.balanceOf(alice);
 
-        // 5. claimRefund does NOT revert - uses safeTransfer instead of safeTransferExact
-        orderBook.claimRefund(orderId);
+        // 3. Simulate cancel report arriving from destination chain
+        //    reportCancel triggers refund which uses safeTransfer
+        vm.prank(address(messenger));
+        orderBook.reportCancel(IOrderBook.CancelReport({ orderId: orderId }));
 
         // 6. Verify alice received less than expected due to fee
         uint256 aliceBalanceAfter = feeToken.balanceOf(alice);

@@ -10,6 +10,7 @@ contract MockMessenger is IMessenger {
     address public orderBook;
 
     mapping(bytes32 => IOrderBook.FillReport) public fillReports;
+    mapping(bytes32 => bool) public cancelReports;
 
     function setOrderBook(address orderBook_) external {
         orderBook = orderBook_;
@@ -29,7 +30,7 @@ contract MockMessenger is IMessenger {
         IOrderBook.CancelReport calldata report,
         bytes calldata messageData
     ) external override {
-        // No-op for this mock
+        cancelReports[report.orderId] = true;
         emit CancelReportSent(destinationChainId, report);
     }
 
@@ -37,7 +38,15 @@ contract MockMessenger is IMessenger {
         IOrderBook(orderBook).reportFill(report);
     }
 
+    function receiveCancelReport(IOrderBook.CancelReport calldata report) external {
+        IOrderBook(orderBook).reportCancel(report);
+    }
+
     function isFillReported(bytes32 orderId) external view returns (bool) {
         return fillReports[orderId].amountOutFilled != 0;
+    }
+
+    function isCancelReported(bytes32 orderId) external view returns (bool) {
+        return cancelReports[orderId];
     }
 }
