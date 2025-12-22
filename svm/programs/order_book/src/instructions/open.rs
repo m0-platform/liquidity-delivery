@@ -130,6 +130,12 @@ impl OpenOrder<'_> {
             OrderBookError::InvalidFillDeadline
         );
 
+        // Recipient != Solver to avoid issues with token transfers from one to the other
+        require!(
+            params.recipient != params.solver,
+            OrderBookError::InvalidRecipient
+        );
+
         Ok(())
     }
 
