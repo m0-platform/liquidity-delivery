@@ -95,6 +95,7 @@ interface IOrderBook {
     error InvalidOriginChain();
     error InvalidRecipient();
     error InvalidReport();
+    error InvalidReportSource();
     error NotAuthorized();
     error OrderExpired();
     error OrderAlreadyFilled();
@@ -439,9 +440,10 @@ interface IOrderBook {
     /**
      * @notice Report a fill that was made on another chain back to this chain as the origin chain
      * @dev Must be called by the messenger contract
+     * @param sourceChainId_ The chain ID that the fill report was sent from
      * @param report_ Fill data sent from the destination chain
      */
-    function reportFill(FillReport calldata report_) external;
+    function reportFill(uint32 sourceChainId_, FillReport calldata report_) external;
 
     /* ========== Admin Functions ========== */
 

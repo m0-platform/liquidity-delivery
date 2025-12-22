@@ -475,7 +475,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     /* ========== Receiving Fill Reports ========== */
 
     /// @inheritdoc IOrderBook
-    function reportFill(FillReport calldata report_) external override {
+    function reportFill(uint32 sourceChainId_, FillReport calldata report_) external override {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         Order storage order = $.localOrders[report_.orderId];
 
@@ -484,6 +484,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         if (order.status != OrderStatus.Created && order.status != OrderStatus.CancelRequested)
             revert InvalidOrderStatus();
         if (report_.tokenIn != order.tokenIn.toBytes32()) revert InvalidReport();
+        if (sourceChainId_ != order.destChainId) revert InvalidReportSource();
 
         // Update the fill amounts for the order
         IOrderBook.FilledAmounts storage filledAmounts = $.filledAmounts[report_.orderId];
