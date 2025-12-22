@@ -38,7 +38,7 @@ impl RequestCancelOrder<'_> {
 
     #[access_control(ctx.accounts.validate())]
     pub fn handler(ctx: Context<Self>, order_id: [u8; 32]) -> Result<()> {
-        // Set the order status to CancelRequested and the fill deadline to the current timestamp
+        // Set the order status to CancelRequested and record the cancel request timestamp
         let order = &mut ctx.accounts.order.data;
         order.status = OrderStatus::CancelRequested;
 
