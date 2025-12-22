@@ -7,6 +7,9 @@ rpc_rate_limit:
   max_requests_per_second: 5
   burst_size: 10
 
+# API Server configuration
+api_server_port: 3000
+
 # Order configuration
 max_order_clip_size: 10000
 max_clip_reprocess_delay_sec: 60 

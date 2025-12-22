@@ -1,3 +1,4 @@
+pub mod api_server;
 pub mod event_logger;
 pub mod evm_event_listener;
 pub mod evm_writer;
@@ -8,6 +9,8 @@ pub mod svm_event_listener;
 
 use std::sync::Arc;
 
+#[allow(unused_imports)]
+pub use api_server::ApiServer;
 pub use event_logger::EventLogger;
 pub use evm_event_listener::EvmEventListener;
 pub use evm_writer::EvmWriter;

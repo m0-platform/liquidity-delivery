@@ -19,7 +19,7 @@ use crate::utils::chain_runtime;
 
 pub struct SvmEventListener {
     event_bus: Arc<EventBus>,
-    order_store: Arc<RwLock<OrderStore>>,
+    order_store: Arc<OrderStore>,
     chains: Vec<ChainConfig>,
     cluster: config::Network,
     task_handles: Arc<RwLock<Vec<JoinHandle<()>>>>,
@@ -34,7 +34,7 @@ impl SvmEventListener {
 
         Self {
             task_handles: Arc::new(RwLock::new(Vec::new())),
-            order_store: Arc::new(RwLock::new(OrderStore::new())),
+            order_store: Arc::new(OrderStore::new()),
             chains: params.config.chains.clone(),
             cluster: params.config.network,
             event_bus: params.event_bus.clone(),
@@ -54,8 +54,7 @@ impl EventHandler for SvmEventListener {
     }
 
     async fn handle_event(&self, event: SolverEvent) -> Result<Vec<SolverEvent>> {
-        let store = self.order_store.read().await;
-        let _ = store.handle_event(event.clone()).await;
+        let _ = self.order_store.handle_event(event.clone()).await;
 
         match event {
             SolverEvent::Start => {

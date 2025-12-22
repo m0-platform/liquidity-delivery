@@ -13,7 +13,7 @@ slog-json = "2.6"
 slog-term = "2.9"
 slog-async = "2.8"
 chrono = "0.4"
-m0-liquidity-sdk = "0.0.2"
+m0-liquidity-sdk = "0.0.4"
 order_book = { version = "0.1.0", path = "../svm/programs/order_book" }
 hex = "0.4.3"
 serde_yaml = "0.9"
@@ -35,6 +35,9 @@ anchor-client = { version = "0.31.1", features = ["async"] }
 spl-token = "8.0.0"
 spl-associated-token-account = "7.0.0"
 governor = "0.6"
+poem = "3.0"
+poem-openapi = { version = "5.0", features = ["stoplight-elements"] }
+nanoid = "0.4"
 
 [dev-dependencies]
 mockito = "1.7.0"

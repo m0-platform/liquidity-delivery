@@ -14,7 +14,7 @@ use futures_util::future::join_all;
 use m0_liquidity_sdk::types::{Asset, Chain, ChainRuntime};
 use slog::{debug, error, info, warn, Logger};
 use spl_token::solana_program::program_pack::Pack;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::Mutex;
 
 use crate::components::ComponentParams;
 use crate::config::ChainConfig;
@@ -28,8 +28,8 @@ use crate::stores::{AssetStore, OrderStore};
 use crate::utils::{chain_from_id, chain_runtime, format_address};
 
 pub struct InventoryManager {
-    asset_store: Arc<RwLock<AssetStore>>,
-    order_store: Arc<RwLock<OrderStore>>,
+    asset_store: Arc<AssetStore>,
+    order_store: Arc<OrderStore>,
     chains: Vec<ChainConfig>,
     balances: Arc<Mutex<HashMap<Asset, u128>>>,
     holds: Arc<Mutex<HashMap<Chain, HashMap<String, u128>>>>,
@@ -46,10 +46,8 @@ impl InventoryManager {
             .new(slog::o!("component" => "InventoryManager"));
 
         Self {
-            asset_store: Arc::new(RwLock::new(AssetStore::new(
-                params.config.liquidity_api_url.clone(),
-            ))),
-            order_store: Arc::new(RwLock::new(OrderStore::new())),
+            asset_store: Arc::new(AssetStore::new(params.config.liquidity_api_url.clone())),
+            order_store: Arc::new(OrderStore::new()),
             chains: params.config.chains.clone(),
             balances: Arc::new(Mutex::new(HashMap::new())),
             holds: Arc::new(Mutex::new(HashMap::new())),
@@ -71,12 +69,7 @@ impl InventoryManager {
             .collect();
 
         for chain in svm_chains {
-            let assets = self
-                .asset_store
-                .read()
-                .await
-                .get_assets_for_chain(chain.chain_id)
-                .await;
+            let assets = self.asset_store.get_assets_for_chain(chain.chain_id).await;
 
             debug!(
                 self.logger,
@@ -196,12 +189,7 @@ impl InventoryManager {
             .collect();
 
         for chain in evm_chains {
-            let assets = self
-                .asset_store
-                .read()
-                .await
-                .get_assets_for_chain(chain.chain_id)
-                .await;
+            let assets = self.asset_store.get_assets_for_chain(chain.chain_id).await;
 
             debug!(
                 self.logger,
@@ -308,8 +296,8 @@ impl EventHandler for InventoryManager {
     }
 
     async fn initialize(&self) -> Result<()> {
-        self.asset_store.write().await.initialize().await?;
-        self.order_store.write().await.initialize().await?;
+        self.asset_store.initialize().await?;
+        self.order_store.initialize().await?;
 
         // Load balances before starting
         self.load_svm_balances().await?;
@@ -320,8 +308,7 @@ impl EventHandler for InventoryManager {
     }
 
     async fn handle_event(&self, event: SolverEvent) -> Result<Vec<SolverEvent>> {
-        let store = self.order_store.read().await;
-        let _ = store.handle_event(event.clone()).await;
+        let _ = self.order_store.handle_event(event.clone()).await;
 
         match event {
             SolverEvent::RequestHold(e) => {
@@ -413,7 +400,7 @@ impl EventHandler for InventoryManager {
                 let held = order_holds.remove(&order_id).unwrap_or(0);
 
                 if held > 0 {
-                    let order = self.order_store.read().await.get_order(&order_id).await?;
+                    let order = self.order_store.get_order(&order_id).await?;
                     let token = format_address(&order.data.token_out);
 
                     // Release holds associated with the order
@@ -428,7 +415,7 @@ impl EventHandler for InventoryManager {
                 }
             }
             SolverEvent::FillOrderSuccessful(e) => {
-                let order = self.order_store.read().await.get_order(&e.order_id).await?;
+                let order = self.order_store.get_order(&e.order_id).await?;
 
                 let result = match chain_runtime(order.data.dest_chain_id) {
                     ChainRuntime::Evm => self.load_evm_balances().await,

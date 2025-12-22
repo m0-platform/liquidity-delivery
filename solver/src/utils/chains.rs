@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use alloy::primitives::Address;
 use anchor_client::solana_sdk::pubkey::Pubkey;
 use m0_liquidity_sdk::types::{Chain, ChainRuntime};
@@ -13,6 +15,8 @@ pub fn chain_id(chain: Chain) -> u32 {
         Chain::Fogo => 4294967294,
         Chain::Sepolia => 11155111,
         Chain::ArbitrumSepolia => 421614,
+        Chain::HyperEvm => 999,
+        Chain::BinanceSmartChain => 56,
     }
 }
 
@@ -27,6 +31,8 @@ pub fn chain_from_id(chain_id: u32) -> Chain {
         4294967294 => Chain::Fogo,
         11155111 => Chain::Sepolia,
         421614 => Chain::ArbitrumSepolia,
+        56 => Chain::BinanceSmartChain,
+        999 => Chain::HyperEvm,
         _ => panic!("Unsupported chain ID: {}", chain_id),
     }
 }
@@ -50,6 +56,15 @@ pub fn chain_runtime(chain_id: u32) -> ChainRuntime {
         ChainRuntime::Svm
     } else {
         ChainRuntime::Evm
+    }
+}
+
+pub fn decode_address(address: String, chain_id: u32) -> Option<[u8; 32]> {
+    if chain_from_id(chain_id) == Chain::Solana {
+        return Some(Pubkey::from_str(&address).ok()?.to_bytes());
+    } else {
+        let evm_address = Address::from_str(&address).ok()?;
+        return Some(decode_evm_address(evm_address));
     }
 }
 

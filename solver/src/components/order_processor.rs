@@ -4,18 +4,20 @@ use slog::{info, Logger};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+use crate::api::QuoteResponse;
 use crate::components::ComponentParams;
 use crate::config::SupportedAssets;
 use crate::error::Result;
 use crate::events::{
-    EventHandler, EventProcessor, OrderRejectEvent, RequestFillOrderEvent, RequestHoldEvent,
-    SolverEvent,
+    APIQuoteResponseEvent, EventHandler, EventProcessor, OrderRejectEvent, RequestFillOrderEvent,
+    RequestHoldEvent, SolverEvent,
 };
 use crate::stores::{AssetStore, OrderStore};
+use crate::utils::decode_address;
 
 pub struct OrderProcessor {
-    order_store: Arc<RwLock<OrderStore>>,
-    asset_store: Arc<RwLock<AssetStore>>,
+    order_store: Arc<OrderStore>,
+    asset_store: Arc<AssetStore>,
     supported_assets: SupportedAssets,
     logger: Logger,
     max_clip_size: u128,
@@ -27,10 +29,8 @@ pub struct OrderProcessor {
 impl OrderProcessor {
     pub fn new(params: &ComponentParams) -> Self {
         Self {
-            order_store: Arc::new(RwLock::new(OrderStore::new())),
-            asset_store: Arc::new(RwLock::new(AssetStore::new(
-                params.config.liquidity_api_url.clone(),
-            ))),
+            order_store: Arc::new(OrderStore::new()),
+            asset_store: Arc::new(AssetStore::new(params.config.liquidity_api_url.clone())),
             supported_assets: params.config.supported_assets.clone(),
             logger: params.logger.new(slog::o!("component" => "OrderProcessor")),
             max_clip_size: params.config.max_order_clip_size as u128,
@@ -45,9 +45,8 @@ impl OrderProcessor {
         token_address: [u8; 32],
         chain_id: u32,
     ) -> std::result::Result<Asset, String> {
-        let asset_store = self.asset_store.read().await;
-
-        let asset = asset_store
+        let asset = self
+            .asset_store
             .get_asset(token_address, chain_id)
             .await
             .ok_or_else(|| "Asset not supported".to_string())?;
@@ -75,14 +74,13 @@ impl EventHandler for OrderProcessor {
     }
 
     async fn initialize(&self) -> Result<()> {
-        self.order_store.write().await.initialize().await?;
-        self.asset_store.write().await.initialize().await?;
+        self.order_store.initialize().await?;
+        self.asset_store.initialize().await?;
         Ok(())
     }
 
     async fn handle_event(&self, event: SolverEvent) -> Result<Vec<SolverEvent>> {
-        let order_store = self.order_store.read().await;
-        let _ = order_store.handle_event(event.clone()).await;
+        let _ = self.order_store.handle_event(event.clone()).await;
 
         match event {
             SolverEvent::OrderCreated(e) => {
@@ -167,10 +165,10 @@ impl EventHandler for OrderProcessor {
                         break;
                     }
 
-                    let order = order_store.get_order(order_id).await?;
-                    let asset_store = self.asset_store.read().await;
+                    let order = self.order_store.get_order(order_id).await?;
 
-                    let dest_asset = asset_store
+                    let dest_asset = self
+                        .asset_store
                         .get_asset(order.data.token_out, order.data.dest_chain_id)
                         .await
                         .unwrap();
@@ -201,6 +199,58 @@ impl EventHandler for OrderProcessor {
                 }
 
                 return Ok(events);
+            }
+            SolverEvent::APIRequestQuote(request_event) => {
+                let req = request_event.request;
+                let mut resp = APIQuoteResponseEvent {
+                    id: request_event.id,
+                    response: QuoteResponse::default(),
+                };
+
+                let input_token = match decode_address(req.input_token, req.input_chain_id) {
+                    Some(asset) => asset,
+                    None => {
+                        resp.response.reason = Some("Invalid input token".to_string());
+                        return Ok(vec![SolverEvent::APIQuoteResponse(resp)]);
+                    }
+                };
+
+                let output_token = match decode_address(req.output_token, req.output_chain_id) {
+                    Some(asset) => asset,
+                    None => {
+                        resp.response.reason = Some("Invalid output token".to_string());
+                        return Ok(vec![SolverEvent::APIQuoteResponse(resp)]);
+                    }
+                };
+
+                if let Err(_) = self
+                    .get_supported_asset(input_token, req.input_chain_id)
+                    .await
+                {
+                    resp.response.reason = Some("Input token not supported".to_string());
+                    return Ok(vec![SolverEvent::APIQuoteResponse(resp)]);
+                }
+
+                if let Err(_) = self
+                    .get_supported_asset(output_token, req.output_chain_id)
+                    .await
+                {
+                    resp.response.reason = Some("Output token not supported".to_string());
+                    return Ok(vec![SolverEvent::APIQuoteResponse(resp)]);
+                }
+
+                // Make sure amount_out covers our fee
+                let min_amount_out = req.amount_in as u128 * (10_000 - self.fee_bps) / 10_000;
+                if min_amount_out < req.amount_out as u128 {
+                    resp.response.reason = Some("Output amount too low".to_string());
+                    return Ok(vec![SolverEvent::APIQuoteResponse(resp)]);
+                }
+
+                // Solver is willing to fill the order
+                resp.response.can_process = true;
+                resp.response.estimated_time_seconds = 300; // 5 minutes
+
+                return Ok(vec![SolverEvent::APIQuoteResponse(resp)]);
             }
             _ => {}
         }

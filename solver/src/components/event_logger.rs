@@ -28,13 +28,6 @@ impl EventHandler for EventLogger {
 
     async fn handle_event(&self, event: SolverEvent) -> Result<Vec<SolverEvent>> {
         match event {
-            SolverEvent::Start => {
-                info!(self.logger, "Start");
-            }
-            SolverEvent::Stop => {
-                info!(self.logger, "Stop");
-            }
-            SolverEvent::Heartbeat(_) => {}
             SolverEvent::OrderCreated(e) => {
                 info!(
                     self.logger,
@@ -133,6 +126,7 @@ impl EventHandler for EventLogger {
                     "order_id" => %e.order_id,
                 );
             }
+            _ => {}
         }
 
         Ok(vec![])

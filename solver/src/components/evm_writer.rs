@@ -4,7 +4,6 @@ use m0_liquidity_sdk::types::ChainRuntime;
 use slog::{error, info, warn, Logger};
 use std::str::FromStr;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
 use crate::components::ComponentParams;
 use crate::config::ChainConfig;
@@ -16,7 +15,7 @@ use crate::stores::OrderStore;
 use crate::utils::{chain_runtime, decode_evm_address, decode_order_id, encode_evm_address};
 
 pub struct EvmWriter {
-    order_store: Arc<RwLock<OrderStore>>,
+    order_store: Arc<OrderStore>,
     provider_manager: Arc<ProviderManager>,
     chains: Vec<ChainConfig>,
     logger: Logger,
@@ -25,7 +24,7 @@ pub struct EvmWriter {
 impl EvmWriter {
     pub fn new(params: &ComponentParams) -> Self {
         Self {
-            order_store: Arc::new(RwLock::new(OrderStore::new())),
+            order_store: Arc::new(OrderStore::new()),
             provider_manager: params.provider_manager.clone(),
             chains: params.config.chains.clone(),
             logger: params.logger.new(slog::o!("component" => "EvmWriter")),
@@ -92,18 +91,17 @@ impl EventHandler for EvmWriter {
     }
 
     async fn initialize(&self) -> Result<()> {
-        self.order_store.write().await.initialize().await?;
+        self.order_store.initialize().await?;
 
         Ok(())
     }
 
     async fn handle_event(&self, event: SolverEvent) -> Result<Vec<SolverEvent>> {
-        let store = self.order_store.read().await;
-        let _ = store.handle_event(event.clone()).await;
+        let _ = self.order_store.handle_event(event.clone()).await;
 
         match event {
             SolverEvent::RequestFillOrder(e) => {
-                let order = store.get_order(&e.order_id).await?;
+                let order = self.order_store.get_order(&e.order_id).await?;
                 let dest_chain_id = order.data.dest_chain_id;
 
                 if chain_runtime(dest_chain_id) != ChainRuntime::Evm {

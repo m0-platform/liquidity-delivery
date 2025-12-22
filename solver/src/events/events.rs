@@ -2,6 +2,8 @@ use m0_liquidity_sdk::types::Asset;
 use order_book::OrderData;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::api::{QuoteRequest, QuoteResponse};
+
 /// Unified event enum
 #[derive(Debug, Clone)]
 pub enum SolverEvent {
@@ -27,6 +29,10 @@ pub enum SolverEvent {
     FillOrderSuccessful(FillOrderSuccessfulEvent),
     RequestSwap(RequestSwapEvent),
     SwapSuccessful(SwapSuccessfulEvent),
+
+    // API events
+    APIRequestQuote(APIRequestQuoteEvent),
+    APIQuoteResponse(APIQuoteResponseEvent),
 }
 
 impl SolverEvent {
@@ -235,8 +241,14 @@ pub struct SwapSuccessfulEvent {
     pub order_id: String,
 }
 
-impl SwapSuccessfulEvent {
-    pub fn new(order_id: String) -> Self {
-        Self { order_id }
-    }
+#[derive(Debug, Clone)]
+pub struct APIRequestQuoteEvent {
+    pub request: QuoteRequest,
+    pub id: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct APIQuoteResponseEvent {
+    pub response: QuoteResponse,
+    pub id: String,
 }

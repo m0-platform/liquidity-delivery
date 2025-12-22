@@ -1,7 +1,7 @@
 use anchor_client::solana_sdk::signature::Keypair;
 use m0_liquidity_sdk::types::{Asset, Chain};
 use serde::{Deserialize, Serialize};
-use std::{fs, path::Path, sync::Arc};
+use std::{fs, sync::Arc};
 use thiserror::Error;
 
 use crate::{providers::Signers, utils::chain_from_id};
@@ -69,6 +69,7 @@ pub struct Config {
     pub max_order_clip_size: u64,
     pub max_clip_reprocess_delay_sec: u64,
     pub supported_assets: SupportedAssets,
+    pub api_server_port: u16,
 }
 
 #[derive(Debug, Deserialize)]
@@ -85,6 +86,7 @@ struct ConfigFile {
     max_order_clip_size: Option<u64>,
     max_clip_reprocess_delay_sec: Option<u64>,
     supported_assets: Option<SupportedAssets>,
+    api_server_port: Option<u16>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -148,6 +150,7 @@ impl Default for Config {
             max_clip_reprocess_delay_sec: 60,
             supported_assets: SupportedAssets::default(),
             auto_rebalance: true,
+            api_server_port: 3000,
         }
     }
 }
@@ -162,13 +165,13 @@ impl Default for RateLimitConfig {
 }
 
 impl Config {
-    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, ConfigError> {
+    pub fn from_file(path: &String) -> Result<Self, ConfigError> {
         let contents = fs::read_to_string(path).map_err(|e| {
-            ConfigError::InvalidChainConfig(format!("Failed to read config file: {}", e))
+            ConfigError::InvalidConfig(format!("Failed to read config file {}: {}", path, e))
         })?;
 
         let config_file: ConfigFile = serde_yaml::from_str(&contents)
-            .map_err(|e| ConfigError::InvalidChainConfig(format!("Failed to parse YAML: {}", e)))?;
+            .map_err(|e| ConfigError::InvalidConfig(format!("Failed to parse YAML: {}", e)))?;
 
         let environment = Environment::from_str(&config_file.environment)?;
         let network = Network::from_str(&config_file.network)?;
@@ -188,7 +191,7 @@ impl Config {
             .collect();
 
         if chains.is_empty() {
-            return Err(ConfigError::InvalidChainConfig(
+            return Err(ConfigError::InvalidConfig(
                 "No enabled chains configured".to_string(),
             ));
         }
@@ -197,7 +200,7 @@ impl Config {
         let evm_private_key = config_file
             .evm_private_key
             .parse()
-            .map_err(|_| ConfigError::InvalidChainConfig("Invalid EVM_PRIVATE_KEY".to_string()))?;
+            .map_err(|_| ConfigError::InvalidConfig("Invalid EVM_PRIVATE_KEY".to_string()))?;
 
         let svm_private_key = Arc::new(Keypair::from_base58_string(&config_file.svm_private_key));
 
@@ -229,6 +232,9 @@ impl Config {
         if let Some(supported_assets) = config_file.supported_assets {
             config.supported_assets = supported_assets;
         }
+        if let Some(api_server_port) = config_file.api_server_port {
+            config.api_server_port = api_server_port;
+        }
 
         Ok(config)
     }
@@ -252,5 +258,5 @@ pub enum ConfigError {
     InvalidNetwork(String),
 
     #[error("Invalid chain configuration: {0}")]
-    InvalidChainConfig(String),
+    InvalidConfig(String),
 }

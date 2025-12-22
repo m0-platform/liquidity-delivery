@@ -58,6 +58,11 @@ impl OrderStore {
             .cloned()
             .ok_or_else(|| SolverError::OrderNotFound(order_id.to_string()))
     }
+
+    pub async fn get_all_orders(&self) -> Vec<Order> {
+        let orders = self.orders.read().await;
+        orders.values().cloned().collect()
+    }
 }
 
 #[async_trait]

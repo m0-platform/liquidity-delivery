@@ -1,3 +1,6 @@
+run-solver:
+	cd solver && cargo run --package solver --bin solver -- $(args)
+
 test-solver:
 	RUSTFLAGS='-Awarnings' cargo test --package solver --test integration_tests -- --nocapture
 

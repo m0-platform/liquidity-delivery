@@ -30,7 +30,7 @@ use crate::utils::{chain_runtime, decode_evm_address};
 /// Component that listens to new orders created on multiple EVM chains
 pub struct EvmEventListener {
     event_bus: Arc<EventBus>,
-    order_store: Arc<RwLock<OrderStore>>,
+    order_store: Arc<OrderStore>,
     chains: Vec<ChainConfig>,
     task_handles: Arc<RwLock<Vec<JoinHandle<()>>>>,
     logger: Logger,
@@ -50,8 +50,7 @@ impl EventHandler for EvmEventListener {
     }
 
     async fn handle_event(&self, event: SolverEvent) -> Result<Vec<SolverEvent>> {
-        let store = self.order_store.read().await;
-        let _ = store.handle_event(event.clone()).await;
+        let _ = self.order_store.handle_event(event.clone()).await;
 
         match event {
             SolverEvent::Start => {
@@ -83,7 +82,7 @@ impl EvmEventListener {
     pub fn new(params: &ComponentParams) -> Self {
         Self {
             task_handles: Arc::new(RwLock::new(Vec::new())),
-            order_store: Arc::new(RwLock::new(OrderStore::new())),
+            order_store: Arc::new(OrderStore::new()),
             chains: params.config.chains.clone(),
             event_bus: params.event_bus.clone(),
             logger: params
@@ -94,7 +93,7 @@ impl EvmEventListener {
             polling_interval: if params.config.network == Network::Local {
                 Duration::from_millis(1000)
             } else {
-                Duration::from_millis(5000)
+                Duration::from_millis(10_000)
             },
         }
     }
@@ -157,7 +156,7 @@ impl EvmEventListener {
                             if let Err(e) = event_bus.publish(event).await {
                                 error!(
                                     logger,
-                                    "Failed to publish event on chain";
+                                    "Failed to publish event";
                                     "chain_id" => %chain_id,
                                     "error" => %e,
                                 );
@@ -167,7 +166,7 @@ impl EvmEventListener {
                         Err(e) => {
                             error!(
                                 logger,
-                                "Error processing log on chain";
+                                "Error processing log";
                                 "chain_id" => %chain_id,
                                 "error" => %e,
                             );
@@ -293,14 +292,16 @@ impl EvmEventListener {
             ))
         })?;
 
-        info!(
-            logger,
-            "Fetched historical logs";
-            "count" => logs.len(),
-            "chain_id" => chain_id,
-            "from_block" => from_block,
-            "to_block" => to_block
-        );
+        if logs.len() > 0 {
+            info!(
+                logger,
+                "Fetched historical logs";
+                "count" => logs.len(),
+                "chain_id" => chain_id,
+                "from_block" => from_block,
+                "to_block" => to_block
+            );
+        }
 
         for log in logs {
             let block_number = log.block_number.unwrap();

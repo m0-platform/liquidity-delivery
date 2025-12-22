@@ -1,3 +1,4 @@
+mod api;
 mod components;
 pub mod config;
 mod contracts;
@@ -68,6 +69,7 @@ pub async fn run_solver(
     let inventory_manager = Arc::new(InventoryManager::new(&params));
     let event_logger = Arc::new(components::EventLogger::new(&params));
     let order_timer = Arc::new(components::OrderTimer::new(&params));
+    let api_server = Arc::new(components::ApiServer::new(&params));
 
     // Initialize all components
     evm_listener.initialize().await?;
@@ -77,6 +79,7 @@ pub async fn run_solver(
     inventory_manager.initialize().await?;
     event_logger.initialize().await?;
     order_timer.initialize().await?;
+    api_server.initialize().await?;
 
     // Spawn handlers for all components
     register_component(&evm_listener, &event_bus, &shutdown_tx, &logger);
@@ -86,6 +89,7 @@ pub async fn run_solver(
     register_component(&inventory_manager, &event_bus, &shutdown_tx, &logger);
     register_component(&event_logger, &event_bus, &shutdown_tx, &logger);
     register_component(&order_timer, &event_bus, &shutdown_tx, &logger);
+    register_component(&api_server, &event_bus, &shutdown_tx, &logger);
 
     // Let everything get started
     info!(logger, "All components registered");
