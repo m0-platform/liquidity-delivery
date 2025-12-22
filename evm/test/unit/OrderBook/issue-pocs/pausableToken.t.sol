@@ -104,6 +104,7 @@ contract PausableTokenTest is Test {
         vm.prank(address(messenger));
         vm.expectRevert(abi.encodeWithSelector(MockPausableToken.EnforcedPause.selector));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: AMOUNT_OUT,

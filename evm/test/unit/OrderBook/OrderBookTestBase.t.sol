@@ -185,6 +185,7 @@ abstract contract OrderBookTestBase is Test {
         // Report the fill back to the origin chain
         vm.prank(address(messenger));
         orderBook.reportFill(
+            DEST_CHAIN_ID,
             IOrderBook.FillReport({
                 orderId: orderId_,
                 amountOutFilled: amountOutFilled_,

@@ -23,8 +23,8 @@ contract MockMessenger is IMessenger {
         emit FillReportSent(destinationChainId, report);
     }
 
-    function receiveFillReport(IOrderBook.FillReport calldata report) external {
-        IOrderBook(orderBook).reportFill(report);
+    function receiveFillReport(uint32 sourceChainId, IOrderBook.FillReport calldata report) external {
+        IOrderBook(orderBook).reportFill(sourceChainId, report);
     }
 
     function isFillReported(bytes32 orderId) external view returns (bool) {

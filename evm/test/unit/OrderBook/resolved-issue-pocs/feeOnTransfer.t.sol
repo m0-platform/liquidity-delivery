@@ -94,6 +94,7 @@ contract FeeOnTransferTest is Test {
         // The OrderBook expects to transfer exactly AMOUNT_IN, but fee will reduce actual amount
         vm.prank(address(messenger));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: AMOUNT_OUT,

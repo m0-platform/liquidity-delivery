@@ -107,6 +107,7 @@ contract MEarnerYieldAccrualTest is Test {
 
         vm.prank(address(messenger));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: AMOUNT_OUT,
@@ -207,6 +208,7 @@ contract MEarnerYieldAccrualTest is Test {
         // 4. Now fill the order
         vm.prank(address(messenger));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: AMOUNT_OUT,

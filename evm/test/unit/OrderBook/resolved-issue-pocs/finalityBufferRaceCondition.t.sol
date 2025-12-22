@@ -70,6 +70,7 @@ contract FinalityBufferRaceConditionTest is OrderBookTestBase {
         uint256 solverBalanceBefore = tokenIn.balanceOf(users["solver"]);
         vm.prank(address(messenger));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: params.amountOut,
