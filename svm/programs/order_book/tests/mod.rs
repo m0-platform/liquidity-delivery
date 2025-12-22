@@ -836,6 +836,7 @@ impl OrderBookTest {
         &self,
         relayer: &Pubkey,
         messenger_authority: &Pubkey,
+        source_chain_id: u32,
         fill_report: &order_book::instructions::FillReport,
     ) -> Result<Instruction, Box<dyn Error>> {
         let accounts =
@@ -846,6 +847,7 @@ impl OrderBookTest {
             .program()
             .accounts(accounts)
             .args(order_book::instruction::ReportOrderFill {
+                source_chain_id,
                 fill_report: fill_report.clone(),
             })
             .instruction()?;
@@ -947,6 +949,7 @@ impl OrderBookTest {
     fn report_fill(
         &mut self,
         relayer: &str,
+        source_chain_id: u32,
         fill_report: &order_book::instructions::FillReport,
     ) -> Result<(), Box<dyn Error>> {
         let relayer_keypair = self.users.get(relayer).unwrap();
@@ -955,6 +958,7 @@ impl OrderBookTest {
         let ix = self.create_report_fill_ix(
             &relayer_keypair.pubkey(),
             &messenger_authority.pubkey(),
+            source_chain_id,
             fill_report,
         )?;
 

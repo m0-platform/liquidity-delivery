@@ -56,4 +56,6 @@ pub enum OrderBookError {
     FinalityPending,
     #[msg("Invalid destination account")]
     InvalidDestinationAccount,
+    #[msg("Invalid report source chain ID")]
+    InvalidReportSource,
 }

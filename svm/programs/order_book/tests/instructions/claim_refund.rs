@@ -428,8 +428,6 @@ mod xchain_orders {
         let order_params = default_order_params(&test);
         let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
-        let (_, native_order) = test.get_native_order_account(&order_id)?;
-
         // Warp time past fill_deadline but NOT past fill_deadline + finality buffer (which is 1000)
         test.warp_forward(200);
 
@@ -593,7 +591,7 @@ mod xchain_orders {
             origin_recipient: test.get_user("solver").pubkey().to_bytes(),
             token_in: test.get_mint("token-in-spl-6").to_bytes(),
         };
-        test.report_fill("admin", &fill_report)?;
+        test.report_fill("admin", order_params.dest_chain_id, &fill_report)?;
 
         // Verify order has remaining tokens
         let order_account = test

@@ -22,7 +22,7 @@ pub struct FillReport {
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(fill_report: FillReport)]
+#[instruction(source_chain_id: u32, fill_report: FillReport)]
 pub struct ReportOrderFill<'info> {
     #[account(mut)]
     pub relayer: Signer<'info>,
@@ -40,6 +40,7 @@ pub struct ReportOrderFill<'info> {
         mut,
         seeds = [ORDER_SEED_PREFIX, fill_report.order_id.as_ref()],
         bump = order.bump,
+        constraint = order.data.dest_chain_id == source_chain_id @ OrderBookError::InvalidReportSource,
     )]
     pub order: Account<'info, Order::<NativeOrder>>,
 
@@ -86,7 +87,7 @@ impl ReportOrderFill<'_> {
             self.order.order_type == OrderType::Native,
             OrderBookError::InvalidOrderType
         );
-
+        
         let status = &self.order.data.status;
 
         // Validate the order can be filled
@@ -104,7 +105,7 @@ impl ReportOrderFill<'_> {
     }
 
     #[access_control(ctx.accounts.validate(&fill_report))]
-    pub fn handler(ctx: Context<Self>, fill_report: FillReport) -> Result<()> {
+    pub fn handler(ctx: Context<Self>, _source_chain_id: u32, fill_report: FillReport) -> Result<()> {
         let order = &mut ctx.accounts.order.data;
 
         // Update the filled amounts on the order

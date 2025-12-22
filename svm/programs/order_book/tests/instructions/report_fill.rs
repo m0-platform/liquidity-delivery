@@ -94,7 +94,7 @@ fn test_report_fill_unauthorized_messenger_reverts() -> Result<(), Box<dyn Error
         .ctx
         .program()
         .accounts(accounts)
-        .args(order_book::instruction::ReportOrderFill { fill_report })
+        .args(order_book::instruction::ReportOrderFill { source_chain_id: DEST_CHAIN_ID, fill_report })
         .instruction()?;
 
     test.ctx
