@@ -129,6 +129,7 @@ impl OpenOrder<'_> {
             params.fill_deadline >= Clock::get()?.unix_timestamp as u64,
             OrderBookError::InvalidFillDeadline
         );
+        require!(params.recipient != [0u8; 32], OrderBookError::InvalidRecipient);
 
         Ok(())
     }
