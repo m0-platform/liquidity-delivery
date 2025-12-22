@@ -6,6 +6,8 @@ use std::error::Error;
 // ReportOrderFill instruction tests
 // [X] given the messenger_authority does not match the global account
 //   [X] it reverts with a NotAuthorized error
+// [ ] given the source chain ID does not match the order's dest_chain_id
+//   [ ] it reverts with an InvalidReportSource error
 // [X] given the order does not exist
 //   [X] it reverts with an AccountNotInitialized error
 // [X] given the order type is Foreign
@@ -100,6 +102,46 @@ fn test_report_fill_unauthorized_messenger_reverts() -> Result<(), Box<dyn Error
     test.ctx
         .execute_instruction(ix, &[&test.get_user("admin"), &messenger_authority])?
         .assert_anchor_error(&format!("{:?}", OrderBookError::NotAuthorized));
+
+    Ok(())
+}
+
+#[test]
+fn test_report_fill_invalid_source_chain_reverts() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
+
+    // Create a native order (origin = CHAIN_ID, dest = DEST_CHAIN_ID)
+    let order_params = order_book::instructions::open::OrderParams {
+        dest_chain_id: DEST_CHAIN_ID, // foreign destination
+        fill_deadline: test
+            .ctx
+            .svm
+            .get_sysvar::<anchor_lang::prelude::Clock>()
+            .unix_timestamp as u64
+            + 86400,
+        token_out: test.get_mint("token-out-spl-6").to_bytes(),
+        amount_in: 1_000_000,
+        amount_out: 1_000_000,
+        recipient: test.get_user("alice").pubkey().to_bytes(),
+        solver: test.get_user("solver").pubkey().to_bytes(),
+    };
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+    // Create fill report
+    let fill_report =
+        default_fill_report(&test, order_id, test.get_user("solver").pubkey().to_bytes());
+
+    let ix = test.create_report_fill_ix(
+        &test.get_user("admin").pubkey(),
+        &test.get_user("messenger_authority").pubkey(),
+        order_params.dest_chain_id + 1, // Invalid source chain ID
+        &fill_report
+    )?;
+
+    test.ctx
+        .execute_instruction(ix, &[&test.get_user("admin"), &test.get_user("messenger_authority")])?
+        .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidReportSource));
 
     Ok(())
 }
