@@ -631,7 +631,9 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     }
 
     function _revertIfOrderIdMismatch(bytes32 orderId_, OrderData memory orderData_) internal pure {
-        // Ensure the provided order ID matches the computed order ID from the order data
+        // Ensure the provided order ID matches the computed order ID from the order data.
+        // The orderId_ parameter exists specifically for this check, giving solvers assurance
+        // that the order they intend to fill matches the orderData_ they submit.
         if (orderId_ != getOrderId(orderData_)) revert OrderIdMismatch();
     }
 }
