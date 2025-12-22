@@ -20,6 +20,8 @@ mod local_orders {
     //   [X] it reverts with a ? error
     // [X] given the sender does not have enough balance in the token in account
     //   [X] it reverts with a "insufficient funds" error
+    // [X] given the recipient is the same as the solver
+    //   [X] it reverts with an InvalidRecipient error
     // [X] given all the above conditions are satisfied
     //   [X] given the sender signs the instruction
     //     [X] it successfully opens the order
@@ -246,6 +248,36 @@ mod local_orders {
     }
 
     #[test]
+    fn test_recipient_same_as_solver_reverts() -> Result<(), Box<dyn Error>> {
+        // Setup test environment
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        let sender = test.users.get("alice").unwrap();
+        let token_in_mint = test.mints.get("token-in-spl-6").unwrap();
+        let sender_token_in_account = test.atas.get(&("token-in-spl-6", "alice")).unwrap();
+
+        // Prepare order parameters with recipient same as solver
+        let mut order_params = default_order_params(&test, "alice");
+        let solver_pubkey = test.users.get("solver").unwrap().pubkey();
+        order_params.recipient = solver_pubkey.to_bytes(); // recipient same as solver
+
+        let (_, ix) = test.create_open_order_ix(
+            &sender.pubkey(),
+            &token_in_mint,
+            &sender_token_in_account,
+            None,
+            &order_params,
+        )?;
+
+        test.ctx
+            .execute_instruction(ix, &[sender])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidRecipient));
+
+        Ok(())
+    }
+
+    #[test]
     fn test_success() -> Result<(), Box<dyn Error>> {
         // Setup test environment
         let mut test = OrderBookTest::new()?;
@@ -382,6 +414,8 @@ mod xchain_orders {
     //   [X] it reverts with a ? error
     // [X] given the sender does not have enough balance in the token in account
     //   [X] it reverts with a "insufficient funds" error
+    // [X] given the recipient is the same as the solver
+    //   [X] it reverts with an InvalidRecipient error
     // [X] given all the above conditions are satisfied
     //   [X] given the sender signs the instruction
     //     [X] it successfully opens the order
@@ -667,6 +701,36 @@ mod xchain_orders {
         test.ctx
             .execute_instruction(ix, &[sender])?
             .assert_log_error("insufficient funds");
+        Ok(())
+    }
+
+    #[test]
+    fn test_xchain_order_recipient_same_as_solver_reverts() -> Result<(), Box<dyn Error>> {
+        // Setup test environment
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        let sender = test.users.get("alice").unwrap();
+        let token_in_mint = test.mints.get("token-in-spl-6").unwrap();
+        let sender_token_in_account = test.atas.get(&("token-in-spl-6", "alice")).unwrap();
+
+        // Prepare order parameters with recipient same as solver
+        let mut order_params = default_order_params(&test, "alice");
+        let solver_pubkey = test.users.get("solver").unwrap().pubkey();
+        order_params.recipient = solver_pubkey.to_bytes(); // recipient same as solver
+
+        let (_, ix) = test.create_open_order_ix(
+            &sender.pubkey(),
+            &token_in_mint,
+            &sender_token_in_account,
+            None,
+            &order_params,
+        )?;
+
+        test.ctx
+            .execute_instruction(ix, &[sender])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidRecipient));
+
         Ok(())
     }
 
