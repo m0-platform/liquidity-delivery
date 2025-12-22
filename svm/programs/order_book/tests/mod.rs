@@ -910,6 +910,7 @@ impl OrderBookTest {
 
         let fill_params = order_book::instructions::FillParams {
             amount_out_to_fill,
+            min_amount_out: 0,
             origin_recipient: solver_keypair.pubkey().to_bytes(),
         };
 
@@ -932,6 +933,7 @@ impl OrderBookTest {
 
         let fill_params = order_book::instructions::FillParams {
             amount_out_to_fill,
+            min_amount_out: 0,
             origin_recipient: solver_keypair.pubkey().to_bytes(),
         };
 

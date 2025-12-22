@@ -52,6 +52,8 @@ pub enum OrderBookError {
     DestinationAccountRequired,
     #[msg("Order is already filled")]
     OrderFilled,
+    #[msg("Fill amount below minimum")]
+    FillBelowMinimum,
     #[msg("Order status is not finalized")]
     FinalityPending,
     #[msg("Invalid destination account")]

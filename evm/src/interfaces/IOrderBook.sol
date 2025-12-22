@@ -85,6 +85,7 @@ interface IOrderBook {
     error AmountInZero();
     error AmountOutZero();
     error FillAmountZero();
+    error FillBelowMinimum();
     error FinalityPending();
     error InvalidDeadline();
     error InvalidDestinationChain();
@@ -258,10 +259,12 @@ interface IOrderBook {
      * @dev This struct contains parameters that are specific to the filler
      *      and are not part of the original order data
      * @param amountOutToFill The amount of output token the filler is providing to fill
+     * @param minAmountOut The minimum amount of output token the filler is willing to fill (reverts if actual fill is less)
      * @param originRecipient The address on the origin chain that should receive released funds
      */
     struct FillParams {
         uint128 amountOutToFill;
+        uint128 minAmountOut;
         bytes32 originRecipient;
     }
 

@@ -22,6 +22,7 @@ use portal::{
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct FillParams {
     pub amount_out_to_fill: u64,
+    pub min_amount_out: u64,
     pub origin_recipient: [u8; 32],
 }
 
@@ -197,6 +198,12 @@ impl FillNativeOrder<'_> {
 
             (amount_in_to_release, fill_params.amount_out_to_fill)
         };
+
+        // Ensure the fill amount meets the filler's minimum requirement
+        require!(
+            amount_out_to_fill >= fill_params.min_amount_out,
+            OrderBookError::FillBelowMinimum
+        );
 
         // Update the amount filled on the order
         order.amount_in_released += amount_in_to_release as u128;
@@ -387,6 +394,12 @@ impl<'info> FillForeignOrder<'info> {
 
             (amount_in_to_release, fill_params.amount_out_to_fill)
         };
+
+        // Ensure the fill amount meets the filler's minimum requirement
+        require!(
+            amount_out_to_fill >= fill_params.min_amount_out,
+            OrderBookError::FillBelowMinimum
+        );
 
         // Update the fill amounts on the order
         order.amount_in_released += amount_in_to_release as u128;

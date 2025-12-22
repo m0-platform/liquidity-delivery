@@ -172,7 +172,7 @@ abstract contract OrderBookTestBase is Test {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: fillAmount_, originRecipient: order.solver })
+            IOrderBook.FillParams({ amountOutToFill: fillAmount_, minAmountOut: 0, originRecipient: order.solver })
         );
     }
 

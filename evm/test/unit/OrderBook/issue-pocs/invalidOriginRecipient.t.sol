@@ -58,6 +58,7 @@ contract InvalidOriginRecipientTest is OrderBookTestBase {
             }),
             IOrderBook.FillParams({
                 amountOutToFill: params.amountOut,
+                minAmountOut: 0,
                 originRecipient: address(orderBook).toBytes32()
             })
         );
@@ -102,6 +103,7 @@ contract InvalidOriginRecipientTest is OrderBookTestBase {
             }),
             IOrderBook.FillParams({
                 amountOutToFill: params.amountOut,
+                minAmountOut: 0,
                 originRecipient: bytes32(0) // address(0)
             })
         );

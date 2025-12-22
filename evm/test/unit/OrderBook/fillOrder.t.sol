@@ -24,6 +24,8 @@ contract FillOrderTest is OrderBookTestBase {
     //   [X] it reverts with an OrderFilled error
     // [X] given the fill amount is zero
     //   [X] it reverts with a FillAmountZero error
+    // [X] given the actual fill amount is below the minimum specified
+    //   [X] it reverts with a FillBelowMinimum error
     // [X] given the order originated on the current chain (i.e. it is local)
     //   [X] given both tokens have 6 decimals
     //     [X] given the fill amount is equal to the amount out remaining to fill
@@ -108,7 +110,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
+            IOrderBook.FillParams({ amountOutToFill: order.amountOut, minAmountOut: 0, originRecipient: params.solver })
         );
     }
 
@@ -140,7 +142,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
+            IOrderBook.FillParams({ amountOutToFill: order.amountOut, minAmountOut: 0, originRecipient: params.solver })
         );
     }
 
@@ -174,7 +176,7 @@ contract FillOrderTest is OrderBookTestBase {
         orderBook.fillOrder(
             orderId,
             orderData,
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
+            IOrderBook.FillParams({ amountOutToFill: order.amountOut, minAmountOut: 0, originRecipient: params.solver })
         );
     }
 
@@ -205,7 +207,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: users["bob"].toBytes32() })
+            IOrderBook.FillParams({ amountOutToFill: order.amountOut, minAmountOut: 0, originRecipient: users["bob"].toBytes32() })
         );
     }
 
@@ -234,7 +236,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
+            IOrderBook.FillParams({ amountOutToFill: order.amountOut, minAmountOut: 0, originRecipient: params.solver })
         );
     }
 
@@ -268,7 +270,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
+            IOrderBook.FillParams({ amountOutToFill: order.amountOut, minAmountOut: 0, originRecipient: params.solver })
         );
     }
 
@@ -297,7 +299,47 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: 0, originRecipient: params.solver })
+            IOrderBook.FillParams({ amountOutToFill: 0, minAmountOut: 0, originRecipient: params.solver })
+        );
+    }
+
+    function test_fillBelowMinimum_reverts() public {
+        // Create a local order with no designated solver (anyone can fill)
+        params.destChainId = CHAIN_ID;
+        params.solver = bytes32(0);
+        bytes32 orderId = _placeOrder(users["alice"], params);
+
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+
+        // First solver partially fills the order (e.g., fills 90% of it)
+        uint128 firstFillAmount = (order.amountOut * 9) / 10;
+        _fillOrder(users["bob"], orderId, firstFillAmount);
+
+        // Second solver tries to fill the full amount but sets minAmountOut to the full amount
+        // Since only 10% remains, this should revert with FillBelowMinimum
+        vm.prank(users["solver"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.FillBelowMinimum.selector));
+        orderBook.fillOrder(
+            orderId,
+            IOrderBook.OrderData({
+                version: order.version,
+                originChainId: CHAIN_ID,
+                sender: order.sender.toBytes32(),
+                nonce: order.nonce,
+                destChainId: order.destChainId,
+                fillDeadline: order.fillDeadline,
+                amountIn: order.amountIn,
+                amountOut: order.amountOut,
+                tokenIn: order.tokenIn.toBytes32(),
+                tokenOut: order.tokenOut,
+                recipient: order.recipient,
+                solver: order.solver
+            }),
+            IOrderBook.FillParams({
+                amountOutToFill: order.amountOut, // Try to fill full amount
+                minAmountOut: order.amountOut,    // But require at least full amount
+                originRecipient: params.solver
+            })
         );
     }
 
@@ -336,7 +378,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
+            IOrderBook.FillParams({ amountOutToFill: order.amountOut, minAmountOut: 0, originRecipient: params.solver })
         );
 
         // Check order status
@@ -431,7 +473,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: fillAmount, originRecipient: params.solver })
+            IOrderBook.FillParams({ amountOutToFill: fillAmount, minAmountOut: 0, originRecipient: params.solver })
         );
 
         // Check order status
@@ -521,7 +563,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: fillAmount, originRecipient: params.solver })
+            IOrderBook.FillParams({ amountOutToFill: fillAmount, minAmountOut: 0, originRecipient: params.solver })
         );
 
         // Check order status - should still be Created, not Completed
@@ -605,7 +647,7 @@ contract FillOrderTest is OrderBookTestBase {
         orderBook.fillOrder(
             orderId,
             orderData,
-            IOrderBook.FillParams({ amountOutToFill: orderData.amountOut, originRecipient: params.solver })
+            IOrderBook.FillParams({ amountOutToFill: orderData.amountOut, minAmountOut: 0, originRecipient: params.solver })
         );
 
         // Check token transfers on destination chain
@@ -687,7 +729,7 @@ contract FillOrderTest is OrderBookTestBase {
         orderBook.fillOrder(
             orderId,
             orderData,
-            IOrderBook.FillParams({ amountOutToFill: fillAmount, originRecipient: params.solver })
+            IOrderBook.FillParams({ amountOutToFill: fillAmount, minAmountOut: 0, originRecipient: params.solver })
         );
 
         // Check token transfers on destination chain
@@ -761,7 +803,7 @@ contract FillOrderTest is OrderBookTestBase {
         orderBook.fillOrder(
             orderId,
             orderData,
-            IOrderBook.FillParams({ amountOutToFill: fillAmount, originRecipient: params.solver })
+            IOrderBook.FillParams({ amountOutToFill: fillAmount, minAmountOut: 0, originRecipient: params.solver })
         );
 
         // Check token transfers on destination chain
@@ -833,7 +875,7 @@ contract FillOrderTest is OrderBookTestBase {
         orderBook.fillOrder(
             orderId,
             orderData,
-            IOrderBook.FillParams({ amountOutToFill: orderData.amountOut, originRecipient: solver.toBytes32() })
+            IOrderBook.FillParams({ amountOutToFill: orderData.amountOut, minAmountOut: 0, originRecipient: solver.toBytes32() })
         );
         vm.stopPrank();
     }
@@ -874,7 +916,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: fillAmount, originRecipient: order.solver })
+            IOrderBook.FillParams({ amountOutToFill: fillAmount, minAmountOut: 0, originRecipient: order.solver })
         );
 
         // Check balances after the first fill
@@ -923,7 +965,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: remainingAmountOut, originRecipient: order.solver })
+            IOrderBook.FillParams({ amountOutToFill: remainingAmountOut, minAmountOut: 0, originRecipient: order.solver })
         );
 
         // Check final balances
@@ -995,7 +1037,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
+            IOrderBook.FillParams({ amountOutToFill: order.amountOut, minAmountOut: 0, originRecipient: params.solver })
         );
 
         // Check order status

@@ -54,7 +54,7 @@ contract RoundingEdgeCaseTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: dustFillAmount, originRecipient: users["solver"].toBytes32() })
+            IOrderBook.FillParams({ amountOutToFill: dustFillAmount, minAmountOut: 0, originRecipient: users["solver"].toBytes32() })
         );
         vm.stopPrank();
 

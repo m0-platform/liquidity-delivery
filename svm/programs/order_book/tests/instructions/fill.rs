@@ -66,6 +66,7 @@ mod local_orders {
     fn default_fill_params(test: &OrderBookTest) -> order_book::instructions::fill::FillParams {
         order_book::instructions::fill::FillParams {
             amount_out_to_fill: 500_000,
+            min_amount_out: 0,
             origin_recipient: test.get_user("solver").pubkey().clone().to_bytes(),
         }
     }
@@ -438,6 +439,7 @@ mod local_orders {
         // First, fill the order completely
         let full_fill_params = order_book::instructions::fill::FillParams {
             amount_out_to_fill: order_params.amount_out as u64, // Fill the entire amount
+            min_amount_out: 0,
             origin_recipient: solver.pubkey().to_bytes(),
         };
 
@@ -460,6 +462,43 @@ mod local_orders {
         test.ctx
             .execute_instruction(ix, &[&solver])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::OrderNotFillable));
+
+        Ok(())
+    }
+
+    #[test]
+    fn fill_native_order_below_minimum_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+        let order_params = default_order_params(&test, "alice");
+        let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+        let solver = test.get_user("solver");
+
+        // First, partially fill the order (90% of it)
+        let partial_fill_amount = (order_params.amount_out * 9 / 10) as u64;
+        let partial_fill_params = order_book::instructions::fill::FillParams {
+            amount_out_to_fill: partial_fill_amount,
+            min_amount_out: 0,
+            origin_recipient: solver.pubkey().to_bytes(),
+        };
+
+        let ix = test.create_fill_native_order_ix(&solver.pubkey(), order_id, &partial_fill_params)?;
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_success();
+
+        // Now try to fill again with min_amount_out = full amount (but only 10% remains)
+        let fill_params = order_book::instructions::fill::FillParams {
+            amount_out_to_fill: order_params.amount_out as u64, // Try to fill full amount
+            min_amount_out: order_params.amount_out as u64,     // Require at least full amount
+            origin_recipient: solver.pubkey().to_bytes(),
+        };
+
+        let ix = test.create_fill_native_order_ix(&solver.pubkey(), order_id, &fill_params)?;
+        test.ctx.svm.expire_blockhash();
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::FillBelowMinimum));
 
         Ok(())
     }
@@ -492,6 +531,7 @@ mod local_orders {
         // Fill the entire order (amount_out_to_fill >= amount_out)
         let full_fill_params = order_book::instructions::fill::FillParams {
             amount_out_to_fill: order_params.amount_out as u64, // Fill the entire amount
+            min_amount_out: 0,
             origin_recipient: solver.pubkey().to_bytes(),
         };
 
@@ -584,6 +624,7 @@ mod local_orders {
         let amount_out_to_fill = order_params.amount_out / 2;
         let partial_fill_params = order_book::instructions::fill::FillParams {
             amount_out_to_fill: amount_out_to_fill as u64,
+            min_amount_out: 0,
             origin_recipient: solver.pubkey().to_bytes(),
         };
 
@@ -653,6 +694,7 @@ mod local_orders {
         // Verify we can fill it again
         let second_fill_params = order_book::instructions::fill::FillParams {
             amount_out_to_fill: amount_out_to_fill as u64, // Fill another half
+            min_amount_out: 0,
             origin_recipient: solver.pubkey().to_bytes(),
         };
 
@@ -723,6 +765,7 @@ mod local_orders {
             // Execute fill
             let fill_params = order_book::instructions::fill::FillParams {
                 amount_out_to_fill: amount_out_to_fill as u64,
+                min_amount_out: 0,
                 origin_recipient: solver.pubkey().to_bytes(),
             };
 
@@ -954,6 +997,7 @@ mod xchain_orders {
     fn default_fill_params(test: &OrderBookTest) -> order_book::instructions::fill::FillParams {
         order_book::instructions::fill::FillParams {
             amount_out_to_fill: 500_000,
+            min_amount_out: 0,
             origin_recipient: test.get_user("solver").pubkey().to_bytes(),
         }
     }
@@ -1209,6 +1253,7 @@ mod xchain_orders {
         // First, fill the order completely
         let full_fill_params = order_book::instructions::fill::FillParams {
             amount_out_to_fill: order_data.amount_out as u64,
+            min_amount_out: 0,
             origin_recipient: solver.pubkey().to_bytes(),
         };
 
@@ -1226,6 +1271,34 @@ mod xchain_orders {
         test.ctx
             .execute_instruction(ix, &[&solver])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::OrderNotFillable));
+
+        Ok(())
+    }
+
+    #[test]
+    fn fill_foreign_order_below_minimum_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+        let order_data = default_foreign_order_data(&test, "alice");
+        let solver = test.get_user("solver");
+
+        // First, partially fill the order (90% of it)
+        let partial_fill_amount = (order_data.amount_out * 9 / 10) as u64;
+        test.fill_foreign_order("solver", &order_data, partial_fill_amount)?;
+
+        // Now try to fill again with min_amount_out = full amount (but only 10% remains)
+        let fill_params = order_book::instructions::fill::FillParams {
+            amount_out_to_fill: order_data.amount_out as u64, // Try to fill full amount
+            min_amount_out: order_data.amount_out as u64,     // Require at least full amount
+            origin_recipient: solver.pubkey().to_bytes(),
+        };
+
+        let ix =
+            test.create_fill_foreign_order_ix(&solver.pubkey(), &order_data, &fill_params)?;
+        test.ctx.svm.expire_blockhash();
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::FillBelowMinimum));
 
         Ok(())
     }

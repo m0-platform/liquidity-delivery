@@ -417,6 +417,9 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         bool fullFill_ = fillerParams_.amountOutToFill >= amountOutRemaining_;
         uint128 amountOutToFill_ = fullFill_ ? amountOutRemaining_ : fillerParams_.amountOutToFill;
 
+        // Ensure the fill amount meets the filler's minimum requirement
+        if (amountOutToFill_ < fillerParams_.minAmountOut) revert FillBelowMinimum();
+
         // Calculate the corresponding of token in to release to the filler
         uint128 amountInRemaining_ = orderData_.amountIn - filledAmounts.amountInReleased;
         uint128 amountInToRelease_ = fullFill_
