@@ -28,12 +28,14 @@ pub mod mock_portal {
     pub fn send_cancel_report(
         _ctx: Context<SendReport>,
         order_id: [u8; 32],
+        order_sender: [u8; 32],
+        token_in: [u8; 32],
         origin_chain_id: u32,
     ) -> Result<()> {
         msg!(
             "Sending order cancel message to chain {}: {:?}",
             origin_chain_id,
-            order_id
+            (order_id, order_sender, token_in)
         );
         Ok(())
     }
@@ -42,8 +44,10 @@ pub mod mock_portal {
 #[derive(Accounts)]
 pub struct SendReport<'info> {
     /// CHECK: any account can pay for the message
+    #[account(mut)]
     pub sender: Signer<'info>,
 
+    #[account(mut)]
     pub order_book_global: Signer<'info>,
 
     /// CHECK: we don't validate this in the mock

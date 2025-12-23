@@ -92,8 +92,8 @@ pub mod order_book {
         CancelNativeOrder::handler(ctx, order_id)
     }
 
-    pub fn cancel_foreign_order(
-        ctx: Context<CancelForeignOrder>,
+    pub fn cancel_foreign_order<'info>(
+        ctx: Context<'_, '_, 'info, 'info, CancelForeignOrder<'info>>,
         order_id: [u8; 32],
         order_data: OrderData,
     ) -> Result<()> {
