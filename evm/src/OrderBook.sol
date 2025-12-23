@@ -284,9 +284,13 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     function cancelOrder(bytes32 orderId_, OrderData calldata orderData_, bytes memory messageData_) external override {
         // Verify sender
         // If fill deadline hasn't passed yet, only the recipient can cancel
+        // Also, allow sender to cancel if same chain order
         // Otherwise, anyone can cancel to allow for refunds after expiry
-        if (block.timestamp <= orderData_.fillDeadline && orderData_.recipient.toAddress() != msg.sender)
-            revert NotAuthorized();
+        if (
+            block.timestamp <= orderData_.fillDeadline &&
+            !(orderData_.recipient.toAddress() == msg.sender ||
+                (orderData_.originChainId == chainId && orderData_.sender.toAddress() == msg.sender))
+        ) revert NotAuthorized();
 
         _cancelOrder(orderId_, orderData_, messageData_);
     }

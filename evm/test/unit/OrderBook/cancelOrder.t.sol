@@ -232,4 +232,68 @@ contract CancelOrderTest is OrderBookTestBase {
             "alice should be refunded the amountIn"
         );
     }
+
+    function test_givenXChainOrder_senderCalls_reverts() public {
+        // For this test, we simulate being on the DESTINATION chain canceling an order
+        // that originated from a different chain (DEST_CHAIN_ID).
+        // We construct orderData with originChainId = DEST_CHAIN_ID (not current chain)
+        // and the order doesn't exist on this chain yet (DoesNotExist status is allowed for xchain)
+        // Set the recipient to be different from the sender
+
+        IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
+            version: 1,
+            originChainId: DEST_CHAIN_ID, // Order originated from another chain
+            sender: users["alice"].toBytes32(),
+            nonce: 0,
+            destChainId: CHAIN_ID, // This chain is the destination
+            createdAt: uint64(block.timestamp),
+            fillDeadline: params.fillDeadline,
+            amountIn: params.amountIn,
+            amountOut: params.amountOut,
+            tokenIn: address(tokenIn).toBytes32(),
+            tokenOut: params.tokenOut,
+            recipient: users["bob"].toBytes32(),
+            solver: params.solver
+        });
+        bytes32 orderId = orderBook.getOrderId(orderData);
+
+        // Order doesn't exist on this chain (DoesNotExist status) - this is valid for cross-chain cancel
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.DoesNotExist));
+
+        vm.prank(users["alice"]);
+        vm.expectRevert(IOrderBook.NotAuthorized.selector);
+        orderBook.cancelOrder(orderId, orderData, new bytes(0));
+    }
+
+    function test_givenLocalOrder_senderCalls_success() public {
+        // Open a local order for alice with bob as the recipient
+        params.recipient = users["bob"].toBytes32();
+        params.destChainId = CHAIN_ID;
+
+        bytes32 orderId = _placeOrder(users["alice"], params);
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        IOrderBook.OrderData memory orderData = _getOrderDataFromOrder(orderId, order);
+
+        uint256 aliceStartingBalance = tokenIn.balanceOf(users["alice"]);
+
+        vm.prank(users["alice"]);
+        vm.expectEmit(true, false, false, true);
+        emit IOrderBook.RefundClaimed(orderId, users["alice"], params.amountIn);
+        vm.expectEmit(true, false, false, false);
+        emit IOrderBook.OrderCancelled(orderId);
+        orderBook.cancelOrder(orderId, orderData, new bytes(0));
+
+        IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
+        assertEq(
+            uint8(updatedOrder.status),
+            uint8(IOrderBook.OrderStatus.Cancelled),
+            "order status should be Cancelled"
+        );
+        assertEq(
+            tokenIn.balanceOf(users["alice"]),
+            aliceStartingBalance + params.amountIn,
+            "alice should be refunded the amountIn"
+        );
+    }
 }
