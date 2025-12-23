@@ -289,6 +289,45 @@ mod local_orders {
     }
 
     #[test]
+    fn test_claim_refund_canceled_order_combined_success() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Create an order
+        let order_params = default_order_params(&test);
+        let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+        // Get initial balance
+        let alice_token_in_ata = test.get_ata("token-in-spl-6", "alice");
+        let alice_balance_before = test.get_token_balance(&alice_token_in_ata)?;
+
+        // Request cancel and claim refund in the same transaction
+        let sender_keypair = test.get_user("alice");
+        let ix_cancel = test.create_request_cancel_ix(&sender_keypair.pubkey(), order_id)?;
+        let ix_refund = test.create_claim_refund_ix(&sender_keypair.pubkey(), order_id)?;
+
+        test.ctx.execute_instructions(vec![ix_cancel, ix_refund], &[&sender_keypair])?
+            .assert_success();
+
+        // Verify balance increased by full amount
+        let alice_balance_after = test.get_token_balance(&alice_token_in_ata)?;
+        assert_eq!(
+            alice_balance_after - alice_balance_before,
+            1_000_000,
+            "Alice should receive full refund"
+        );
+
+        // Verify order status is Completed
+        let (_, order_data) = test.get_native_order_account(&order_id)?;
+        assert_eq!(
+            order_data.data.status,
+            order_book::state::OrderStatus::Completed
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn test_claim_refund_partial_fill_refund_success() -> Result<(), Box<dyn Error>> {
         let mut test = OrderBookTest::new()?;
         test.initialize()?;
