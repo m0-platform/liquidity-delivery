@@ -39,13 +39,18 @@ pub mod order_book {
         Initialize::handler(ctx, chain_id, messenger_authority)
     }
 
-    pub fn configure_destination(
-        ctx: Context<ConfigureDestination>,
+    pub fn add_destination(
+        ctx: Context<AddDestination>,
         dest_chain_id: u32,
-        is_supported: bool,
-        finality_buffer: Option<u64>,
     ) -> Result<()> {
-        ConfigureDestination::handler(ctx, dest_chain_id, is_supported, finality_buffer)
+        AddDestination::handler(ctx, dest_chain_id)
+    }
+
+    pub fn remove_destination(
+        ctx: Context<RemoveDestination>,
+        dest_chain_id: u32,
+    ) -> Result<()> {
+        RemoveDestination::handler(ctx, dest_chain_id)
     }
 
     pub fn set_messenger_authority(

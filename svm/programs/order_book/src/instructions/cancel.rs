@@ -1,10 +1,21 @@
 use crate::{
+    constants::{ANCHOR_DISCRIMINATOR_SIZE}, 
     error::OrderBookError,
-    state::{NativeOrder, Order, OrderStatus, ORDER_SEED_PREFIX},
+    state::{
+        ForeignOrder, GLOBAL_SEED, NativeOrder, ORDER_SEED_PREFIX, Order, 
+        OrderBookGlobal, OrderData, OrderStatus, OrderType, compute_order_id
+    }, utils::{transfer_tokens_from_program}
 };
 use anchor_lang::prelude::*;
-use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
+use anchor_spl::{
+    associated_token::AssociatedToken,
+    token_interface::{Mint, TokenAccount, TokenInterface},
+};
 
+use crate::portal::{
+    cpi::{accounts::SendCancelReport, send_cancel_report},
+    program::Portal,
+};
 
 // Instructions related to cancelling orders
 // Orders must be cancelled on their destination chain.
@@ -24,6 +35,26 @@ use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 //      the relayer reports the cancel back to the origin chain by executing `ReportOrderCancel`
 //      via the Portal program
 
+// Handler Inputs
+#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize)]
+pub struct CancelReport {
+    pub order_id: [u8; 32],
+}
+
+// Events
+#[event]
+pub struct RefundClaimed {
+    pub order_id: [u8; 32],
+    pub sender: Pubkey,
+    pub amount: u64,
+}
+
+#[event]
+pub struct OrderCancelled {
+    pub order_id: [u8; 32],
+}
+
+// Instruction Contexts and Handlers
 #[event_cpi]
 #[derive(Accounts)]
 #[instruction(order_id: [u8; 32])]
@@ -181,7 +212,8 @@ impl CancelForeignOrder<'_> {
         let order = &self.order.data;
 
         // Validate the order ID matches the order data
-        let expected_order_id = crate::state::orders::derive_order_id(order_data);
+        let expected_order_id = compute_order_id(order_data);
+    
         require!(
             order_id == expected_order_id,
             OrderBookError::InvalidOrderId
@@ -220,7 +252,7 @@ impl CancelForeignOrder<'_> {
         send_cancel_report(
             CpiContext::new_with_signer(
                 ctx.accounts.portal_program.to_account_info(),
-                SendReport {
+                SendCancelReport {
                     sender: ctx.accounts.signer.to_account_info(),
                     order_book_global: ctx.accounts.global_account.to_account_info(),
                     portal_global: ctx.accounts.portal_global.to_account_info(),
@@ -243,10 +275,6 @@ impl CancelForeignOrder<'_> {
     }
 }
 
-#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize)]
-pub struct CancelReport {
-    pub order_id: [u8; 32],
-}
 
 #[event_cpi]
 #[derive(Accounts)]
@@ -266,7 +294,7 @@ pub struct ReportOrderCancel<'info> {
 
     #[account(
         mut,
-        seeds = [ORDER_SEED_PREFIX, fill_report.order_id.as_ref()],
+        seeds = [ORDER_SEED_PREFIX, cancel_report.order_id.as_ref()],
         bump = order.bump,
     )]
     pub order: Account<'info, Order::<NativeOrder>>,
@@ -308,7 +336,7 @@ pub struct ReportOrderCancel<'info> {
 }
 
 impl ReportOrderCancel<'_> {
-    fn validate(&self, cancel_report: &CancelReport) -> Result<()> {
+    fn validate(&self) -> Result<()> {
         // Validate the order type is native
         require!(
             self.order.order_type == OrderType::Native,
@@ -326,14 +354,14 @@ impl ReportOrderCancel<'_> {
         Ok(())
     }
 
-    #[access_control(ctx.accounts.validate(&cancel_report))]
+    #[access_control(ctx.accounts.validate())]
     pub fn handler(ctx: Context<Self>, cancel_report: CancelReport) -> Result<()> {
         let order = &mut ctx.accounts.order.data;
 
         // Set the order status to Cancelled
         order.status = OrderStatus::Cancelled;
         
-        // Transfer the input tokens from the order to the designated recipient
+        // Transfer the remaining inputs tokens back to the order sender
         let amount = ctx.accounts.order_token_in_ata.amount;
         if amount > 0 {
             transfer_tokens_from_program(
@@ -344,7 +372,7 @@ impl ReportOrderCancel<'_> {
                 &ctx.accounts.order.to_account_info(),
                 &[&[
                     ORDER_SEED_PREFIX,
-                    &fill_report.order_id,
+                    &cancel_report.order_id,
                     &[ctx.accounts.order.bump],
                 ]],
                 &ctx.accounts.token_in_program,
@@ -361,21 +389,10 @@ impl ReportOrderCancel<'_> {
 
         // Emit an event for the fill report
         emit_cpi!(OrderCancelled {
-            order_id: fill_report.order_id,
+            order_id: cancel_report.order_id,
         });
 
         Ok(())
     }
 }
 
-#[event]
-pub struct RefundClaimed {
-    pub order_id: [u8; 32],
-    pub sender: Pubkey,
-    pub amount: u64,
-}
-
-#[event]
-pub struct OrderCancelled {
-    pub order_id: [u8; 32],
-}
