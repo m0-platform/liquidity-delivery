@@ -7,7 +7,7 @@ use crate::VERSION;
 pub enum OrderStatus {
     DoesNotExist,
     Created,
-    CancelRequested,
+    Cancelled,
     Completed,
 }
 
@@ -36,8 +36,8 @@ pub struct NativeOrder {
     pub sender: Pubkey,
     pub nonce: u64,
     pub dest_chain_id: u32,
+    pub created_at: u64,
     pub fill_deadline: u64,
-    pub cancel_requested_at: u64,
     pub token_in: Pubkey,
     pub token_out: [u8; 32],
     pub amount_in: u128,
@@ -50,6 +50,7 @@ pub struct NativeOrder {
 
 #[derive(AnchorDeserialize, AnchorSerialize, Clone, InitSpace)]
 pub struct ForeignOrder {
+    pub status: OrderStatus,
     pub amount_in_released: u128,
     pub amount_out_filled: u128,
 }
@@ -63,6 +64,7 @@ pub struct OrderData {
     pub nonce: u64,
     pub origin_chain_id: u32,
     pub dest_chain_id: u32,
+    pub created_at: u64,
     pub fill_deadline: u64,
     pub token_in: [u8; 32],
     pub token_out: [u8; 32],
@@ -81,6 +83,7 @@ fn encode_order_data(order_data: &OrderData) -> Vec<u8> {
     encoded.extend_from_slice(&order_data.nonce.to_be_bytes());
     encoded.extend_from_slice(&order_data.origin_chain_id.to_be_bytes());
     encoded.extend_from_slice(&order_data.dest_chain_id.to_be_bytes());
+    encoded.extend_from_slice(&order_data.created_at.to_be_bytes());
     encoded.extend_from_slice(&order_data.fill_deadline.to_be_bytes());
     encoded.extend_from_slice(&order_data.token_in);
     encoded.extend_from_slice(&order_data.token_out);
@@ -112,6 +115,7 @@ impl OrderData {
             nonce: native_order.nonce,
             origin_chain_id,
             dest_chain_id: native_order.dest_chain_id,
+            created_at: native_order.created_at,
             fill_deadline: native_order.fill_deadline,
             token_in: native_order.token_in.to_bytes(),
             token_out: native_order.token_out,
@@ -145,6 +149,7 @@ mod tests {
             nonce: 42u64,
             originChainId: 1u32,
             destChainId: 2u32,
+            createdAt: 12345500000u64,
             fillDeadline: 1234567890u64,
             tokenIn: FixedBytes::<32>::new([5u8; 32]),
             tokenOut: FixedBytes::<32>::new([2u8; 32]),
@@ -167,6 +172,7 @@ mod tests {
             nonce: 42u64,
             origin_chain_id: 1u32,
             dest_chain_id: 2u32,
+            created_at: 12345500000u64,
             fill_deadline: 1234567890u64,
             token_in: [5u8; 32],
             token_out: [2u8; 32],

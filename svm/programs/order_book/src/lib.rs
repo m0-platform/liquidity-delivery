@@ -80,15 +80,19 @@ pub mod order_book {
         OpenOrder::handler(ctx, params)
     }
 
-    pub fn request_cancel_order(
-        ctx: Context<RequestCancelOrder>,
+    pub fn cancel_native_order(
+        ctx: Context<CancelNativeOrder>,
         order_id: [u8; 32],
     ) -> Result<()> {
-        RequestCancelOrder::handler(ctx, order_id)
+        CancelNativeOrder::handler(ctx, order_id)
     }
 
-    pub fn claim_refund(ctx: Context<ClaimRefund>, order_id: [u8; 32]) -> Result<()> {
-        ClaimRefund::handler(ctx, order_id)
+    pub fn cancel_foreign_order(
+        ctx: Context<CancelForeignOrder>,
+        order_id: [u8; 32],
+        order_data: OrderData,
+    ) -> Result<()> {
+        CancelForeignOrder::handler(ctx, order_id, order_data)
     }
 
     // Solver actions
@@ -115,7 +119,11 @@ pub mod order_book {
 
     pub fn report_order_fill(ctx: Context<ReportOrderFill>, fill_report: FillReport) -> Result<()> {
         ReportOrderFill::handler(ctx, fill_report)
-    }  
+    } 
+
+    pub fn report_order_cancel(ctx: Context<ReportOrderCancel>, cancel_report: CancelReport) -> Result<()> {
+        ReportOrderCancel::handler(ctx, cancel_report)
+    } 
 
     // Dummy IDL instruction
     // Included to ensure the order types are included in the IDL build
