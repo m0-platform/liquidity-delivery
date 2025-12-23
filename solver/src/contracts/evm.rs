@@ -1,4 +1,4 @@
-use alloy::{primitives::Bytes, sol, sol_types::SolError};
+use alloy::sol;
 
 sol! {
     #[sol(rpc)]
@@ -94,40 +94,4 @@ sol! {
         function balanceOf(address account) external view returns (uint256);
         function decimals() external view returns (uint8);
     }
-}
-
-pub fn decode_custom_err(revert_data: Option<Bytes>) -> Option<String> {
-    let data = revert_data.as_ref()?;
-
-    macro_rules! try_decode {
-        ($($error:ident),* $(,)?) => {
-            $(
-                if IOrderBook::$error::abi_decode(data).is_ok() {
-                    return Some(stringify!($error).to_string());
-                }
-            )*
-        };
-    }
-
-    try_decode!(
-        AmountInZero,
-        AmountOutZero,
-        FillAmountZero,
-        FinalityPending,
-        InvalidDeadline,
-        InvalidDestinationChain,
-        InvalidFinalityBuffer,
-        InvalidNonce,
-        InvalidOrderStatus,
-        InvalidOrderVersion,
-        InvalidOriginChain,
-        InvalidRecipient,
-        InvalidReport,
-        NotAuthorized,
-        OrderExpired,
-        OrderAlreadyFilled,
-        OrderIdMismatch,
-    );
-
-    None
 }

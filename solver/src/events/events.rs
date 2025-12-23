@@ -245,6 +245,8 @@ pub struct SwapSuccessfulEvent {
 pub struct APIRequestQuoteEvent {
     pub request: QuoteRequest,
     pub id: String,
+    pub parsed_input_token: [u8; 32],
+    pub parsed_output_token: [u8; 32],
 }
 
 #[derive(Debug, Clone)]

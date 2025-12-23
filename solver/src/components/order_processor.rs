@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use m0_liquidity_sdk::types::Asset;
+use m0_liquidity_sdk::types::{Asset, ChainRuntime};
 use slog::{info, Logger};
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -13,7 +13,7 @@ use crate::events::{
     RequestHoldEvent, SolverEvent,
 };
 use crate::stores::{AssetStore, OrderStore};
-use crate::utils::decode_address;
+use crate::utils::chain_runtime;
 
 pub struct OrderProcessor {
     order_store: Arc<OrderStore>,
@@ -24,6 +24,8 @@ pub struct OrderProcessor {
     clip_process_delay: u64,
     fee_bps: u128,
     proprocess_queue: Arc<RwLock<Vec<(String, u128)>>>,
+    solver_address_evm: String,
+    solver_address_svm: String,
 }
 
 impl OrderProcessor {
@@ -37,6 +39,8 @@ impl OrderProcessor {
             clip_process_delay: params.config.max_clip_reprocess_delay_sec,
             fee_bps: params.config.solver_fee_bps as u128,
             proprocess_queue: Arc::new(RwLock::new(Vec::new())),
+            solver_address_evm: params.provider_manager.evm_address.to_string(),
+            solver_address_svm: params.provider_manager.svm_address.to_string(),
         }
     }
 
@@ -58,12 +62,36 @@ impl OrderProcessor {
         Ok(asset)
     }
 
+    async fn get_supported_assets(
+        &self,
+        input_token: [u8; 32],
+        input_chain_id: u32,
+        output_token: [u8; 32],
+        output_id: u32,
+    ) -> std::result::Result<(Asset, Asset), String> {
+        let input_asset = self
+            .get_supported_asset(input_token, input_chain_id)
+            .await
+            .map_err(|e| format!("input_token: {}", e))?;
+
+        let output_asset = self
+            .get_supported_asset(output_token, output_id)
+            .await
+            .map_err(|e| format!("output_token: {}", e))?;
+
+        if !input_asset.m0_extension && !output_asset.m0_extension {
+            return Err("At least one asset must be an M0 extension".to_string());
+        }
+
+        Ok((input_asset, output_asset))
+    }
+
     fn get_reprocess_time(&self) -> u128 {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis()
-            + self.clip_process_delay as u128
+            + (self.clip_process_delay as u128 * 1000)
     }
 }
 
@@ -84,20 +112,16 @@ impl EventHandler for OrderProcessor {
 
         match event {
             SolverEvent::OrderCreated(e) => {
-                if let Err(reason) = self
-                    .get_supported_asset(e.order.token_in, e.order.origin_chain_id)
+                let (_, destination_asset) = match self
+                    .get_supported_assets(
+                        e.order.token_in,
+                        e.order.origin_chain_id,
+                        e.order.token_out,
+                        e.order.dest_chain_id,
+                    )
                     .await
                 {
-                    return Ok(vec![SolverEvent::OrderRejected(OrderRejectEvent::new(
-                        e.order_id, reason,
-                    ))]);
-                }
-
-                let destination_asset = match self
-                    .get_supported_asset(e.order.token_out, e.order.dest_chain_id)
-                    .await
-                {
-                    Ok(asset) => asset,
+                    Ok(assets) => assets,
                     Err(reason) => {
                         return Ok(vec![SolverEvent::OrderRejected(OrderRejectEvent::new(
                             e.order_id, reason,
@@ -204,51 +228,44 @@ impl EventHandler for OrderProcessor {
                 let req = request_event.request;
                 let mut resp = APIQuoteResponseEvent {
                     id: request_event.id,
-                    response: QuoteResponse::default(),
+                    response: QuoteResponse {
+                        fee_bps: self.fee_bps as u32,
+                        ..Default::default()
+                    },
                 };
 
-                let input_token = match decode_address(req.input_token, req.input_chain_id) {
-                    Some(asset) => asset,
-                    None => {
-                        resp.response.reason = Some("Invalid input token".to_string());
+                let (_, output_asset) = match self
+                    .get_supported_assets(
+                        request_event.parsed_input_token,
+                        req.input_chain_id,
+                        request_event.parsed_output_token,
+                        req.output_chain_id,
+                    )
+                    .await
+                {
+                    Ok(assets) => assets,
+                    Err(reason) => {
+                        resp.response.reject_reason = Some(reason);
                         return Ok(vec![SolverEvent::APIQuoteResponse(resp)]);
                     }
                 };
-
-                let output_token = match decode_address(req.output_token, req.output_chain_id) {
-                    Some(asset) => asset,
-                    None => {
-                        resp.response.reason = Some("Invalid output token".to_string());
-                        return Ok(vec![SolverEvent::APIQuoteResponse(resp)]);
-                    }
-                };
-
-                if let Err(_) = self
-                    .get_supported_asset(input_token, req.input_chain_id)
-                    .await
-                {
-                    resp.response.reason = Some("Input token not supported".to_string());
-                    return Ok(vec![SolverEvent::APIQuoteResponse(resp)]);
-                }
-
-                if let Err(_) = self
-                    .get_supported_asset(output_token, req.output_chain_id)
-                    .await
-                {
-                    resp.response.reason = Some("Output token not supported".to_string());
-                    return Ok(vec![SolverEvent::APIQuoteResponse(resp)]);
-                }
-
-                // Make sure amount_out covers our fee
-                let min_amount_out = req.amount_in as u128 * (10_000 - self.fee_bps) / 10_000;
-                if min_amount_out < req.amount_out as u128 {
-                    resp.response.reason = Some("Output amount too low".to_string());
-                    return Ok(vec![SolverEvent::APIQuoteResponse(resp)]);
-                }
 
                 // Solver is willing to fill the order
-                resp.response.can_process = true;
-                resp.response.estimated_time_seconds = 300; // 5 minutes
+                resp.response.rejected = false;
+                resp.response.output_amount =
+                    (req.amount_in as u128 * (10_000 - self.fee_bps) / 10_000) as u64;
+
+                // Fill time based on how many clips will be needed to fill the order
+                let max_size = self.max_clip_size * 10u128.pow(output_asset.decimals as u32);
+                resp.response.est_fill_time_seconds =
+                    resp.response.output_amount / max_size as u64 * self.clip_process_delay;
+
+                resp.response.solver_address =
+                    if chain_runtime(req.output_chain_id) == ChainRuntime::Svm {
+                        self.solver_address_svm.clone()
+                    } else {
+                        self.solver_address_evm.clone()
+                    };
 
                 return Ok(vec![SolverEvent::APIQuoteResponse(resp)]);
             }

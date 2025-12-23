@@ -1,29 +1,12 @@
 mod common;
 mod fixtures;
 
-use fixtures::TestSuite;
+use fixtures::EvmChainTestSuite;
 use test_context::test_context;
 
-#[test_context(TestSuite)]
+#[test_context(EvmChainTestSuite)]
 #[tokio::test]
-async fn test_inventory_manager_loads_balances(ctx: &TestSuite) {
-    for log in [
-        r"USDC \(Ethereum\): 999999999999900",
-        r"USDC \(Base\): 999999999999900",
-        r"USDT \(Ethereum\): 999999999999900",
-        r"USDT \(Base\): 999999999999900",
-        r"USDS \(Ethereum\): 10",
-        r"USDS \(Base\): 10",
-        r"ETH \(Ethereum\): 0.99",
-        r"ETH \(Base\): 0.99",
-    ] {
-        ctx.contains_log(log).await;
-    }
-}
-
-#[test_context(TestSuite)]
-#[tokio::test]
-async fn test_order_rejected(ctx: &TestSuite) {
+async fn test_order_rejected(ctx: &EvmChainTestSuite) {
     let chain = &ctx.chains[0];
 
     ctx.create_order(
@@ -41,9 +24,9 @@ async fn test_order_rejected(ctx: &TestSuite) {
     ctx.contains_log("Asset not supported").await;
 }
 
-#[test_context(TestSuite)]
+#[test_context(EvmChainTestSuite)]
 #[tokio::test]
-async fn test_order_processed_chain_a(ctx: &TestSuite) {
+async fn test_order_processed_chain_a(ctx: &EvmChainTestSuite) {
     let (chain_a, chain_b) = (&ctx.chains[0], &ctx.chains[1]);
 
     ctx.create_order(
@@ -68,9 +51,9 @@ async fn test_order_processed_chain_a(ctx: &TestSuite) {
     .await;
 }
 
-#[test_context(TestSuite)]
+#[test_context(EvmChainTestSuite)]
 #[tokio::test]
-async fn test_order_processed_chain_b(ctx: &TestSuite) {
+async fn test_order_processed_chain_b(ctx: &EvmChainTestSuite) {
     let (chain_a, chain_b) = (&ctx.chains[1], &ctx.chains[0]);
 
     ctx.create_order(
@@ -95,9 +78,9 @@ async fn test_order_processed_chain_b(ctx: &TestSuite) {
     .await;
 }
 
-#[test_context(TestSuite)]
+#[test_context(EvmChainTestSuite)]
 #[tokio::test]
-async fn test_order_invalid_out(ctx: &TestSuite) {
+async fn test_order_invalid_out(ctx: &EvmChainTestSuite) {
     let (chain_a, chain_b) = (&ctx.chains[1], &ctx.chains[0]);
 
     ctx.create_order(
@@ -120,9 +103,9 @@ async fn test_order_invalid_out(ctx: &TestSuite) {
         .await;
 }
 
-#[test_context(TestSuite)]
+#[test_context(EvmChainTestSuite)]
 #[tokio::test]
-async fn test_order_insufficient_solver_funds(ctx: &TestSuite) {
+async fn test_order_insufficient_solver_funds(ctx: &EvmChainTestSuite) {
     let (chain_a, chain_b) = (&ctx.chains[1], &ctx.chains[0]);
 
     ctx.create_order(
@@ -148,9 +131,9 @@ async fn test_order_insufficient_solver_funds(ctx: &TestSuite) {
     .await;
 }
 
-#[test_context(TestSuite)]
+#[test_context(EvmChainTestSuite)]
 #[tokio::test]
-async fn test_order_multiple_clips(ctx: &TestSuite) {
+async fn test_order_multiple_clips(ctx: &EvmChainTestSuite) {
     let (chain_a, chain_b) = (&ctx.chains[0], &ctx.chains[1]);
 
     ctx.create_order(

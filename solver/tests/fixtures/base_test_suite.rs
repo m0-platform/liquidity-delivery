@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use alloy::{
     network::TransactionBuilder,
     node_bindings::AnvilInstance,
@@ -19,7 +21,6 @@ use solver::{
     Config,
 };
 use std::{process::Command, sync::Arc, time::Duration};
-use test_context::AsyncTestContext;
 use tokio::{sync::broadcast, time::sleep};
 
 use crate::common::{mock_api, Asset, LogBuffer};
@@ -38,15 +39,15 @@ sol!(
 
 pub use IOrderBook::OrderParams;
 
-pub struct TestSuite {
+pub struct BaseTestSuite {
     pub chains: Vec<ChainInstance>,
     _evm_signer: PrivateKeySigner,
-    pub evm_user: PrivateKeySigner,
+    evm_user: PrivateKeySigner,
     _svm_signer: Arc<Keypair>,
     pub shutdown_tx: broadcast::Sender<()>,
     _mock_server: ServerGuard,
-    log_buffer: LogBuffer,
-    pub logger: Logger,
+    pub log_buffer: LogBuffer,
+    logger: Logger,
 }
 
 pub struct ChainInstance {
@@ -56,9 +57,9 @@ pub struct ChainInstance {
     pub tokens: Vec<Asset>,
 }
 
-impl AsyncTestContext for TestSuite {
+impl BaseTestSuite {
     /// Create a new test suite with Anvil and deployed contracts
-    async fn setup() -> TestSuite {
+    pub async fn setup_with_chains(evm_chains: Vec<u32>) -> BaseTestSuite {
         // Create a log buffer for capturing logs
         let log_buffer = LogBuffer::new();
         let logger = Logger::root(
@@ -67,8 +68,6 @@ impl AsyncTestContext for TestSuite {
                 .fuse(),
             common_logger_values!(),
         );
-
-        let evm_chains = vec![1, 8453];
 
         let mut chains = Vec::new();
         let evm_signer = PrivateKeySigner::from_bytes(&FixedBytes::from([1u8; 32])).unwrap();
@@ -242,7 +241,7 @@ impl AsyncTestContext for TestSuite {
             .await
             .expect("Failed to start solver");
 
-        let suite = TestSuite {
+        let suite = BaseTestSuite {
             chains,
             _evm_signer: evm_signer,
             evm_user,
@@ -254,22 +253,20 @@ impl AsyncTestContext for TestSuite {
         };
 
         // Wait for solver to start
-        suite.contains_log("Started event listener for chain").await;
+        suite.contains_log("All components registered").await;
 
         suite
     }
 
-    async fn teardown(self) {
+    pub async fn base_teardown(self) {
         let _ = self.shutdown_tx.send(());
 
-        for chain in self.chains {
+        for chain in self.chains.iter() {
             let id = chain.anvil.child().id();
             let _ = Command::new("kill").arg("-9").arg(id.to_string()).output();
         }
     }
-}
 
-impl TestSuite {
     pub async fn contains_log(&self, pattern: &str) -> usize {
         self.contains_log_from_index(pattern, 0).await
     }

@@ -19,7 +19,7 @@ impl Asset {
                 "icon": "",
                 "name": "{}",
                 "decimals": 6,
-                "m0Extension": false,
+                "m0Extension": true,
                 "runtime": "evm"
             }}"#,
             chain_from_id(self.chain_id),
@@ -32,7 +32,23 @@ impl Asset {
 
 pub async fn mock_api_with_assets(assets: Vec<Asset>) -> ServerGuard {
     let mut server = mockito::Server::new_async().await;
-    let assets_response: Vec<String> = assets.into_iter().map(|a| a.to_json()).collect();
+
+    let assets_response: Vec<String> = if assets.len() > 0 {
+        assets.into_iter().map(|a| a.to_json()).collect()
+    } else {
+        [1, 8453]
+            .iter()
+            .map(|&chain_id| Asset {
+                address: "0x437cc33344a0B27A429f795ff6B469C72698B291"
+                    .parse()
+                    .unwrap(),
+                chain_id,
+                symbol: "wM".to_string(),
+            })
+            .map(|a| a.to_json())
+            .collect()
+    };
+
     let body = format!("[{}]", assets_response.join(","));
 
     // Assets endpoint

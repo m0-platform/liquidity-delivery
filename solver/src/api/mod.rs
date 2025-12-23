@@ -1,11 +1,14 @@
 pub mod api;
 
+use chrono::{SecondsFormat, TimeDelta, Utc};
+use nanoid::nanoid;
 use poem_openapi::{payload::Json, ApiResponse, Object};
+use serde::{Deserialize, Serialize};
 
 use crate::stores::Order;
 
 /// Quote request structure
-#[derive(Debug, Object, Clone)]
+#[derive(Debug, Object, Clone, Serialize, Deserialize)]
 pub struct QuoteRequest {
     /// EVM or SVM token address
     #[oai(validator(pattern = "[0-9A-HJ-NP-Za-km-z]{32,44}"))]
@@ -16,29 +19,43 @@ pub struct QuoteRequest {
     pub output_token: String,
     pub output_chain_id: u32,
     pub amount_in: u64,
-    pub amount_out: u64,
 }
 
 /// Quote response structure
-#[derive(Debug, Object, Clone)]
+#[derive(Debug, Object, Clone, Serialize, Deserialize)]
 pub struct QuoteResponse {
-    pub can_process: bool,
-    pub estimated_time_seconds: u64,
-    pub reason: Option<String>,
+    pub quote_id: String,
+    pub fee_bps: u32,
+    pub output_amount: u64,
+    pub est_fill_time_seconds: u64,
+    pub expires_at: String,
+    pub rejected: bool,
+    pub reject_reason: Option<String>,
+    pub solver_address: String,
+    pub requires_exclusivity: bool,
 }
 
 impl Default for QuoteResponse {
     fn default() -> Self {
         Self {
-            can_process: false,
-            estimated_time_seconds: 0,
-            reason: None,
+            rejected: true,
+            fee_bps: 0,
+            quote_id: nanoid!(),
+            output_amount: 0,
+            expires_at: Utc::now()
+                .checked_add_signed(TimeDelta::minutes(10))
+                .unwrap()
+                .to_rfc3339_opts(SecondsFormat::Secs, true),
+            est_fill_time_seconds: 10,
+            reject_reason: None,
+            solver_address: String::new(),
+            requires_exclusivity: false,
         }
     }
 }
 
 /// Order information for API responses
-#[derive(Debug, Object, Clone)]
+#[derive(Debug, Object, Clone, Serialize, Deserialize)]
 pub struct OrderInfo {
     pub id: String,
     pub state: String,

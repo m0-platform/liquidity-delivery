@@ -1,4 +1,4 @@
-mod api;
+pub mod api;
 mod components;
 pub mod config;
 mod contracts;

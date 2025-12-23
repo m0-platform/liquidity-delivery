@@ -13,6 +13,7 @@ use crate::{
     components::ComponentParams,
     events::{APIRequestQuoteEvent, EventBus},
     stores::OrderStore,
+    utils::decode_address,
     SolverEvent::APIRequestQuote,
 };
 
@@ -39,10 +40,30 @@ impl SolverApi {
         channels.insert(request_id.clone(), tx);
         drop(channels);
 
+        let input_asset = match decode_address(req.input_token.clone(), req.input_chain_id) {
+            Some(asset) => asset,
+            None => {
+                return QuoteApiResponse::BadRequest(Json(ErrorResponse {
+                    error: "Invalid input token".to_string(),
+                }));
+            }
+        };
+
+        let output_asset = match decode_address(req.output_token.clone(), req.output_chain_id) {
+            Some(asset) => asset,
+            None => {
+                return QuoteApiResponse::BadRequest(Json(ErrorResponse {
+                    error: "Invalid output token".to_string(),
+                }));
+            }
+        };
+
         // Put quote request event on the event bus
         let request = APIRequestQuote(APIRequestQuoteEvent {
             request: req.0,
             id: request_id,
+            parsed_input_token: input_asset,
+            parsed_output_token: output_asset,
         });
 
         if let Err(e) = self.event_bus.publish(request).await {
