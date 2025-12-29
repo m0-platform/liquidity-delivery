@@ -178,13 +178,12 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         if (orderParams_.amountOut == 0) revert AmountOutZero();
         if (orderParams_.recipient == bytes32(0)) revert InvalidRecipient();
 
-        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-
         // Destination chain must either be the current chain or a supported destination
         if (orderParams_.destChainId != chainId && !isDestinationSupported(orderParams_.destChainId))
             revert InvalidDestinationChain();
 
         // Create order
+        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         uint64 nonce_ = $.senderNonces[sender_]++;
 
         bytes32 orderId_ = getOrderId(
