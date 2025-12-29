@@ -179,8 +179,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         if (orderParams_.recipient == bytes32(0)) revert InvalidRecipient();
 
         // Destination chain must either be the current chain or a supported destination
-        if (orderParams_.destChainId != chainId && !isDestinationSupported(orderParams_.destChainId))
-            revert InvalidDestinationChain();
+        if (!isDestinationSupported(orderParams_.destChainId)) revert InvalidDestinationChain();
 
         // Create order
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
@@ -577,7 +576,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
     /// @inheritdoc IOrderBook
     function isDestinationSupported(uint32 destChainId_) public view override returns (bool) {
-        return _getOrderBookStorageLocation().supportedDestinations[destChainId_];
+        return destChainId_ == chainId || _getOrderBookStorageLocation().supportedDestinations[destChainId_];
     }
 
     /* ========== EIP-712 Digest Functions ========== */
