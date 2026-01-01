@@ -207,7 +207,7 @@ pub struct CancelForeignOrder {
     pub system_program: Program<'info, System>,
 }
 
-impl CancelForeignOrder<'_> {
+impl<'info> CancelForeignOrder<'info> {
     fn validate(&self, order_id: [u8; 32], order_data: &OrderData) -> Result<()> {
         let order = &self.order.data;
 
@@ -242,7 +242,7 @@ impl CancelForeignOrder<'_> {
     }   
 
     #[access_control(ctx.accounts.validate(order_id, &order_data))]
-    pub fn handler(ctx: Context<Self>, order_id: [u8; 32], order_data: OrderData) -> Result<()> {
+    pub fn handler(ctx: Context<'_, '_, 'info, 'info, Self>, order_id: [u8; 32], order_data: OrderData) -> Result<()> {
         let order = &mut ctx.accounts.order.data;
 
         // Set the order status to Cancelled
@@ -264,6 +264,8 @@ impl CancelForeignOrder<'_> {
             )
             .with_remaining_accounts(ctx.remaining_accounts.to_vec()),
             order_id, // order_id: [u8; 32],
+            order_data.sender, // order_sender: [u8; 32],
+            order_data.token_in, // token_in: [u8; 32],
             order_data.origin_chain_id, // origin_chain_id: u32,
         )?;
 
