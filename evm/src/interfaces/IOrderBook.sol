@@ -67,19 +67,19 @@ interface IOrderBook {
     event OrderCompleted(bytes32 orderId);
 
     /**
-     * @notice Emitted when the configuration for a destination chain is updated
+     * @notice Emitted when an order is cancelled
+     * @dev This event is emitted on the origin chain
+     * @param orderId The ID of the cancelled order
+     */
+    event OrderCancelled(bytes32 indexed orderId);
+
+    /**
+     * @notice Emitted when the support for a destination chain is updated
      * @dev This event is emitted on the origin chain
      * @param destChainId The internal chain ID of the destination chain
-     * @param newIsSupported Whether orders can be created with this chain as the destination
-     * @param newFinalityBuffer The new finality buffer duration (in seconds)
-     * @param newFinalityBufferEffectiveTimestamp The timestamp when the new finality buffer becomes effective
+     * @param isSupported Whether orders can be created with this chain as the destination
      */
-    event DestinationConfigUpdated(
-        uint32 indexed destChainId,
-        bool newIsSupported,
-        uint32 newFinalityBuffer,
-        uint64 newFinalityBufferEffectiveTimestamp
-    );
+    event DestinationSupportUpdated(uint32 indexed destChainId, bool isSupported);
 
     /* ========== Errors ========== */
     error AmountInZero();
@@ -95,8 +95,10 @@ interface IOrderBook {
     error InvalidOriginChain();
     error InvalidRecipient();
     error InvalidReport();
+    error InvalidTimestamp();
     error NotAuthorized();
     error OrderExpired();
+    error OrderAlreadyExists();
     error OrderAlreadyFilled();
     error OrderIdMismatch();
 
@@ -164,7 +166,7 @@ interface IOrderBook {
     enum OrderStatus {
         DoesNotExist,
         Created,
-        CancelRequested,
+        Cancelled,
         Completed
     }
 
@@ -176,8 +178,8 @@ interface IOrderBook {
      * @param sender Address that provided the funds on the origin chain
      * @param nonce A counter tied to the sender to allow unique orders
      * @param destChainId Destination chain ID where the order is to be filled
+     * @param createdAt Timestamp when the order was created
      * @param fillDeadline Timestamp by which the order must be filled on the destination chain
-     * @param cancelRequestedAt Timestamp when the cancel was requested, 0 if no cancel requested
      * @param tokenIn Address of the input token on this chain
      * @param tokenOut Address of the output token on the destination chain
      * @param amountIn Amount of input token provided
@@ -191,8 +193,8 @@ interface IOrderBook {
         address sender; //             20 +
         uint64 nonce; //               8 = 31 bytes
         uint32 destChainId; // slot 2: 4 +
+        uint32 createdAt; //           4 +
         uint32 fillDeadline; //        4 +
-        uint32 cancelRequestedAt; //   4 +
         address tokenIn; //            20 = 32 bytes
         bytes32 tokenOut; //   slot 3
         uint128 amountIn; //   slot 4: 16 +
@@ -211,6 +213,7 @@ interface IOrderBook {
      * @param nonce A counter tied to the sender to allow unique orders
      * @param originChainId internal chain ID where the order was created
      * @param destChainId Destination chain ID where the order is to be filled
+     * @param createdAt Timestamp when the order was created
      * @param fillDeadline Timestamp by which the order must be filled on the destination chain
      * @param tokenIn Address of the input token on the origin chain
      * @param tokenOut Address of the output token on the destination chain
@@ -225,6 +228,7 @@ interface IOrderBook {
         uint64 nonce;
         uint32 originChainId;
         uint32 destChainId;
+        uint64 createdAt;
         uint64 fillDeadline;
         bytes32 tokenIn;
         bytes32 tokenOut;
@@ -237,8 +241,8 @@ interface IOrderBook {
     /**
      * @notice Data reported from a destination chain back to the origin chain about a fill
      * @dev This struct is sent by the messenger contract to report fills that occurred
-     *      on the destination chain back to the origin chain for refund processing
-     * @param orderId The ID of the order being reported
+     *      on the destination chain back to the origin chain for processing
+     * @param orderId The ID of the order that a fill is being reported for
      * @param amountInToRelease The amount of input token to release to the filler on the origin chain
      * @param amountOutFilled The amount of output token that was filled on the destination chain
      * @param originRecipient The address on the origin chain that should receive released funds
@@ -253,8 +257,19 @@ interface IOrderBook {
         bytes32 tokenIn;
     }
 
+    /**
+     * @notice Data reported from a destination chain back to the origin chain about a cancelled order
+     * @dev This struct is sent by the messenger contract to report order cancellations and refunds
+     *      that occurred on the destination chain back to the origin chain for processing
+     * @param orderId The ID of the order that a cancellation is being reported for
+     * @param orderSender The address on the origin chain that created the order
+     * @param tokenIn The address of the input token on the origin chain
+     * The last two are included for non-EVM chains to provide a way to resolve the sender and token
+     */
     struct CancelReport {
         bytes32 orderId;
+        bytes32 orderSender;
+        bytes32 tokenIn;
     }
 
     /**
@@ -438,6 +453,16 @@ interface IOrderBook {
      */
     function reportCancel(CancelReport calldata report_) external;
 
+    /* ========== Admin Functions ========== */
+
+    /**
+     * @notice Set external chain support for orders
+     * @dev Must be DEFAULT_ADMIN_ROLE to call
+     * @param destChainId_ The chain ID for the destination chain used by the messenger
+     * @param isSupported_ whether support for the chain should be enabled (true activates, false deactivates)
+     */
+    function setDestinationSupported(uint32 destChainId_, bool isSupported_) external;
+
     /* ========== View Functions ========== */
 
     /**
@@ -460,6 +485,9 @@ interface IOrderBook {
 
     /// @notice Returns the next nonce for the provided sender address
     function getSenderNonce(address sender_) external view returns (uint64);
+
+    /// @notice Returns whether orders can be created with the provided chain ID as the destination
+    function isDestinationSupported(uint32 destChainId_) external view returns (bool);
 
     /* ========== EIP-712 Digest Functions ========== */
 

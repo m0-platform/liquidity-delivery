@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 /// @notice Mock ERC20 token that can rebase DOWN (decrease all balances)
 /// @dev Simulates deflationary rebasing tokens like AMPL during contraction

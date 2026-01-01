@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 /// @notice Mock ERC20 token that can be paused (like USDC, USDT)
 /// @dev Simulates pausable tokens where transfers revert when paused

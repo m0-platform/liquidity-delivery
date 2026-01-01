@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { VmSafe } from "../../../lib/forge-std/src/Vm.sol";
 import { console } from "../../../lib/forge-std/src/console.sol";
@@ -190,7 +190,7 @@ contract OpenOrderForTest is OrderBookTestBase {
         assertEq(order.version, VERSION, "version");
         assertEq(order.destChainId, gaslessParams.destChainId, "destChainId");
         assertEq(order.fillDeadline, gaslessParams.fillDeadline, "fillDeadline");
-        assertEq(order.cancelRequestedAt, uint32(0), "cancelRequestedAt");
+        assertEq(order.createdAt, uint32(block.timestamp), "createdAt");
         assertEq(order.nonce, gaslessParams.nonce, "nonce");
         assertEq(order.tokenIn, gaslessParams.tokenIn, "tokenIn");
         assertEq(order.tokenOut, gaslessParams.tokenOut, "tokenOut");
@@ -234,7 +234,7 @@ contract OpenOrderForTest is OrderBookTestBase {
         assertEq(order.version, VERSION, "version");
         assertEq(order.destChainId, gaslessParams.destChainId, "destChainId");
         assertEq(order.fillDeadline, gaslessParams.fillDeadline, "fillDeadline");
-        assertEq(order.cancelRequestedAt, uint32(0), "cancelRequestedAt");
+        assertEq(order.createdAt, uint32(block.timestamp), "createdAt");
         assertEq(order.nonce, gaslessParams.nonce, "nonce");
         assertEq(order.tokenIn, gaslessParams.tokenIn, "tokenIn");
         assertEq(order.tokenOut, gaslessParams.tokenOut, "tokenOut");

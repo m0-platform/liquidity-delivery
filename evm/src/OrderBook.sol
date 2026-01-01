@@ -1,13 +1,9 @@
-// SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.26;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity 0.8.33;
 
-import {
-    IERC20
-} from "../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
+import { IERC20 } from "../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
 import { IERC20Extended } from "../lib/common/src/interfaces/IERC20Extended.sol";
-import {
-    AccessControlUpgradeable
-} from "../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol";
+import { AccessControlUpgradeable } from "../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import { ERC712ExtendedUpgradeable } from "../lib/common/src/ERC712ExtendedUpgradeable.sol";
 import { TypeConverter } from "../lib/common/src/libs/TypeConverter.sol";
 import { SafeERC20 } from "./libs/SafeERC20.sol";
@@ -18,8 +14,10 @@ import { IMessenger } from "./interfaces/IMessenger.sol";
 abstract contract OrderBookStorageLayout {
     /// @custom:storage-location erc7201:M0.storage.OrderBook
     struct OrderBookStorageStruct {
-        // only store full data about origin orders
-        mapping(bytes32 orderId => IOrderBook.Order) localOrders;
+        // supported destination chains
+        mapping(uint32 destChainId => bool isSupported) supportedDestinations;
+        // only store full data about origin orders, status is tracked for all orders
+        mapping(bytes32 orderId => IOrderBook.Order) orders;
         // store fill amounts for both origin and destination orders
         mapping(bytes32 orderId => IOrderBook.FilledAmounts) filledAmounts;
         // track nonces for each sender to ensure unique order IDs
@@ -180,14 +178,11 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         if (orderParams_.amountOut == 0) revert AmountOutZero();
         if (orderParams_.recipient == bytes32(0)) revert InvalidRecipient();
 
-        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-
-        // Any chain can be accepted now, no need for configs
-        // // Destination chain must either be the current chain or a supported destination
-        // if (orderParams_.destChainId != chainId && !isDestinationSupported(orderParams_.destChainId))
-        //     revert InvalidDestinationChain();
+        // Destination chain must either be the current chain or a supported destination
+        if (!isDestinationSupported(orderParams_.destChainId)) revert InvalidDestinationChain();
 
         // Create order
+        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         uint64 nonce_ = $.senderNonces[sender_]++;
 
         bytes32 orderId_ = getOrderId(
@@ -197,6 +192,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
                 sender: sender_.toBytes32(),
                 nonce: nonce_,
                 destChainId: orderParams_.destChainId,
+                createdAt: uint64(block.timestamp),
                 fillDeadline: uint64(orderParams_.fillDeadline),
                 tokenIn: orderParams_.tokenIn.toBytes32(),
                 tokenOut: orderParams_.tokenOut,
@@ -207,11 +203,16 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
             })
         );
 
-        $.localOrders[orderId_] = Order({
+        // Shouldn't be needed due to uniqueness of order ID, but
+        // it is good to be explicit about the expected state
+        // and this protects against a (very unlikely) hash collision
+        if ($.orders[orderId_].status != OrderStatus.DoesNotExist) revert OrderAlreadyExists();
+
+        $.orders[orderId_] = Order({
             version: VERSION, // origin contract version
             status: OrderStatus.Created,
             destChainId: orderParams_.destChainId,
-            cancelRequestedAt: uint32(0),
+            createdAt: uint32(block.timestamp),
             fillDeadline: orderParams_.fillDeadline,
             nonce: nonce_,
             tokenIn: orderParams_.tokenIn,
@@ -279,14 +280,15 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
     /// @inheritdoc IOrderBook
     function cancelOrder(bytes32 orderId_, OrderData calldata orderData_, bytes memory messageData_) external override {
-        if (orderId_ != getOrderId(orderData_)) revert OrderIdMismatch();
-        // if (orderData_.version != VERSION) revert InvalidOrderVersion();
-        if (orderData_.sender.toAddress() != msg.sender) revert NotAuthorized();
-
-        // TODO: replace with status check
-        uint128 amountOutRemaining_ = orderData_.amountOut -
-            _getOrderBookStorageLocation().filledAmounts[orderId_].amountOutFilled;
-        if (amountOutRemaining_ == 0) revert OrderAlreadyFilled();
+        // Verify sender
+        // If fill deadline hasn't passed yet, only the recipient can cancel
+        // Also, allow sender to cancel if same chain order
+        // Otherwise, anyone can cancel to allow for refunds after expiry
+        if (
+            block.timestamp <= orderData_.fillDeadline &&
+            !(orderData_.recipient.toAddress() == msg.sender ||
+                (orderData_.originChainId == chainId && orderData_.sender.toAddress() == msg.sender))
+        ) revert NotAuthorized();
 
         _cancelOrder(orderId_, orderData_, messageData_);
     }
@@ -298,35 +300,42 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         bytes memory messageData_,
         bytes calldata signature_
     ) external override {
-        if (orderId_ != getOrderId(orderData_)) revert OrderIdMismatch();
-        // if (orderData_.version != VERSION) revert InvalidOrderVersion();
-
         // Verify signature
         if (signature_.length == 64) {
             (bytes32 r, bytes32 vs) = abi.decode(signature_, (bytes32, bytes32));
-            _revertIfInvalidSignature(orderData_.sender.toAddress(), getCancelRequestDigest(orderId_), r, vs);
+            _revertIfInvalidSignature(orderData_.recipient.toAddress(), getCancelRequestDigest(orderId_), r, vs);
         } else {
-            _revertIfInvalidSignature(orderData_.sender.toAddress(), getCancelRequestDigest(orderId_), signature_);
+            _revertIfInvalidSignature(orderData_.recipient.toAddress(), getCancelRequestDigest(orderId_), signature_);
         }
 
         _cancelOrder(orderId_, orderData_, messageData_);
     }
 
     function _cancelOrder(bytes32 orderId_, OrderData calldata orderData_, bytes memory messageData_) internal {
-        if (orderData_.destChainId == chainId) {
+        _revertIfOrderIdMismatch(orderId_, orderData_);
+
+        // Can't cancel an order before it's created
+        if (orderData_.createdAt > block.timestamp) revert InvalidTimestamp();
+
+        Order storage order = _getOrderBookStorageLocation().orders[orderId_];
+        _revertIfInvalidStatusToFillOrCancel(order, orderData_);
+
+        if (orderData_.originChainId == chainId) {
             // Local orders can be immediately refunded
-            Order storage order = _getOrderBookStorageLocation().localOrders[orderId_];
-
-            if (order.status != OrderStatus.Created) revert InvalidOrderStatus();
-
             _claimRefund(orderId_, order);
         } else {
+            // Update order status
+            order.status = OrderStatus.Cancelled;
+
+            // Cross-chain orders require sending a cancel report to the origin chain
             IMessenger(messenger).sendCancelReport(
                 orderData_.originChainId,
-                CancelReport({ orderId: orderId_ }),
+                CancelReport({ orderId: orderId_, orderSender: orderData_.sender, tokenIn: orderData_.tokenIn }),
                 messageData_
             );
         }
+
+        emit OrderCancelled(orderId_);
     }
 
     function _claimRefund(bytes32 orderId_, Order storage order) internal {
@@ -334,8 +343,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         uint128 amountInRemaining_ = order.amountIn -
             _getOrderBookStorageLocation().filledAmounts[orderId_].amountInReleased;
 
-        // Set the order status to completed
-        order.status = OrderStatus.Completed;
+        // Update order status
+        order.status = OrderStatus.Cancelled;
 
         // Transfer the remaining amount back to the sender
         IERC20(order.tokenIn).safeTransfer(order.sender, uint256(amountInRemaining_));
@@ -370,15 +379,13 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         FillParams calldata fillerParams_,
         bytes memory messageData_
     ) internal {
-        // Ensure the provided order ID matches the computed order ID from the order data
-        // This check is not strictly required, but it is a useful sanity check for solvers
-        // to ensure they have the order data correct
-        if (orderId_ != getOrderId(orderData_)) revert OrderIdMismatch();
+        _revertIfOrderIdMismatch(orderId_, orderData_);
 
         // Validate fill data
         if (chainId != orderData_.destChainId) revert InvalidDestinationChain();
         if (orderData_.fillDeadline < block.timestamp) revert OrderExpired();
         if (orderData_.version != VERSION) revert InvalidOrderVersion();
+        if (orderData_.createdAt > block.timestamp) revert InvalidTimestamp();
         if (fillerParams_.amountOutToFill == 0) revert FillAmountZero();
 
         // If the solver is specified, ensure that the caller is the designated solver
@@ -386,21 +393,40 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         if (solver_ != address(0) && solver_ != msg.sender) revert NotAuthorized();
 
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
+        Order storage order = $.orders[orderId_];
+        _revertIfInvalidStatusToFillOrCancel(order, orderData_);
 
-        // Calculate fill amount as the minimum of the filler provided amount and the remaining unfilled amount
-        IOrderBook.FilledAmounts storage filledAmounts = $.filledAmounts[orderId_];
+        uint128 amountInToRelease_;
+        uint128 amountOutToFill_;
+        // Local scope to avoid stack too deep errors
+        {
+            // Calculate fill amount as the minimum of the filler provided amount and the remaining unfilled amount
+            IOrderBook.FilledAmounts storage filledAmounts = $.filledAmounts[orderId_];
 
-        // TODO: replace with status check
-        uint128 amountOutRemaining_ = orderData_.amountOut - filledAmounts.amountOutFilled;
-        if (amountOutRemaining_ == 0) revert OrderAlreadyFilled();
+            uint128 amountOutRemaining_ = orderData_.amountOut - filledAmounts.amountOutFilled;
+            bool fullFill_ = fillerParams_.amountOutToFill >= amountOutRemaining_;
+            amountOutToFill_ = fullFill_ ? amountOutRemaining_ : fillerParams_.amountOutToFill;
 
-        bool fullFill_ = fillerParams_.amountOutToFill >= amountOutRemaining_;
-        uint128 amountOutToFill_ = fullFill_ ? amountOutRemaining_ : fillerParams_.amountOutToFill;
+            // Calculate the corresponding of token in to release to the filler
+            amountInToRelease_ = fullFill_
+                ? orderData_.amountIn - filledAmounts.amountInReleased // remaining amount
+                : ((uint256(orderData_.amountIn) * amountOutToFill_) / orderData_.amountOut).toUint128();
 
-        // Calculate the corresponding of token in to release to the filler
-        uint128 amountInToRelease_ = fullFill_
-            ? orderData_.amountIn - filledAmounts.amountInReleased // remaining amount
-            : ((uint256(orderData_.amountIn) * amountOutToFill_) / orderData_.amountOut).toUint128();
+            // Update filled amounts
+            filledAmounts.amountOutFilled += amountOutToFill_;
+            filledAmounts.amountInReleased += amountInToRelease_;
+
+            // If full fill, update order status to completed
+            if (fullFill_) {
+                order.status = OrderStatus.Completed;
+                emit OrderCompleted(orderId_);
+            } else {
+                // Set order status to created in case of uninitialized cross-chain order
+                if (orderData_.originChainId != chainId && order.status == OrderStatus.DoesNotExist) {
+                    order.status = OrderStatus.Created;
+                }
+            }
+        }
 
         // Transfer tokens from the solver to the recipient
         IERC20(orderData_.tokenOut.toAddress()).safeTransferExactFrom(
@@ -409,20 +435,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
             uint256(amountOutToFill_)
         );
 
-        // Update filled amounts
-        filledAmounts.amountOutFilled += amountOutToFill_;
-        filledAmounts.amountInReleased += amountInToRelease_;
-
         // If local order, release the corresponding amount of origin tokens to the filler
         if (chainId == orderData_.originChainId) {
-            // If a full fill, mark the order as completed
-            Order storage order = $.localOrders[orderId_];
-
-            if (fullFill_) {
-                order.status = OrderStatus.Completed;
-                emit OrderCompleted(orderId_);
-            }
-
             // If this is a fill on the origin chain, we can immediately release the token in to the filler
             // This is because the origin and destination chains are the same, so no cross-chain messaging is needed
             IERC20(order.tokenIn).safeTransferExact(
@@ -449,17 +463,16 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         emit OrderFilled(orderId_, msg.sender, amountInToRelease_, amountOutToFill_);
     }
 
-    /* ========== Receiving Fill Reports ========== */
+    /* ========== Receiving Crosschain Reports ========== */
 
     /// @inheritdoc IOrderBook
     function reportFill(FillReport calldata report_) external override {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-        Order storage order = $.localOrders[report_.orderId];
+        Order storage order = $.orders[report_.orderId];
 
         // Validate the fill report and sender
         if (msg.sender != messenger) revert NotAuthorized();
-        if (order.status != OrderStatus.Created && order.status != OrderStatus.CancelRequested)
-            revert InvalidOrderStatus();
+        if (order.status != OrderStatus.Created) revert InvalidOrderStatus();
         if (report_.tokenIn != order.tokenIn.toBytes32()) revert InvalidReport();
 
         // Update the fill amounts for the order
@@ -484,13 +497,39 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
     /// @inheritdoc IOrderBook
     function reportCancel(CancelReport calldata report_) external override {
-        Order storage order = _getOrderBookStorageLocation().localOrders[report_.orderId];
+        Order storage order = _getOrderBookStorageLocation().orders[report_.orderId];
 
         // Validate the cancel report and sender
         if (msg.sender != messenger) revert NotAuthorized();
         if (order.status != OrderStatus.Created) revert InvalidOrderStatus();
 
+        // Validate the reported order sender and token in match
+        // This isn't strictly required because we use local data,
+        // but invalid reports should not be sent so we prevent this
+        if (order.tokenIn != report_.tokenIn.toAddress() || order.sender != report_.orderSender.toAddress())
+            revert InvalidReport();
+
         _claimRefund(report_.orderId, order);
+    }
+
+    /* ========== Admin Functions ========== */
+
+    /// @inheritdoc IOrderBook
+    function setDestinationSupported(
+        uint32 destChainId_,
+        bool isSupported_
+    ) external override onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (destChainId_ == chainId) revert InvalidDestinationChain();
+
+        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
+        bool isSupported = $.supportedDestinations[destChainId_];
+
+        // Don't update if the value is the same
+        if (isSupported == isSupported_) return;
+
+        $.supportedDestinations[destChainId_] = isSupported_;
+
+        emit DestinationSupportUpdated(destChainId_, isSupported_);
     }
 
     /* ========== View Functions ========== */
@@ -505,6 +544,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
                     orderData_.nonce,
                     orderData_.originChainId,
                     orderData_.destChainId,
+                    orderData_.createdAt,
                     orderData_.fillDeadline,
                     orderData_.tokenIn,
                     orderData_.tokenOut,
@@ -519,7 +559,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     /// @inheritdoc IOrderBook
     function getOrder(bytes32 orderId_) external view override returns (Order memory) {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-        return $.localOrders[orderId_];
+        return $.orders[orderId_];
     }
 
     /// @inheritdoc IOrderBook
@@ -532,6 +572,11 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     function getSenderNonce(address sender_) external view override returns (uint64) {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         return $.senderNonces[sender_];
+    }
+
+    /// @inheritdoc IOrderBook
+    function isDestinationSupported(uint32 destChainId_) public view override returns (bool) {
+        return destChainId_ == chainId || _getOrderBookStorageLocation().supportedDestinations[destChainId_];
     }
 
     /* ========== EIP-712 Digest Functions ========== */
@@ -563,5 +608,25 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     /// @inheritdoc IOrderBook
     function getCancelRequestDigest(bytes32 orderId_) public view override returns (bytes32) {
         return _getDigest(keccak256(abi.encode(CANCEL_REQUEST_TYPEHASH, orderId_)));
+    }
+
+    /* ========== Internal Helper Functions ========== */
+
+    function _revertIfInvalidStatusToFillOrCancel(Order storage order_, OrderData memory orderData_) internal view {
+        // Check order status
+        // If local order, status must be Created
+        // If cross-chain order, status must be DoesNotExist (if not filled at all yet) or Created (if already partially filled)
+        if (
+            !(
+                orderData_.originChainId == chainId
+                    ? order_.status == OrderStatus.Created
+                    : (order_.status == OrderStatus.Created || order_.status == OrderStatus.DoesNotExist)
+            )
+        ) revert InvalidOrderStatus();
+    }
+
+    function _revertIfOrderIdMismatch(bytes32 orderId_, OrderData memory orderData_) internal pure {
+        // Ensure the provided order ID matches the computed order ID from the order data
+        if (orderId_ != getOrderId(orderData_)) revert OrderIdMismatch();
     }
 }

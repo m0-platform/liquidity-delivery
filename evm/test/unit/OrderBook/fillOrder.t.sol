@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
 
@@ -100,7 +100,8 @@ contract FillOrderTest is OrderBookTestBase {
                 sender: order.sender.toBytes32(),
                 nonce: order.nonce,
                 destChainId: order.destChainId, // This is DEST_CHAIN_ID (2), not CHAIN_ID (1)
-                fillDeadline: order.fillDeadline,
+                createdAt: uint64(order.createdAt),
+                fillDeadline: uint64(order.fillDeadline),
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
@@ -132,7 +133,8 @@ contract FillOrderTest is OrderBookTestBase {
                 sender: order.sender.toBytes32(),
                 nonce: order.nonce,
                 destChainId: order.destChainId,
-                fillDeadline: order.fillDeadline,
+                createdAt: uint64(order.createdAt),
+                fillDeadline: uint64(order.fillDeadline),
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
@@ -158,7 +160,8 @@ contract FillOrderTest is OrderBookTestBase {
             nonce: order.nonce,
             originChainId: CHAIN_ID,
             destChainId: order.destChainId,
-            fillDeadline: order.fillDeadline,
+            createdAt: uint64(order.createdAt),
+            fillDeadline: uint64(order.fillDeadline),
             tokenIn: order.tokenIn.toBytes32(),
             tokenOut: order.tokenOut,
             amountIn: order.amountIn,
@@ -197,7 +200,8 @@ contract FillOrderTest is OrderBookTestBase {
                 sender: order.sender.toBytes32(),
                 nonce: order.nonce,
                 destChainId: order.destChainId,
-                fillDeadline: order.fillDeadline,
+                createdAt: uint64(order.createdAt),
+                fillDeadline: uint64(order.fillDeadline),
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
@@ -226,7 +230,8 @@ contract FillOrderTest is OrderBookTestBase {
                 sender: order.sender.toBytes32(),
                 nonce: order.nonce,
                 destChainId: order.destChainId,
-                fillDeadline: order.fillDeadline,
+                createdAt: uint64(order.createdAt),
+                fillDeadline: uint64(order.fillDeadline),
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
@@ -251,7 +256,7 @@ contract FillOrderTest is OrderBookTestBase {
 
         // Try to fill it again
         vm.prank(users["solver"]);
-        vm.expectRevert(abi.encodeWithSelector(IOrderBook.OrderAlreadyFilled.selector));
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
         orderBook.fillOrder(
             orderId,
             IOrderBook.OrderData({
@@ -260,7 +265,8 @@ contract FillOrderTest is OrderBookTestBase {
                 sender: order.sender.toBytes32(),
                 nonce: order.nonce,
                 destChainId: order.destChainId,
-                fillDeadline: order.fillDeadline,
+                createdAt: uint64(order.createdAt),
+                fillDeadline: uint64(order.fillDeadline),
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
@@ -289,7 +295,8 @@ contract FillOrderTest is OrderBookTestBase {
                 sender: order.sender.toBytes32(),
                 nonce: order.nonce,
                 destChainId: order.destChainId,
-                fillDeadline: order.fillDeadline,
+                createdAt: uint64(order.createdAt),
+                fillDeadline: uint64(order.fillDeadline),
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
@@ -328,7 +335,8 @@ contract FillOrderTest is OrderBookTestBase {
                 sender: order.sender.toBytes32(),
                 nonce: order.nonce,
                 destChainId: order.destChainId,
-                fillDeadline: order.fillDeadline,
+                createdAt: uint64(order.createdAt),
+                fillDeadline: uint64(order.fillDeadline),
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
@@ -423,7 +431,8 @@ contract FillOrderTest is OrderBookTestBase {
                 sender: order.sender.toBytes32(),
                 nonce: order.nonce,
                 destChainId: order.destChainId,
-                fillDeadline: order.fillDeadline,
+                createdAt: uint64(order.createdAt),
+                fillDeadline: uint64(order.fillDeadline),
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
@@ -513,7 +522,8 @@ contract FillOrderTest is OrderBookTestBase {
                 sender: order.sender.toBytes32(),
                 nonce: order.nonce,
                 destChainId: order.destChainId,
-                fillDeadline: order.fillDeadline,
+                createdAt: uint64(order.createdAt),
+                fillDeadline: uint64(order.fillDeadline),
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
@@ -583,6 +593,7 @@ contract FillOrderTest is OrderBookTestBase {
             sender: users["alice"].toBytes32(),
             nonce: 0,
             destChainId: CHAIN_ID, // To be filled on chain 1 (current chain)
+            createdAt: uint64(block.timestamp),
             fillDeadline: uint64(block.timestamp + FILL_DURATION),
             amountIn: AMOUNT_IN,
             amountOut: AMOUNT_OUT,
@@ -662,6 +673,7 @@ contract FillOrderTest is OrderBookTestBase {
             sender: users["alice"].toBytes32(),
             nonce: 0,
             destChainId: CHAIN_ID, // To be filled on chain 1 (current chain)
+            createdAt: uint64(block.timestamp),
             fillDeadline: uint64(block.timestamp + FILL_DURATION),
             amountIn: AMOUNT_IN,
             amountOut: AMOUNT_OUT,
@@ -736,6 +748,7 @@ contract FillOrderTest is OrderBookTestBase {
             sender: users["alice"].toBytes32(),
             nonce: 0,
             destChainId: CHAIN_ID, // To be filled on chain 1 (current chain)
+            createdAt: uint64(block.timestamp),
             fillDeadline: uint64(block.timestamp + FILL_DURATION),
             amountIn: AMOUNT_IN,
             amountOut: AMOUNT_OUT,
@@ -815,6 +828,7 @@ contract FillOrderTest is OrderBookTestBase {
             sender: users["alice"].toBytes32(),
             nonce: 0,
             destChainId: CHAIN_ID, // To be filled on chain 1 (current chain)
+            createdAt: uint64(block.timestamp),
             fillDeadline: uint64(block.timestamp + FILL_DURATION),
             amountIn: AMOUNT_IN,
             amountOut: AMOUNT_OUT,
@@ -866,7 +880,8 @@ contract FillOrderTest is OrderBookTestBase {
                 sender: order.sender.toBytes32(),
                 nonce: order.nonce,
                 destChainId: order.destChainId,
-                fillDeadline: order.fillDeadline,
+                createdAt: uint64(order.createdAt),
+                fillDeadline: uint64(order.fillDeadline),
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
@@ -915,7 +930,8 @@ contract FillOrderTest is OrderBookTestBase {
                 sender: order.sender.toBytes32(),
                 nonce: order.nonce,
                 destChainId: order.destChainId,
-                fillDeadline: order.fillDeadline,
+                createdAt: uint64(order.createdAt),
+                fillDeadline: uint64(order.fillDeadline),
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
@@ -987,7 +1003,8 @@ contract FillOrderTest is OrderBookTestBase {
                 sender: order.sender.toBytes32(),
                 nonce: order.nonce,
                 destChainId: order.destChainId,
-                fillDeadline: order.fillDeadline,
+                createdAt: uint64(order.createdAt),
+                fillDeadline: uint64(order.fillDeadline),
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
