@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { Test } from "../../../../lib/forge-std/src/Test.sol";
-import {
-    ERC1967Proxy
-} from "../../../../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { ERC1967Proxy } from "../../../../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { TypeConverter } from "../../../../lib/common/src/libs/TypeConverter.sol";
 
 import { OrderBook, IOrderBook } from "../../../../src/OrderBook.sol";
@@ -129,7 +127,13 @@ contract PausableTokenTest is Test {
 
         uint256 aliceBalanceBefore = pausableToken.balanceOf(alice);
         vm.prank(address(messenger));
-        orderBook.reportCancel(IOrderBook.CancelReport({ orderId: orderId }));
+        orderBook.reportCancel(
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: alice.toBytes32(),
+                tokenIn: params.tokenIn.toBytes32()
+            })
+        );
         uint256 aliceBalanceAfter = pausableToken.balanceOf(alice);
 
         // Alice got her tokenIn back!

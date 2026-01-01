@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { Test } from "../../../lib/forge-std/src/Test.sol";
-import {
-    ERC1967Proxy
-} from "../../../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { ERC1967Proxy } from "../../../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
 
 import { OrderBook, IOrderBook } from "../../../src/OrderBook.sol";
@@ -189,39 +187,38 @@ abstract contract OrderBookTestBase is Test {
         bytes32 orderId_,
         IOrderBook.Order memory order_
     ) internal view returns (IOrderBook.OrderData memory) {
-        return IOrderBook.OrderData({
-            version: order_.version,
-            originChainId: CHAIN_ID,
-            sender: order_.sender.toBytes32(),
-            nonce: order_.nonce,
-            destChainId: order_.destChainId,
-            createdAt: uint64(order_.createdAt),
-            fillDeadline: uint64(order_.fillDeadline),
-            amountIn: order_.amountIn,
-            amountOut: order_.amountOut,
-            tokenIn: order_.tokenIn.toBytes32(),
-            tokenOut: order_.tokenOut,
-            recipient: order_.recipient,
-            solver: order_.solver
-        });
+        return
+            IOrderBook.OrderData({
+                version: order_.version,
+                originChainId: CHAIN_ID,
+                sender: order_.sender.toBytes32(),
+                nonce: order_.nonce,
+                destChainId: order_.destChainId,
+                createdAt: uint64(order_.createdAt),
+                fillDeadline: uint64(order_.fillDeadline),
+                amountIn: order_.amountIn,
+                amountOut: order_.amountOut,
+                tokenIn: order_.tokenIn.toBytes32(),
+                tokenOut: order_.tokenOut,
+                recipient: order_.recipient,
+                solver: order_.solver
+            });
     }
 
-    function _cancelOrder(
-        address caller_,
-        bytes32 orderId_,
-        IOrderBook.Order memory order_
-    ) internal {
+    function _cancelOrder(address caller_, bytes32 orderId_, IOrderBook.Order memory order_) internal {
         vm.prank(caller_);
-        orderBook.cancelOrder(
-            orderId_,
-            _getOrderDataFromOrder(orderId_, order_),
-            new bytes(0)
-        );
+        orderBook.cancelOrder(orderId_, _getOrderDataFromOrder(orderId_, order_), new bytes(0));
     }
 
-    function _reportCancel(bytes32 orderId_) internal {
+    function _reportCancel(bytes32 orderId_, address orderSender_, address tokenIn_) internal {
         vm.prank(address(messenger));
-        orderBook.reportCancel(IOrderBook.CancelReport({ orderId: orderId_ }));
+        orderBook.reportCancel(
+            IOrderBook.CancelReport({
+                orderId: orderId_,
+                orderSender: orderSender_.toBytes32(),
+                tokenIn: tokenIn_.toBytes32()
+            })
+        );
     }
 
     // =========== Test Modifiers ========== //

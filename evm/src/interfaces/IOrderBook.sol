@@ -241,8 +241,8 @@ interface IOrderBook {
     /**
      * @notice Data reported from a destination chain back to the origin chain about a fill
      * @dev This struct is sent by the messenger contract to report fills that occurred
-     *      on the destination chain back to the origin chain for refund processing
-     * @param orderId The ID of the order being reported
+     *      on the destination chain back to the origin chain for processing
+     * @param orderId The ID of the order that a fill is being reported for
      * @param amountInToRelease The amount of input token to release to the filler on the origin chain
      * @param amountOutFilled The amount of output token that was filled on the destination chain
      * @param originRecipient The address on the origin chain that should receive released funds
@@ -257,8 +257,19 @@ interface IOrderBook {
         bytes32 tokenIn;
     }
 
+    /**
+     * @notice Data reported from a destination chain back to the origin chain about a cancelled order
+     * @dev This struct is sent by the messenger contract to report order cancellations and refunds
+     *      that occurred on the destination chain back to the origin chain for processing
+     * @param orderId The ID of the order that a cancellation is being reported for
+     * @param orderSender The address on the origin chain that created the order
+     * @param tokenIn The address of the input token on the origin chain
+     * The last two are included for non-EVM chains to provide a way to resolve the sender and token
+     */
     struct CancelReport {
         bytes32 orderId;
+        bytes32 orderSender;
+        bytes32 tokenIn;
     }
 
     /**

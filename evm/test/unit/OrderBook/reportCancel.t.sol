@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
 
@@ -18,6 +18,10 @@ contract ReportCancelTest is OrderBookTestBase {
     //   [X] it reverts with an InvalidOrderStatus error
     // [X] given the order is already cancelled
     //   [X] it reverts with an InvalidOrderStatus error
+    // [X] given the reported order sender is wrong
+    //   [X] it reverts with an InvalidReport error
+    // [X] given the reported token in is wrong
+    //   [X] it reverts with an InvalidReport error
     // [X] given the order is active (Created status)
     //   [X] given no prior fills
     //     [X] it transfers full amountIn to order sender
@@ -41,7 +45,13 @@ contract ReportCancelTest is OrderBookTestBase {
         // Try to report cancel as a regular user (not messenger)
         vm.prank(users["bob"]);
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.NotAuthorized.selector));
-        orderBook.reportCancel(IOrderBook.CancelReport({ orderId: orderId }));
+        orderBook.reportCancel(
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: users["alice"].toBytes32(),
+                tokenIn: params.tokenIn.toBytes32()
+            })
+        );
     }
 
     function test_orderDoesNotExist_reverts() public {
@@ -50,7 +60,13 @@ contract ReportCancelTest is OrderBookTestBase {
         // Try to report cancel on non-existent order
         vm.prank(address(messenger));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
-        orderBook.reportCancel(IOrderBook.CancelReport({ orderId: fakeOrderId }));
+        orderBook.reportCancel(
+            IOrderBook.CancelReport({
+                orderId: fakeOrderId,
+                orderSender: users["alice"].toBytes32(),
+                tokenIn: params.tokenIn.toBytes32()
+            })
+        );
     }
 
     function test_orderIsCompleted_reverts() public {
@@ -62,19 +78,61 @@ contract ReportCancelTest is OrderBookTestBase {
         // Try to report cancel on the completed order
         vm.prank(address(messenger));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
-        orderBook.reportCancel(IOrderBook.CancelReport({ orderId: orderId }));
+        orderBook.reportCancel(
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: users["alice"].toBytes32(),
+                tokenIn: params.tokenIn.toBytes32()
+            })
+        );
     }
 
     function test_orderIsAlreadyCancelled_reverts() public {
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
         // Report cancel once
-        _reportCancel(orderId);
+        _reportCancel(orderId, users["alice"], params.tokenIn);
 
         // Try to report cancel again
         vm.prank(address(messenger));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
-        orderBook.reportCancel(IOrderBook.CancelReport({ orderId: orderId }));
+        orderBook.reportCancel(
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: users["alice"].toBytes32(),
+                tokenIn: params.tokenIn.toBytes32()
+            })
+        );
+    }
+
+    function test_orderSenderInvalid_reverts() public {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+
+        // Report with wrong order sender, reverts
+        vm.prank(address(messenger));
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
+        orderBook.reportCancel(
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: users["bob"].toBytes32(),
+                tokenIn: params.tokenIn.toBytes32()
+            })
+        );
+    }
+
+    function test_tokenInInvalid_reverts() public {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+
+        // Report with wrong token in, reverts
+        vm.prank(address(messenger));
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
+        orderBook.reportCancel(
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: users["alice"].toBytes32(),
+                tokenIn: params.tokenOut
+            })
+        );
     }
 
     function _test_activeOrderNoFills_success() internal {
@@ -90,7 +148,13 @@ contract ReportCancelTest is OrderBookTestBase {
         vm.prank(address(messenger));
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.RefundClaimed(orderId, users["alice"], order.amountIn);
-        orderBook.reportCancel(IOrderBook.CancelReport({ orderId: orderId }));
+        orderBook.reportCancel(
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: users["alice"].toBytes32(),
+                tokenIn: params.tokenIn.toBytes32()
+            })
+        );
 
         // Verify tokenIn transferred to sender
         assertEq(
@@ -109,11 +173,7 @@ contract ReportCancelTest is OrderBookTestBase {
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Cancelled), "order should be Cancelled");
     }
 
-    function test_bothSixDecimals_activeOrderNoFills_success()
-        public
-        givenTokenInDecimals(6)
-        givenTokenOutDecimals(6)
-    {
+    function test_bothSixDecimals_activeOrderNoFills_success() public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
         _placeOrder(users["alice"], params);
         _test_activeOrderNoFills_success();
     }
@@ -166,7 +226,13 @@ contract ReportCancelTest is OrderBookTestBase {
         vm.prank(address(messenger));
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.RefundClaimed(orderId, users["alice"], expectedRefund);
-        orderBook.reportCancel(IOrderBook.CancelReport({ orderId: orderId }));
+        orderBook.reportCancel(
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: users["alice"].toBytes32(),
+                tokenIn: params.tokenIn.toBytes32()
+            })
+        );
 
         // Verify tokenIn transferred to sender (remaining amount)
         assertEq(

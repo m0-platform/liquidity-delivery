@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { VmSafe } from "../../../lib/forge-std/src/Vm.sol";
 import { console } from "../../../lib/forge-std/src/console.sol";

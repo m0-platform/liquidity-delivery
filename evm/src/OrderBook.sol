@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: GPL-3.0
-pragma solidity 0.8.26;
+// SPDX-License-Identifier: BUSL-1.1
+pragma solidity 0.8.33;
 
 import { IERC20 } from "../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
 import { IERC20Extended } from "../lib/common/src/interfaces/IERC20Extended.sol";
@@ -178,13 +178,11 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         if (orderParams_.amountOut == 0) revert AmountOutZero();
         if (orderParams_.recipient == bytes32(0)) revert InvalidRecipient();
 
-        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-
         // Destination chain must either be the current chain or a supported destination
-        if (orderParams_.destChainId != chainId && !isDestinationSupported(orderParams_.destChainId))
-            revert InvalidDestinationChain();
+        if (!isDestinationSupported(orderParams_.destChainId)) revert InvalidDestinationChain();
 
         // Create order
+        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         uint64 nonce_ = $.senderNonces[sender_]++;
 
         bytes32 orderId_ = getOrderId(
@@ -284,9 +282,13 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     function cancelOrder(bytes32 orderId_, OrderData calldata orderData_, bytes memory messageData_) external override {
         // Verify sender
         // If fill deadline hasn't passed yet, only the recipient can cancel
+        // Also, allow sender to cancel if same chain order
         // Otherwise, anyone can cancel to allow for refunds after expiry
-        if (block.timestamp <= orderData_.fillDeadline && orderData_.recipient.toAddress() != msg.sender)
-            revert NotAuthorized();
+        if (
+            block.timestamp <= orderData_.fillDeadline &&
+            !(orderData_.recipient.toAddress() == msg.sender ||
+                (orderData_.originChainId == chainId && orderData_.sender.toAddress() == msg.sender))
+        ) revert NotAuthorized();
 
         _cancelOrder(orderId_, orderData_, messageData_);
     }
@@ -310,19 +312,13 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     }
 
     function _cancelOrder(bytes32 orderId_, OrderData calldata orderData_, bytes memory messageData_) internal {
-        if (orderId_ != getOrderId(orderData_)) revert OrderIdMismatch();
+        _revertIfOrderIdMismatch(orderId_, orderData_);
+
         // Can't cancel an order before it's created
         if (orderData_.createdAt > block.timestamp) revert InvalidTimestamp();
 
         Order storage order = _getOrderBookStorageLocation().orders[orderId_];
-
-        // Check order status
-        // If local order, status must be Created
-        // If cross-chain order, status must be DoesNotExist (if not filled at all yet) or Created (if already partially filled)
-        if (
-            order.status != OrderStatus.Created &&
-            !(orderData_.originChainId != chainId && order.status == OrderStatus.DoesNotExist)
-        ) revert InvalidOrderStatus();
+        _revertIfInvalidStatusToFillOrCancel(order, orderData_);
 
         if (orderData_.originChainId == chainId) {
             // Local orders can be immediately refunded
@@ -334,7 +330,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
             // Cross-chain orders require sending a cancel report to the origin chain
             IMessenger(messenger).sendCancelReport(
                 orderData_.originChainId,
-                CancelReport({ orderId: orderId_ }),
+                CancelReport({ orderId: orderId_, orderSender: orderData_.sender, tokenIn: orderData_.tokenIn }),
                 messageData_
             );
         }
@@ -383,10 +379,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         FillParams calldata fillerParams_,
         bytes memory messageData_
     ) internal {
-        // Ensure the provided order ID matches the computed order ID from the order data
-        // This check is not strictly required, but it is a useful sanity check for solvers
-        // to ensure they have the order data correct
-        if (orderId_ != getOrderId(orderData_)) revert OrderIdMismatch();
+        _revertIfOrderIdMismatch(orderId_, orderData_);
 
         // Validate fill data
         if (chainId != orderData_.destChainId) revert InvalidDestinationChain();
@@ -400,16 +393,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         if (solver_ != address(0) && solver_ != msg.sender) revert NotAuthorized();
 
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-
         Order storage order = $.orders[orderId_];
-
-        // Check order status
-        // If local order, status must be Created
-        // If cross-chain order, status must be DoesNotExist (if not filled at all yet) or Created (if already partially filled)
-        if (
-            order.status != OrderStatus.Created &&
-            !(orderData_.originChainId != chainId && order.status == OrderStatus.DoesNotExist)
-        ) revert InvalidOrderStatus();
+        _revertIfInvalidStatusToFillOrCancel(order, orderData_);
 
         uint128 amountInToRelease_;
         uint128 amountOutToFill_;
@@ -478,7 +463,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         emit OrderFilled(orderId_, msg.sender, amountInToRelease_, amountOutToFill_);
     }
 
-    /* ========== Receiving Fill Reports ========== */
+    /* ========== Receiving Crosschain Reports ========== */
 
     /// @inheritdoc IOrderBook
     function reportFill(FillReport calldata report_) external override {
@@ -517,6 +502,12 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         // Validate the cancel report and sender
         if (msg.sender != messenger) revert NotAuthorized();
         if (order.status != OrderStatus.Created) revert InvalidOrderStatus();
+
+        // Validate the reported order sender and token in match
+        // This isn't strictly required because we use local data,
+        // but invalid reports should not be sent so we prevent this
+        if (order.tokenIn != report_.tokenIn.toAddress() || order.sender != report_.orderSender.toAddress())
+            revert InvalidReport();
 
         _claimRefund(report_.orderId, order);
     }
@@ -585,7 +576,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
     /// @inheritdoc IOrderBook
     function isDestinationSupported(uint32 destChainId_) public view override returns (bool) {
-        return _getOrderBookStorageLocation().supportedDestinations[destChainId_];
+        return destChainId_ == chainId || _getOrderBookStorageLocation().supportedDestinations[destChainId_];
     }
 
     /* ========== EIP-712 Digest Functions ========== */
@@ -617,5 +608,25 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     /// @inheritdoc IOrderBook
     function getCancelRequestDigest(bytes32 orderId_) public view override returns (bytes32) {
         return _getDigest(keccak256(abi.encode(CANCEL_REQUEST_TYPEHASH, orderId_)));
+    }
+
+    /* ========== Internal Helper Functions ========== */
+
+    function _revertIfInvalidStatusToFillOrCancel(Order storage order_, OrderData memory orderData_) internal view {
+        // Check order status
+        // If local order, status must be Created
+        // If cross-chain order, status must be DoesNotExist (if not filled at all yet) or Created (if already partially filled)
+        if (
+            !(
+                orderData_.originChainId == chainId
+                    ? order_.status == OrderStatus.Created
+                    : (order_.status == OrderStatus.Created || order_.status == OrderStatus.DoesNotExist)
+            )
+        ) revert InvalidOrderStatus();
+    }
+
+    function _revertIfOrderIdMismatch(bytes32 orderId_, OrderData memory orderData_) internal pure {
+        // Ensure the provided order ID matches the computed order ID from the order data
+        if (orderId_ != getOrderId(orderData_)) revert OrderIdMismatch();
     }
 }
