@@ -562,8 +562,8 @@ mod xchain_orders {
         let mut test = OrderBookTest::new()?;
         test.initialize()?;
 
-        // Set the destination chain ID as not supported
-        test.configure_destination(DEST_CHAIN_ID, false, None)?;
+        // Remove the destination chain ID so it's not supported
+        test.remove_destination(DEST_CHAIN_ID)?;
 
         // Get accounts for the instruction
         let alice = test.users.get("alice").unwrap();
@@ -581,9 +581,10 @@ mod xchain_orders {
             &order_params,
         )?;
 
+        // After remove_destination, the account is closed entirely, so we get AccountNotInitialized
         test.ctx
             .execute_instruction(ix, &[alice])?
-            .assert_anchor_error(&format!("{:?}", OrderBookError::DestinationNotSupported));
+            .assert_anchor_error("AccountNotInitialized");
 
         Ok(())
     }
