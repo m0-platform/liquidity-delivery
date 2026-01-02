@@ -100,6 +100,7 @@ mod local_orders {
             nonce: 0,
             origin_chain_id: CHAIN_ID,
             dest_chain_id: order_params.dest_chain_id,
+            created_at: test.current_time(),
             fill_deadline: order_params.fill_deadline,
             token_in: token_in_mint.to_bytes(),
             token_out: order_params.token_out,
@@ -269,6 +270,7 @@ mod local_orders {
             nonce: 0,
             origin_chain_id: DEST_CHAIN_ID,
             dest_chain_id: CHAIN_ID,
+            created_at: test.current_time(),
             fill_deadline: order_params.fill_deadline,
             token_in: token_in_mint.to_bytes(),
             token_out: order_params.token_out,
@@ -321,6 +323,7 @@ mod local_orders {
             nonce: 0,
             origin_chain_id: DEST_CHAIN_ID,
             dest_chain_id: CHAIN_ID,
+            created_at: test.current_time(),
             fill_deadline: order_params.fill_deadline,
             token_in: token_in_mint.to_bytes(),
             token_out: order_params.token_out,
@@ -885,6 +888,64 @@ mod local_orders {
 
         Ok(())
     }
+
+    #[test]
+    fn fill_native_order_expired_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Create order with short deadline
+        let mut order_params = default_order_params(&test, "alice");
+        order_params.fill_deadline = test.current_time() + 100;
+        let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+        let solver = test.get_user("solver");
+        let fill_params = default_fill_params(&test);
+
+        // Warp time past the deadline
+        test.warp_forward(200);
+
+        let ix = test.create_fill_native_order_ix(&solver.pubkey(), order_id, &fill_params)?;
+
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::OrderExpired));
+
+        Ok(())
+    }
+
+    #[test]
+    fn fill_native_order_created_at_future_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+        let order_params = default_order_params(&test, "alice");
+        let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+        let solver = test.get_user("solver");
+        let fill_params = default_fill_params(&test);
+
+        // Get the native order and build order_data with a future created_at
+        let (_, native_order) = test.get_native_order_account(&order_id)?;
+        let mut order_data = OrderData::new_from_native_order(native_order.data, CHAIN_ID);
+        order_data.created_at = test.current_time() + 1000; // In the future
+
+        let accounts = test.build_fill_native_order_accounts(&solver.pubkey(), order_id)?;
+
+        let ix = test
+            .ctx
+            .program()
+            .accounts(accounts)
+            .args(order_book::instruction::FillNativeOrder {
+                order_id,
+                order_data,
+                fill_params,
+            })
+            .instruction()?;
+
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_anchor_error("InvalidOrderId"); // order_id won't match because created_at changed
+
+        Ok(())
+    }
 }
 
 mod xchain_orders {
@@ -941,6 +1002,7 @@ mod xchain_orders {
             nonce: 0,
             origin_chain_id: DEST_CHAIN_ID, // Foreign order originates on another chain
             dest_chain_id: CHAIN_ID,        // Settles on current chain
+            created_at: test.current_time(),
             fill_deadline: test.ctx.svm.get_sysvar::<Clock>().unix_timestamp as u64 + 86400,
             token_in: test.get_mint("token-in-spl-6").to_bytes(),
             token_out: test.get_mint("token-out-spl-6").to_bytes(),
@@ -1592,6 +1654,51 @@ mod xchain_orders {
         test.ctx
             .execute_instruction(ix, &[&solver])?
             .assert_anchor_error("AccountDidNotDeserialize");
+
+        Ok(())
+    }
+
+    #[test]
+    fn fill_foreign_order_expired_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Create order data with short deadline
+        let mut order_data = default_foreign_order_data(&test, "alice");
+        order_data.fill_deadline = test.current_time() + 100;
+
+        let solver = test.get_user("solver");
+        let fill_params = default_fill_params(&test);
+
+        // Warp time past the deadline
+        test.warp_forward(200);
+
+        let ix = test.create_fill_foreign_order_ix(&solver.pubkey(), &order_data, &fill_params)?;
+
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::OrderExpired));
+
+        Ok(())
+    }
+
+    #[test]
+    fn fill_foreign_order_created_at_future_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Create order data with future created_at
+        let mut order_data = default_foreign_order_data(&test, "alice");
+        order_data.created_at = test.current_time() + 1000; // In the future
+
+        let solver = test.get_user("solver");
+        let fill_params = default_fill_params(&test);
+
+        let ix = test.create_fill_foreign_order_ix(&solver.pubkey(), &order_data, &fill_params)?;
+
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidCreatedAtTimestamp));
 
         Ok(())
     }
