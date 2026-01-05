@@ -79,6 +79,18 @@ pub mod order_book {
         AcceptAdminRole::handler(ctx)
     }
 
+    pub fn pause(
+        ctx: Context<AdminInstruction>,
+    ) -> Result<()> {
+        AdminInstruction::pause(ctx)
+    }
+
+    pub fn unpause(
+        ctx: Context<AdminInstruction>,
+    ) -> Result<()> {
+        AdminInstruction::unpause(ctx)
+    }
+
     // User actions
 
     pub fn open_order(ctx: Context<OpenOrder>, params: OrderParams) -> Result<()> {

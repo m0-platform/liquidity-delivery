@@ -60,4 +60,6 @@ pub enum OrderBookError {
     InvalidCreatedAtTimestamp,
     #[msg("Sender address does not match order sender")]
     InvalidSender,
+    #[msg("Program is paused")]
+    ProgramPaused,
 }

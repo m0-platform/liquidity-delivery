@@ -23,6 +23,7 @@ pub struct OrderBookGlobal {
     pub new_admin: Option<Pubkey>,
     pub chain_id: u32,
     pub messenger_authority: Pubkey,
+    pub paused: bool,
     pub bump: u8,
     pub reserved: [u8; 128], // reserved space for future upgrades
 }

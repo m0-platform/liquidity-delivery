@@ -28,6 +28,7 @@ impl Initialize<'_> {
             new_admin: None,
             chain_id,
             messenger_authority,
+            paused: false,
             bump: ctx.bumps.global_account,
             reserved: [0u8; 128],
         });
