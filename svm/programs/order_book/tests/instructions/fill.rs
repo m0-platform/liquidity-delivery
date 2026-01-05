@@ -38,6 +38,8 @@ mod local_orders {
     //     [X] it transfers amount_out_to_fill of token_out to the recipient
     //     [X] it transfers the proportional amount_in of token_in from the order book to the solver
     //     [X] it updates amount_out_filled and amount_in_released on the order
+    // [X] given the program is paused
+    //   [X] it reverts with a ProgramPaused error
 
     use anchor_litesvm::Pubkey;
     use order_book::{OrderData, ORDER_SEED_PREFIX};
@@ -946,6 +948,33 @@ mod local_orders {
 
         Ok(())
     }
+
+    #[test]
+    fn test_fill_native_order_paused_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Create an order before pausing
+        let order_params = default_order_params(&test, "alice");
+        let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+        // Pause the program
+        test.pause()?;
+
+        // Try to fill the order
+        let solver = test.get_user("solver");
+        let fill_params = order_book::instructions::FillParams {
+            amount_out_to_fill: 500_000,
+            origin_recipient: solver.pubkey().to_bytes(),
+        };
+        let ix = test.create_fill_native_order_ix(&solver.pubkey(), order_id, &fill_params)?;
+
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::ProgramPaused));
+
+        Ok(())
+    }
 }
 
 mod xchain_orders {
@@ -986,6 +1015,8 @@ mod xchain_orders {
     //     [X] it transfers the remaining amount_out to the recipient
     //     [X] it completes the order (amount_out_filled == amount_out)
     //     [X] it updates amounts to final values
+    // [X] given the program is paused
+    //   [X] it reverts with a ProgramPaused error
 
     // fill_native_order tests
     // [ ] given the order originates on another chain (not native)
@@ -1699,6 +1730,30 @@ mod xchain_orders {
         test.ctx
             .execute_instruction(ix, &[&solver])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidCreatedAtTimestamp));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_fill_foreign_order_paused_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Pause the program
+        test.pause()?;
+
+        // Try to fill a foreign order
+        let solver = test.get_user("solver");
+        let order_data = default_foreign_order_data(&test, "alice");
+        let fill_params = order_book::instructions::FillParams {
+            amount_out_to_fill: 500_000,
+            origin_recipient: solver.pubkey().to_bytes(),
+        };
+        let ix = test.create_fill_foreign_order_ix(&solver.pubkey(), &order_data, &fill_params)?;
+
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::ProgramPaused));
 
         Ok(())
     }
