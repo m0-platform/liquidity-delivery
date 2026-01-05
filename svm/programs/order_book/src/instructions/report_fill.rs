@@ -156,7 +156,7 @@ impl ReportOrderFill<'_> {
         // Emit an event for the fill report
         emit_cpi!(FillReported {
             order_id: fill_report.order_id,
-            amount_in_to_release: fill_report.amount_in_to_release,
+            amount_in_to_release: amount_in_to_release as u128,
             amount_out_filled: fill_report.amount_out_filled,
             origin_recipient: fill_report.origin_recipient,
         });
