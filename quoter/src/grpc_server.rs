@@ -1,3 +1,4 @@
+use slog::Logger;
 use std::collections::HashMap;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -22,18 +23,20 @@ type ResponseStream = Pin<Box<dyn Stream<Item = Result<QuoteRequestProto, Status
 
 #[derive(Clone)]
 pub struct QuoteGrpcService {
-    // Broadcast channel to send quote requests to all subscribers
     request_sender: Arc<broadcast::Sender<QuoteRequestProto>>,
-    // Map to collect responses for each request
     response_collectors: Arc<RwLock<HashMap<String, mpsc::Sender<QuoteResponseProto>>>>,
+    quote_timeout_ms: u64,
+    logger: Logger,
 }
 
 impl QuoteGrpcService {
-    pub fn new() -> Self {
+    pub fn new(quote_timeout_ms: u64, logger: Logger) -> Self {
         let (request_sender, _) = broadcast::channel(100);
         Self {
             request_sender: Arc::new(request_sender),
             response_collectors: Arc::new(RwLock::new(HashMap::new())),
+            quote_timeout_ms,
+            logger: logger.new(slog::o!("component" => "QuoteGrpcService")),
         }
     }
 
@@ -65,58 +68,26 @@ impl QuoteGrpcService {
         // Broadcast the request to all subscribers
         let _ = self.request_sender.send(proto_request);
 
-        // Collect responses for 500ms
-        let mut responses = Vec::new();
-
-        match timeout(Duration::from_millis(500), async {
-            let mut collected = Vec::new();
-            while let Some(response) = response_rx.recv().await {
-                collected.push(response);
-            }
-            collected
-        })
-        .await
-        {
-            Ok(collected) => {
-                for proto_response in collected {
-                    responses.push(QuoteResponse {
-                        quote_id: proto_response.quote_id,
-                        fee_bps: proto_response.fee_bps,
-                        output_amount: proto_response.output_amount,
-                        est_fill_time_seconds: proto_response.est_fill_time_seconds,
-                        expires_at: proto_response.expires_at,
-                        rejected: proto_response.rejected,
-                        reject_reason: if proto_response.reject_reason.is_empty() {
-                            None
-                        } else {
-                            Some(proto_response.reject_reason)
-                        },
-                        solver_address: proto_response.solver_address,
-                        requires_exclusivity: proto_response.requires_exclusivity,
-                    });
+        let responses: Vec<QuoteResponse> =
+            match timeout(Duration::from_millis(self.quote_timeout_ms), async {
+                let mut collected = Vec::new();
+                while let Some(response) = response_rx.recv().await {
+                    collected.push(response.into());
                 }
-            }
-            Err(_) => {
-                // Timeout occurred, collect whatever we have
-                while let Ok(proto_response) = response_rx.try_recv() {
-                    responses.push(QuoteResponse {
-                        quote_id: proto_response.quote_id,
-                        fee_bps: proto_response.fee_bps,
-                        output_amount: proto_response.output_amount,
-                        est_fill_time_seconds: proto_response.est_fill_time_seconds,
-                        expires_at: proto_response.expires_at,
-                        rejected: proto_response.rejected,
-                        reject_reason: if proto_response.reject_reason.is_empty() {
-                            None
-                        } else {
-                            Some(proto_response.reject_reason)
-                        },
-                        solver_address: proto_response.solver_address,
-                        requires_exclusivity: proto_response.requires_exclusivity,
-                    });
+                collected
+            })
+            .await
+            {
+                Ok(collected) => collected,
+                Err(_) => {
+                    // Timeout occurred, collect whatever we have
+                    let mut collected = Vec::new();
+                    while let Ok(response) = response_rx.try_recv() {
+                        collected.push(response.into());
+                    }
+                    collected
                 }
-            }
-        }
+            };
 
         // Clean up the collector
         {
@@ -140,10 +111,12 @@ impl QuoteService for QuoteGrpcService {
 
         let mut request_receiver = self.request_sender.subscribe();
         let response_collectors = self.response_collectors.clone();
+        let logger = self.logger.clone();
 
         let (tx, rx) = mpsc::channel(100);
 
         // Spawn a task to handle incoming responses
+        let logger_clone = logger.clone();
         tokio::spawn(async move {
             while let Some(result) = in_stream.next().await {
                 match result {
@@ -155,7 +128,7 @@ impl QuoteService for QuoteGrpcService {
                         }
                     }
                     Err(e) => {
-                        tracing::error!("Error receiving response from client: {:?}", e);
+                        slog::error!(logger_clone, "Error receiving response from client"; "error" => %e);
                         break;
                     }
                 }
@@ -172,7 +145,10 @@ impl QuoteService for QuoteGrpcService {
                         }
                     }
                     Err(broadcast::error::RecvError::Lagged(_)) => {
-                        tracing::warn!("Client lagged behind, some requests may have been missed");
+                        slog::warn!(
+                            logger,
+                            "Client lagged behind, some requests may have been missed"
+                        );
                         continue;
                     }
                     Err(broadcast::error::RecvError::Closed) => {

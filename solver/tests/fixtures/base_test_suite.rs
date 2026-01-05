@@ -14,7 +14,6 @@ use mockito::ServerGuard;
 use regex::Regex;
 use slog::{info, Drain, Logger};
 use solver::{
-    common_logger_values,
     config::{Environment, SupportedAssets},
     providers::Signers,
     utils::{chain_from_id, decode_evm_address},
@@ -66,7 +65,7 @@ impl BaseTestSuite {
             slog_async::Async::new(log_buffer.clone().fuse())
                 .build()
                 .fuse(),
-            common_logger_values!(),
+            slog::o!("component" => "TestSuite"),
         );
 
         let mut chains = Vec::new();
@@ -250,7 +249,7 @@ impl BaseTestSuite {
             shutdown_tx,
             _mock_server: mock_server,
             log_buffer,
-            logger: logger.new(slog::o!("component" => "TestSuite")),
+            logger,
         };
 
         // Wait for solver to start

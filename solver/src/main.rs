@@ -1,5 +1,4 @@
 use slog::{info, Drain, Logger};
-use solver::common_logger_values;
 use solver::config::{Config, Environment};
 use std::error::Error;
 
@@ -11,19 +10,27 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     let config = Config::from_file(&config_path)?;
 
-    // Create the root logger
-    let logger = if config.environment == Environment::Production {
+    // Create logger
+    let drain = if config.environment == Environment::Production {
         // JSON format for production
         let drain = slog_json::Json::default(std::io::stdout()).fuse();
-        let drain = slog_async::Async::new(drain).build().fuse();
-        Logger::root(drain, common_logger_values!())
+        slog_async::Async::new(drain).build().fuse()
     } else {
         // Human-readable format for development
         let decorator = slog_term::TermDecorator::new().build();
         let drain = slog_term::FullFormat::new(decorator).build().fuse();
-        let drain = slog_async::Async::new(drain).build().fuse();
-        Logger::root(drain, common_logger_values!())
+        slog_async::Async::new(drain).build().fuse()
     };
+
+    let logger = Logger::root(
+        drain,
+        slog::o!(
+            "timestamp" => slog::FnValue(|_| {
+                chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+            }),
+            "environment" => config.environment.to_str()
+        ),
+    );
 
     let shutdown_tx = solver::run_solver(config, logger.clone()).await?;
 

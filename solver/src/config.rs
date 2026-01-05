@@ -22,6 +22,14 @@ impl Environment {
             _ => Err(ConfigError::InvalidEnvironment(s.to_string())),
         }
     }
+
+    pub fn to_str(&self) -> String {
+        match self {
+            Environment::Development => "development".to_string(),
+            Environment::Production => "production".to_string(),
+            Environment::Local => "local".to_string(),
+        }
+    }
 }
 
 impl Default for Environment {
