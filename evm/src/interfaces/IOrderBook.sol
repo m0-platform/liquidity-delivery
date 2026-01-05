@@ -95,6 +95,8 @@ interface IOrderBook {
     error OrderAlreadyExists();
     error OrderAlreadyFilled();
     error OrderIdMismatch();
+    error ZeroAdmin();
+    error ZeroPauser();
 
     /* ========== Structs and Enums ========== */
 
@@ -564,6 +566,19 @@ interface IOrderBook {
      * @param isSupported_ whether support for the chain should be enabled (true activates, false deactivates)
      */
     function setDestinationSupported(uint32 destChainId_, bool isSupported_) external;
+
+    /**
+     * @notice Pauses the contract.
+     * @dev    Can only be called by an account with the PAUSER_ROLE.
+     * @dev    When paused, all order creation, filling, and refund claiming is disabled.
+     */
+    function pause() external;
+
+    /**
+     * @notice Unpauses the contract.
+     * @dev    Can only be called by an account with the PAUSER_ROLE.
+     */
+    function unpause() external;
 
     /* ========== View Functions ========== */
 

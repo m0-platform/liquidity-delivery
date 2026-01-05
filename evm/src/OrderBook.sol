@@ -4,6 +4,7 @@ pragma solidity 0.8.33;
 import { IERC20 } from "../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
 import { IERC20Extended } from "../lib/common/src/interfaces/IERC20Extended.sol";
 import { AccessControlUpgradeable } from "../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol";
+import { PausableUpgradeable } from "../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol";
 import { ERC712ExtendedUpgradeable } from "../lib/common/src/ERC712ExtendedUpgradeable.sol";
 import { TypeConverter } from "../lib/common/src/libs/TypeConverter.sol";
 import { SafeERC20 } from "./libs/SafeERC20.sol";
@@ -35,11 +36,19 @@ abstract contract OrderBookStorageLayout {
     }
 }
 
-contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeable, ERC712ExtendedUpgradeable {
+contract OrderBook is
+    IOrderBook,
+    OrderBookStorageLayout,
+    AccessControlUpgradeable,
+    PausableUpgradeable,
+    ERC712ExtendedUpgradeable
+{
     using TypeConverter for *;
     using SafeERC20 for IERC20;
 
     // ========== State Variables ========== //
+
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     /// @notice Version of the limit order system
     uint16 public constant VERSION = 1;
@@ -67,10 +76,14 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         portal = portal_;
     }
 
-    function initialize(address admin) external initializer {
+    function initialize(address admin, address pauser) external initializer {
+        if (admin == address(0)) revert ZeroAdmin();
+        if (pauser == address(0)) revert ZeroPauser();
+
         __ERC712ExtendedUpgradeable_init("M0 OrderBook");
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
+        _grantRole(PAUSER_ROLE, pauser);
     }
 
     /* ========== Creating Orders ========== */
@@ -170,7 +183,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         return _openOrderFor(orderParams_, orderSignature_);
     }
 
-    function _openOrder(address sender_, OrderParams memory orderParams_) internal returns (bytes32) {
+    function _openOrder(address sender_, OrderParams memory orderParams_) internal whenNotPaused returns (bytes32) {
         // Validate order parameters
         if (uint256(orderParams_.fillDeadline) < block.timestamp) revert InvalidDeadline();
         if (orderParams_.amountIn == 0) revert AmountInZero();
@@ -378,7 +391,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         OrderData calldata orderData_,
         address bridgeAdapter_,
         bytes memory bridgeAdapterArgs_
-    ) internal {
+    ) internal whenNotPaused {
         _revertIfOrderIdMismatch(orderId_, orderData_);
 
         // Can't cancel an order before it's created
@@ -477,7 +490,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         FillParams calldata fillerParams_,
         address bridgeAdapter_,
         bytes memory bridgeAdapterArgs_
-    ) internal {
+    ) internal whenNotPaused {
         _revertIfOrderIdMismatch(orderId_, orderData_);
 
         // Validate fill data
@@ -581,7 +594,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     /* ========== Receiving Crosschain Reports ========== */
 
     /// @inheritdoc IOrderBook
-    function reportFill(FillReport calldata report_) external override {
+    function reportFill(FillReport calldata report_) external override whenNotPaused {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         Order storage order = $.orders[report_.orderId];
 
@@ -645,6 +658,16 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         $.supportedDestinations[destChainId_] = isSupported_;
 
         emit DestinationSupportUpdated(destChainId_, isSupported_);
+    }
+
+    /// @inheritdoc IOrderBook
+    function pause() external onlyRole(PAUSER_ROLE) {
+        _pause();
+    }
+
+    /// @inheritdoc IOrderBook
+    function unpause() external onlyRole(PAUSER_ROLE) {
+        _unpause();
     }
 
     /* ========== View Functions ========== */
