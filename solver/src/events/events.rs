@@ -2,7 +2,47 @@ use m0_liquidity_sdk::types::Asset;
 use order_book::OrderData;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::api::{QuoteRequest, QuoteResponse};
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct QuoteRequest {
+    pub input_token: String,
+    pub input_chain_id: u32,
+    pub output_token: String,
+    pub output_chain_id: u32,
+    pub amount_in: u64,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct QuoteResponse {
+    pub quote_id: String,
+    pub fee_bps: u32,
+    pub output_amount: u64,
+    pub est_fill_time_seconds: u64,
+    pub expires_at: String,
+    pub rejected: bool,
+    pub reject_reason: Option<String>,
+    pub solver_address: String,
+    pub requires_exclusivity: bool,
+}
+
+impl Default for QuoteResponse {
+    fn default() -> Self {
+        use chrono::{SecondsFormat, TimeDelta, Utc};
+        Self {
+            rejected: true,
+            fee_bps: 0,
+            quote_id: nanoid::nanoid!(),
+            output_amount: 0,
+            expires_at: Utc::now()
+                .checked_add_signed(TimeDelta::minutes(10))
+                .unwrap()
+                .to_rfc3339_opts(SecondsFormat::Secs, true),
+            est_fill_time_seconds: 10,
+            reject_reason: None,
+            solver_address: String::new(),
+            requires_exclusivity: false,
+        }
+    }
+}
 
 /// Unified event enum
 #[derive(Debug, Clone)]
@@ -30,9 +70,9 @@ pub enum SolverEvent {
     RequestSwap(RequestSwapEvent),
     SwapSuccessful(SwapSuccessfulEvent),
 
-    // API events
-    APIRequestQuote(APIRequestQuoteEvent),
-    APIQuoteResponse(APIQuoteResponseEvent),
+    // Quote requests from the grpc stream
+    RequestQuote(RequestQuoteEvent),
+    QuoteResponse(QuoteResponseEvent),
 }
 
 impl SolverEvent {
@@ -242,7 +282,7 @@ pub struct SwapSuccessfulEvent {
 }
 
 #[derive(Debug, Clone)]
-pub struct APIRequestQuoteEvent {
+pub struct RequestQuoteEvent {
     pub request: QuoteRequest,
     pub id: String,
     pub parsed_input_token: [u8; 32],
@@ -250,7 +290,7 @@ pub struct APIRequestQuoteEvent {
 }
 
 #[derive(Debug, Clone)]
-pub struct APIQuoteResponseEvent {
+pub struct QuoteResponseEvent {
     pub response: QuoteResponse,
     pub id: String,
 }

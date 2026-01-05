@@ -67,10 +67,6 @@ service QuoteService {
 cargo run
 ```
 
-The service will start both servers:
-- HTTP API: http://0.0.0.0:3000
-- gRPC: [::1]:50051
-
 ## Testing
 
 Example curl request:

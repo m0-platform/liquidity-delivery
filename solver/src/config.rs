@@ -77,7 +77,7 @@ pub struct Config {
     pub max_order_clip_size: u64,
     pub max_clip_reprocess_delay_sec: u64,
     pub supported_assets: SupportedAssets,
-    pub api_server_port: u16,
+    pub quoter_grpc_url: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -94,7 +94,7 @@ struct ConfigFile {
     max_order_clip_size: Option<u64>,
     max_clip_reprocess_delay_sec: Option<u64>,
     supported_assets: Option<SupportedAssets>,
-    api_server_port: Option<u16>,
+    quoter_grpc_url: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -158,7 +158,7 @@ impl Default for Config {
             max_clip_reprocess_delay_sec: 60,
             supported_assets: SupportedAssets::default(),
             auto_rebalance: true,
-            api_server_port: 3000,
+            quoter_grpc_url: String::from("http://127.0.0.1:50051"),
         }
     }
 }
@@ -217,6 +217,7 @@ impl Config {
             network,
             chains,
             liquidity_api_url: config_file.liquidity_api_url,
+            quoter_grpc_url: config_file.quoter_grpc_url,
             signers: Signers::new(evm_private_key, svm_private_key),
             ..Default::default()
         };
@@ -239,9 +240,6 @@ impl Config {
         }
         if let Some(supported_assets) = config_file.supported_assets {
             config.supported_assets = supported_assets;
-        }
-        if let Some(api_server_port) = config_file.api_server_port {
-            config.api_server_port = api_server_port;
         }
 
         Ok(config)

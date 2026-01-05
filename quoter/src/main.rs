@@ -2,6 +2,8 @@ mod api_server;
 mod grpc_server;
 mod models;
 
+use std::env;
+
 use api_server::{create_router, ApiState};
 use grpc_server::QuoteGrpcService;
 use slog::{info, Drain, Logger};
@@ -9,7 +11,7 @@ use tonic::transport::Server;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let environment = std::env::var("QUOTER_ENV").unwrap_or_else(|_| "development".to_string());
+    let environment = env::var("QUOTER_ENV").unwrap_or_else(|_| "development".to_string());
 
     // Create logger
     let drain = if environment == "production" {
@@ -42,8 +44,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let grpc_service = QuoteGrpcService::new(quote_timeout_ms, logger.clone());
 
-    let grpc_addr = "[::1]:50051".parse()?;
-    let api_addr = "0.0.0.0:3000";
+    let grpc_addr = format!(
+        "[::1]:{}",
+        env::var("GRPC_PORT").unwrap_or_else(|_| "50051".to_string())
+    )
+    .parse()?;
+    let api_addr = format!(
+        "0.0.0.0:{}",
+        env::var("API_PORT").unwrap_or_else(|_| "3000".to_string())
+    );
 
     // Spawn gRPC server
     let grpc_service_clone = grpc_service.clone();
@@ -61,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let app = create_router(api_state);
-    let listener = tokio::net::TcpListener::bind(api_addr).await?;
+    let listener = tokio::net::TcpListener::bind(api_addr.clone()).await?;
     let api_server = tokio::spawn(async move { axum::serve(listener, app).await });
 
     info!(

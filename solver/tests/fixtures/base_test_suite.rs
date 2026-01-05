@@ -19,7 +19,11 @@ use solver::{
     utils::{chain_from_id, decode_evm_address},
     Config,
 };
-use std::{process::Command, sync::Arc, time::Duration};
+use std::{
+    process::Command,
+    sync::Arc,
+    time::{self, Duration},
+};
 use tokio::{sync::broadcast, time::sleep};
 
 use crate::common::{mock_api, Asset, LogBuffer};
@@ -47,6 +51,8 @@ pub struct BaseTestSuite {
     _mock_server: ServerGuard,
     pub log_buffer: LogBuffer,
     logger: Logger,
+    quoter_process: Option<std::process::Child>,
+    pub quoter_port: Option<u16>,
 }
 
 pub struct ChainInstance {
@@ -58,7 +64,7 @@ pub struct ChainInstance {
 
 impl BaseTestSuite {
     /// Create a new test suite with Anvil and deployed contracts
-    pub async fn setup_with_chains(evm_chains: Vec<u32>) -> BaseTestSuite {
+    pub async fn setup_with_chains(evm_chains: Vec<u32>, start_quoter_api: bool) -> BaseTestSuite {
         // Create a log buffer for capturing logs
         let log_buffer = LogBuffer::new();
         let logger = Logger::root(
@@ -222,6 +228,37 @@ impl BaseTestSuite {
         config.max_order_clip_size = 100;
         config.max_clip_reprocess_delay_sec = 1;
 
+        // Start quoter API if requested
+        let (quoter_process, quoter_port) = if start_quoter_api {
+            // Generate unique port based on timestamp to avoid conflicts
+            let rand_int = (time::SystemTime::now()
+                .duration_since(time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis()
+                % 6000) as u16;
+            let port = 3000 + rand_int;
+            let grpc_port = 50051 + rand_int;
+
+            let child = Command::new("cargo")
+                .args(["run", "--bin", "quoter"])
+                .current_dir("../quoter")
+                .env("API_PORT", port.to_string())
+                .env("GRPC_PORT", grpc_port.to_string())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .expect("Failed to start quoter process");
+
+            // Wait for quoter to start
+            sleep(Duration::from_secs(1)).await;
+
+            config.quoter_grpc_url = format!("http://localhost:{}", grpc_port);
+
+            (Some(child), Some(port))
+        } else {
+            (None, None)
+        };
+
         // Support created assets
         config.supported_assets = SupportedAssets {
             third_party_whitelist: chains
@@ -250,6 +287,8 @@ impl BaseTestSuite {
             _mock_server: mock_server,
             log_buffer,
             logger,
+            quoter_process,
+            quoter_port,
         };
 
         // Wait for solver to start
@@ -258,12 +297,16 @@ impl BaseTestSuite {
         suite
     }
 
-    pub async fn base_teardown(self) {
+    pub async fn base_teardown(mut self) {
         let _ = self.shutdown_tx.send(());
 
         for chain in self.chains.iter() {
             let id = chain.anvil.child().id();
             let _ = Command::new("kill").arg("-9").arg(id.to_string()).output();
+        }
+
+        if let Some(mut quoter) = self.quoter_process.take() {
+            let _ = quoter.kill();
         }
     }
 
@@ -347,5 +390,12 @@ impl BaseTestSuite {
         info!(self.logger, "Created order on chain {}", chain.chain_id;
             "block_number" => receipt.block_number.unwrap_or(0)
         );
+    }
+
+    pub fn quote_endpoint(&self) -> String {
+        format!(
+            "http://localhost:{}/quote",
+            self.quoter_port.expect("Quoter port not set")
+        )
     }
 }

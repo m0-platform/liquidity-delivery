@@ -16,7 +16,7 @@ impl Deref for LiteTestSuite {
 
 impl AsyncTestContext for LiteTestSuite {
     async fn setup() -> LiteTestSuite {
-        let base = BaseTestSuite::setup_with_chains(vec![]).await;
+        let base = BaseTestSuite::setup_with_chains(vec![], true).await;
         LiteTestSuite(base)
     }
 

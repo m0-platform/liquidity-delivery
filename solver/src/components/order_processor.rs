@@ -4,13 +4,12 @@ use slog::{info, Logger};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::api::QuoteResponse;
 use crate::components::ComponentParams;
 use crate::config::SupportedAssets;
 use crate::error::Result;
 use crate::events::{
-    APIQuoteResponseEvent, EventHandler, EventProcessor, OrderRejectEvent, RequestFillOrderEvent,
-    RequestHoldEvent, SolverEvent,
+    EventHandler, EventProcessor, OrderRejectEvent, QuoteResponse, QuoteResponseEvent,
+    RequestFillOrderEvent, RequestHoldEvent, SolverEvent,
 };
 use crate::stores::{AssetStore, OrderStore};
 use crate::utils::chain_runtime;
@@ -224,9 +223,9 @@ impl EventHandler for OrderProcessor {
 
                 return Ok(events);
             }
-            SolverEvent::APIRequestQuote(request_event) => {
+            SolverEvent::RequestQuote(request_event) => {
                 let req = request_event.request;
-                let mut resp = APIQuoteResponseEvent {
+                let mut resp = QuoteResponseEvent {
                     id: request_event.id,
                     response: QuoteResponse {
                         fee_bps: self.fee_bps as u32,
@@ -246,7 +245,7 @@ impl EventHandler for OrderProcessor {
                     Ok(assets) => assets,
                     Err(reason) => {
                         resp.response.reject_reason = Some(reason);
-                        return Ok(vec![SolverEvent::APIQuoteResponse(resp)]);
+                        return Ok(vec![SolverEvent::QuoteResponse(resp)]);
                     }
                 };
 
@@ -267,7 +266,7 @@ impl EventHandler for OrderProcessor {
                         self.solver_address_evm.clone()
                     };
 
-                return Ok(vec![SolverEvent::APIQuoteResponse(resp)]);
+                return Ok(vec![SolverEvent::QuoteResponse(resp)]);
             }
             _ => {}
         }

@@ -16,7 +16,7 @@ impl Deref for EvmChainTestSuite {
 
 impl AsyncTestContext for EvmChainTestSuite {
     async fn setup() -> EvmChainTestSuite {
-        let base = BaseTestSuite::setup_with_chains(vec![1, 8453]).await;
+        let base = BaseTestSuite::setup_with_chains(vec![1, 8453], false).await;
         EvmChainTestSuite(base)
     }
 

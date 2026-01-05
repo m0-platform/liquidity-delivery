@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package quoter;
+
+service QuoteService {
+    // Bidirectional streaming RPC for quote subscriptions
+    rpc SubscribeToQuotes(stream QuoteResponseProto) returns (stream QuoteRequestProto);
+}
+
+message QuoteRequestProto {
+    string request_id = 1;
+    string input_token = 2;
+    uint32 input_chain_id = 3;
+    string output_token = 4;
+    uint32 output_chain_id = 5;
+    uint64 amount_in = 6;
+}
+
+message QuoteResponseProto {
+    string request_id = 1;
+    string quote_id = 2;
+    uint32 fee_bps = 3;
+    uint64 output_amount = 4;
+    uint64 est_fill_time_seconds = 5;
+    string expires_at = 6;
+    bool rejected = 7;
+    string reject_reason = 8;
+    string solver_address = 9;
+    bool requires_exclusivity = 10;
+}
