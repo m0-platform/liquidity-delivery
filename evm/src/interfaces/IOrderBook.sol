@@ -60,7 +60,7 @@ interface IOrderBook {
 
     /**
      * @notice Emitted when an order is cancelled
-     * @dev This event is emitted on the origin chain
+     * @dev This event is emitted on the destination chain
      * @param orderId The ID of the cancelled order
      */
     event OrderCancelled(bytes32 indexed orderId);
@@ -439,9 +439,9 @@ interface IOrderBook {
     function reportFill(FillReport calldata report_) external;
 
     /**
-     * @notice Report a crosschain cancellation of an order.
+     * @notice Report a cross-chain cancellation of an order.
      * @dev Must be called by the messenger contract
-     * @param report_ Fill data sent from the destination chain
+     * @param report_ Cancel data sent from the destination chain
      */
     function reportCancel(CancelReport calldata report_) external;
 
