@@ -279,7 +279,35 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     /* ========== Refunding Orders ========== */
 
     /// @inheritdoc IOrderBook
-    function cancelOrder(bytes32 orderId_, OrderData calldata orderData_, bytes memory messageData_) external override {
+    function cancelOrder(bytes32 orderId_, OrderData calldata orderData_) external payable override {
+        _cancelOrder(orderId_, orderData_, address(0), new bytes(0));
+    }
+
+    /// @inheritdoc IOrderBook
+    function cancelOrder(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        bytes calldata bridgeAdapterArgs_
+    ) external payable override {
+        _cancelOrder(orderId_, orderData_, address(0), bridgeAdapterArgs_);
+    }
+
+    /// @inheritdoc IOrderBook
+    function cancelOrder(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        address bridgeAdapter_,
+        bytes calldata bridgeAdapterArgs_
+    ) external payable override {
+        _cancelOrder(orderId_, orderData_, bridgeAdapter_, bridgeAdapterArgs_);
+    }
+
+    function _cancelOrder(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        address bridgeAdapter_,
+        bytes memory bridgeAdapterArgs_
+    ) internal {
         // Cancellation Authorization:
         // 1. Before deadline:
         //   - Same-chain orders: sender OR recipient
@@ -292,16 +320,46 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
                 (orderData_.originChainId == chainId && orderData_.sender.toAddress() == msg.sender))
         ) revert NotAuthorized();
 
-        _cancelOrder(orderId_, orderData_, messageData_);
+        _cancel(orderId_, orderData_, bridgeAdapter_, bridgeAdapterArgs_);
     }
 
     /// @inheritdoc IOrderBook
     function cancelOrderFor(
         bytes32 orderId_,
         OrderData calldata orderData_,
-        bytes memory messageData_,
         bytes calldata signature_
-    ) external override {
+    ) external payable override {
+        _cancelOrderFor(orderId_, orderData_, signature_, address(0), new bytes(0));
+    }
+
+    /// @inheritdoc IOrderBook
+    function cancelOrderFor(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        bytes calldata signature_,
+        bytes calldata bridgeAdapterArgs_
+    ) external payable override {
+        _cancelOrderFor(orderId_, orderData_, signature_, address(0), bridgeAdapterArgs_);
+    }
+
+    /// @inheritdoc IOrderBook
+    function cancelOrderFor(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        bytes calldata signature_,
+        address bridgeAdapter_,
+        bytes calldata bridgeAdapterArgs_
+    ) external payable override {
+        _cancelOrderFor(orderId_, orderData_, signature_, bridgeAdapter_, bridgeAdapterArgs_);
+    }
+
+    function _cancelOrderFor(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        bytes calldata signature_,
+        address bridgeAdapter_,
+        bytes memory bridgeAdapterArgs_
+    ) internal {
         // Verify signature
         if (signature_.length == 64) {
             (bytes32 r, bytes32 vs) = abi.decode(signature_, (bytes32, bytes32));
@@ -310,10 +368,15 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
             _revertIfInvalidSignature(orderData_.recipient.toAddress(), getCancelOrderDigest(orderId_), signature_);
         }
 
-        _cancelOrder(orderId_, orderData_, messageData_);
+        _cancel(orderId_, orderData_, bridgeAdapter_, bridgeAdapterArgs_);
     }
 
-    function _cancelOrder(bytes32 orderId_, OrderData calldata orderData_, bytes memory messageData_) internal {
+    function _cancel(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        address bridgeAdapter_,
+        bytes memory bridgeAdapterArgs_
+    ) internal {
         _revertIfOrderIdMismatch(orderId_, orderData_);
 
         // Can't cancel an order before it's created
@@ -333,11 +396,26 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
             order.status = OrderStatus.Cancelled;
 
             // Cross-chain orders require sending a cancel report to the origin chain
-            IMessenger(messenger).sendCancelReport(
-                orderData_.originChainId,
-                CancelReport({ orderId: orderId_, orderSender: orderData_.sender, tokenIn: orderData_.tokenIn }),
-                messageData_
-            );
+            CancelReport memory report_ = CancelReport({
+                orderId: orderId_,
+                orderSender: orderData_.sender,
+                tokenIn: orderData_.tokenIn
+            });
+
+            bridgeAdapter_ == address(0)
+                ? IPortalV2Like(portal).sendCancelReport(
+                    orderData_.originChainId,
+                    report_,
+                    msg.sender.toBytes32(), // refundAddress
+                    bridgeAdapterArgs_
+                )
+                : IPortalV2Like(portal).sendCancelReport(
+                    orderData_.originChainId,
+                    report_,
+                    msg.sender.toBytes32(), // refundAddress
+                    bridgeAdapter_,
+                    bridgeAdapterArgs_
+                );
         }
 
         emit OrderCancelled(orderId_);
@@ -533,7 +611,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         Order storage order = _getOrderBookStorageLocation().orders[report_.orderId];
 
         // Validate the cancel report and sender
-        if (msg.sender != messenger) revert NotAuthorized();
+        if (msg.sender != portal) revert NotAuthorized();
         if (order.status != OrderStatus.Created) revert InvalidOrderStatus();
 
         // Validate the reported order sender and token in match
