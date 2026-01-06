@@ -43,14 +43,6 @@ interface IOrderBook {
     );
 
     /**
-     * @notice Emitted when a cancellation is requested for an order by the sender
-     * @dev This event is emitted on the origin chain
-     * @param orderId The ID of the order being cancelled
-     * @param cancelRequestedAt The timestamp when the cancellation was requested
-     */
-    event CancelRequested(bytes32 indexed orderId, uint32 cancelRequestedAt);
-
-    /**
      * @notice Emitted when a refund is claimed for an order
      * @dev This event is emitted on the origin chain
      * @param orderId The ID of the order being refunded

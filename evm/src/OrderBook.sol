@@ -317,11 +317,11 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         // Can't cancel an order before it's created
         if (orderData_.createdAt > block.timestamp) revert InvalidTimestamp();
 
-        // Order destination chain must be this chain
-        if (chainId != orderData_.destChainId) revert InvalidDestinationChain();
-
         Order storage order = _getOrderBookStorageLocation().orders[orderId_];
         _revertIfInvalidStatusToFillOrCancel(order, orderData_);
+
+        // Order destination chain must be this chain
+        if (chainId != orderData_.destChainId) revert InvalidDestinationChain();
 
         if (orderData_.originChainId == chainId) {
             // Local orders can be immediately refunded
