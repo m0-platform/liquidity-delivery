@@ -19,6 +19,8 @@ use std::error::Error;
 //   [X] it reverts with InvalidCreatedAtTimestamp error
 // [X] given the signer is not recipient and fill deadline has NOT passed
 //   [X] it reverts with NotAuthorized error
+// [X] given the order originated on this chain (origin_chain_id == chain_id)
+//   [X] it reverts with InvalidOriginChainId error 
 // [X] given the signer is recipient before fill deadline
 //   [X] it succeeds
 // [X] given the signer is anyone after fill deadline
@@ -29,6 +31,8 @@ use std::error::Error;
 //   [X] it sets order status to Cancelled
 
 mod xchain_orders {
+    use order_book::OrderParams;
+
     use super::*;
 
     fn create_foreign_order_data(test: &OrderBookTest) -> OrderData {
@@ -146,6 +150,55 @@ mod xchain_orders {
         test.ctx
             .execute_instruction(ix, &[&carol])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::NotAuthorized));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cancel_foreign_order_on_non_existant_native_order_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Create order data with origin_chain_id == chain_id
+        let mut order_data = create_foreign_order_data(&test);
+        order_data.origin_chain_id = CHAIN_ID; // Originated on this chain
+
+        let signer = test.get_user("bob"); // recipient
+
+        let ix = test.create_cancel_foreign_order_ix(&signer.pubkey(), &order_data)?;
+
+        test.ctx
+            .execute_instruction(ix, &[&signer])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidOriginChainId));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cancel_foreign_order_on_native_order_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Create a same chain order (origin_chain_id == chain_id)
+        let order_params = OrderParams {
+            dest_chain_id: CHAIN_ID,
+            token_out: test.get_mint("token-out-spl-6").to_bytes(),
+            amount_in: 1_000_000,
+            amount_out: 1_000_000,
+            recipient: test.get_user("alice").pubkey().to_bytes(),
+            solver: test.get_user("solver").pubkey().to_bytes(),
+            fill_deadline: test.current_time() + 100,
+        };
+        let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+        let (_, native_order) = test.get_native_order_account(&order_id)?;
+        let order_data = OrderData::new_from_native_order(native_order.data, CHAIN_ID);
+
+        let signer = test.get_user("alice"); // recipient
+        let ix = test.create_cancel_foreign_order_ix(&signer.pubkey(), &order_data)?;
+
+        test.ctx
+            .execute_instruction(ix, &[&signer])?
+            .assert_failure(); // Fails due to deserialization error, but it's good to have the check in case the account changes later
 
         Ok(())
     }

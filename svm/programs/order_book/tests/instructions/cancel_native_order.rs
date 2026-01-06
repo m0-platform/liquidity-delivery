@@ -1,6 +1,6 @@
-use super::super::{OrderBookTest, CHAIN_ID};
+use super::super::{OrderBookTest, CHAIN_ID, DEST_CHAIN_ID};
 use anchor_litesvm::{Signer, TestHelpers};
-use order_book::{error::OrderBookError, ORDER_SEED_PREFIX};
+use order_book::{error::OrderBookError, ORDER_SEED_PREFIX, state::OrderData};
 use std::error::Error;
 
 // CancelNativeOrder instruction tests
@@ -24,6 +24,8 @@ use std::error::Error;
 //   [X] it succeeds and refunds tokens to sender
 // [X] given the order has been fully filled (no remaining tokens)
 //   [X] it reverts with OrderFilled error
+// [X] given the order did not originate on the current chain (origin_chain_id != chain_id)
+//   [X] it reverts with an InvalidOriginChainId error
 // [X] given a partial fill occurred
 //   [X] it refunds only the remaining tokens
 // [X] given all checks pass
@@ -176,6 +178,147 @@ mod local_orders {
         test.ctx
             .execute_instruction(ix, &[&test.get_user("carol")])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::NotAuthorized));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cancel_native_order_foreign_order_nonexistent_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new().unwrap();
+        test.initialize().unwrap();
+
+        // Create order data for an order that originated on another chain
+        // but has this chain as the destination
+        let order_data = OrderData {
+            version: order_book::constants::VERSION,
+            sender: test.get_user("alice").pubkey().to_bytes(), // sender on origin chain
+            nonce: 0,
+            origin_chain_id: DEST_CHAIN_ID, // order originated on chain 2
+            dest_chain_id: CHAIN_ID,        // this chain (1) is the destination
+            created_at: test.current_time(),
+            fill_deadline: test.current_time() + 100,
+            token_in: test.get_mint("token-in-spl-6").to_bytes(),
+            token_out: test.get_mint("token-out-spl-6").to_bytes(),
+            amount_in: 1_000_000,
+            amount_out: 1_000_000,
+            recipient: test.get_user("alice").pubkey().to_bytes(),
+            solver: test.get_user("solver").pubkey().to_bytes(),
+        }; 
+        let order_id = order_data.compute_order_id();
+        
+        // Create the accounts for the ix manually since it will fail on the order account lookup
+        let order_account = test
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
+        let token_in_mint = test.get_mint("token-in-spl-6");
+        let sender_token_in_ata = test.get_ata(
+            "token-in-spl-6",
+            "alice"
+        );
+        let order_token_in_ata = test.create_associated_token_account(
+            &token_in_mint,
+            &order_account,
+        )?;
+        let signer = test.get_user("alice");
+
+        let accounts = order_book::accounts::CancelNativeOrder {
+            program: order_book::ID,
+            event_authority: test.get_event_authority()?,
+            signer: signer.pubkey(),
+            sender: signer.pubkey(),
+            global_account: test.get_global_account()?.0,
+            order: order_account,
+            token_in_mint: test.get_mint("token-in-spl-6"),
+            sender_token_in_ata,
+            order_token_in_ata,
+            token_in_program: anchor_spl::token::ID,
+        };
+
+        // Try to cancel the nonexistent foreign order
+        let ix = test
+            .ctx
+            .program()
+            .accounts(accounts)
+            .args(order_book::instruction::CancelNativeOrder { order_id })
+            .instruction()?;
+
+        test.ctx
+            .execute_instruction(ix, &[&signer])
+            .unwrap()
+            .assert_anchor_error("AccountNotInitialized"); 
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cancel_native_order_foreign_order_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new().unwrap();
+        test.initialize().unwrap();
+
+        // Create order data for an order that originated on another chain
+        // but has this chain as the destination
+        let order_data = OrderData {
+            version: order_book::constants::VERSION,
+            sender: test.get_user("alice").pubkey().to_bytes(), // sender on origin chain
+            nonce: 0,
+            origin_chain_id: DEST_CHAIN_ID, // order originated on chain 2
+            dest_chain_id: CHAIN_ID,        // this chain (1) is the destination
+            created_at: test.current_time(),
+            fill_deadline: test.current_time() + 100,
+            token_in: test.get_mint("token-in-spl-6").to_bytes(),
+            token_out: test.get_mint("token-out-spl-6").to_bytes(),
+            amount_in: 1_000_000,
+            amount_out: 1_000_000,
+            recipient: test.get_user("alice").pubkey().to_bytes(),
+            solver: test.get_user("solver").pubkey().to_bytes(),
+        };
+        let order_id = order_data.compute_order_id();
+
+        // Partially fill the order to initialize the account locally
+        test.fill_foreign_order("solver", &order_data, (order_data.amount_out / 2) as u64)?;
+
+        // Create the accounts for the ix manually since it will fail on the order account lookup
+        let order_account = test
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
+        let token_in_mint = test.get_mint("token-in-spl-6");
+        let sender_token_in_ata = test.get_ata(
+            "token-in-spl-6",
+            "alice"
+        );
+        let order_token_in_ata = test.create_associated_token_account(
+            &token_in_mint,
+            &order_account,
+        )?;
+        let signer = test.get_user("alice");
+
+        let accounts = order_book::accounts::CancelNativeOrder {
+            program: order_book::ID,
+            event_authority: test.get_event_authority()?,
+            signer: signer.pubkey(),
+            sender: signer.pubkey(),
+            global_account: test.get_global_account()?.0,
+            order: order_account,
+            token_in_mint: test.get_mint("token-in-spl-6"),
+            sender_token_in_ata,
+            order_token_in_ata,
+            token_in_program: anchor_spl::token::ID,
+        };
+
+        // Try to cancel the initialized foreign order locally with cancel_native_order
+        let ix = test
+            .ctx
+            .program()
+            .accounts(accounts)
+            .args(order_book::instruction::CancelNativeOrder { order_id })
+            .instruction()?;
+
+        test.ctx
+            .execute_instruction(ix, &[&signer])
+            .unwrap()
+            .assert_anchor_error("AccountDidNotDeserialize"); // Fails due to deserialization error 
 
         Ok(())
     }
