@@ -68,7 +68,7 @@ pub struct CancelNativeOrder<'info> {
 
     #[account(
         seeds = [GLOBAL_SEED],
-        bump = global_account.bump
+        bump = global_account.bump,
     )]
     pub global_account: Account<'info, OrderBookGlobal>,
 
@@ -187,6 +187,7 @@ pub struct CancelForeignOrder {
         seeds = [GLOBAL_SEED],
         bump = global_account.bump,
         constraint = order_data.dest_chain_id == global_account.chain_id @ OrderBookError::InvalidDestChainId,
+        constraint = order_data.origin_chain_id != global_account.chain_id @ OrderBookError::InvalidOriginChainId,
     )]
     pub global_account: Account<'info, OrderBookGlobal>,
 
