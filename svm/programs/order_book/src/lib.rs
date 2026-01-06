@@ -39,13 +39,18 @@ pub mod order_book {
         Initialize::handler(ctx, chain_id, messenger_authority)
     }
 
-    pub fn configure_destination(
-        ctx: Context<ConfigureDestination>,
+    pub fn add_destination(
+        ctx: Context<AddDestination>,
         dest_chain_id: u32,
-        is_supported: bool,
-        finality_buffer: Option<u64>,
     ) -> Result<()> {
-        ConfigureDestination::handler(ctx, dest_chain_id, is_supported, finality_buffer)
+        AddDestination::handler(ctx, dest_chain_id)
+    }
+
+    pub fn remove_destination(
+        ctx: Context<RemoveDestination>,
+        dest_chain_id: u32,
+    ) -> Result<()> {
+        RemoveDestination::handler(ctx, dest_chain_id)
     }
 
     pub fn set_messenger_authority(
@@ -80,15 +85,19 @@ pub mod order_book {
         OpenOrder::handler(ctx, params)
     }
 
-    pub fn request_cancel_order(
-        ctx: Context<RequestCancelOrder>,
+    pub fn cancel_native_order(
+        ctx: Context<CancelNativeOrder>,
         order_id: [u8; 32],
     ) -> Result<()> {
-        RequestCancelOrder::handler(ctx, order_id)
+        CancelNativeOrder::handler(ctx, order_id)
     }
 
-    pub fn claim_refund(ctx: Context<ClaimRefund>, order_id: [u8; 32]) -> Result<()> {
-        ClaimRefund::handler(ctx, order_id)
+    pub fn cancel_foreign_order<'info>(
+        ctx: Context<'_, '_, 'info, 'info, CancelForeignOrder<'info>>,
+        order_id: [u8; 32],
+        order_data: OrderData,
+    ) -> Result<()> {
+        CancelForeignOrder::handler(ctx, order_id, order_data)
     }
 
     // Solver actions
@@ -115,7 +124,11 @@ pub mod order_book {
 
     pub fn report_order_fill(ctx: Context<ReportOrderFill>, fill_report: FillReport) -> Result<()> {
         ReportOrderFill::handler(ctx, fill_report)
-    }  
+    } 
+
+    pub fn report_order_cancel(ctx: Context<ReportOrderCancel>, cancel_report: CancelReport) -> Result<()> {
+        ReportOrderCancel::handler(ctx, cancel_report)
+    } 
 
     // Dummy IDL instruction
     // Included to ensure the order types are included in the IDL build

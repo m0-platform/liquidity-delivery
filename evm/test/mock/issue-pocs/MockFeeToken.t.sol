@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 /// @notice Mock ERC20 token with configurable transfer fee
 /// @dev Fee is in basis points (100 = 1%)
