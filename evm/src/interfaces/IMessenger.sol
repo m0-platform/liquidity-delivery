@@ -9,4 +9,10 @@ interface IMessenger {
         IOrderBook.FillReport calldata report,
         bytes calldata messageData
     ) external;
+
+    function sendCancelReport(
+        uint32 destinationChainId,
+        IOrderBook.CancelReport calldata report,
+        bytes calldata messageData
+    ) external;
 }

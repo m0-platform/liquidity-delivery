@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
 
@@ -20,12 +20,15 @@ contract ReportFillTest is OrderBookTestBase {
     //   [X] it reverts with an InvalidReport error
     // [X] given the reported amount in to release would exceed the order amount in
     //   [X] it reverts with an InvalidReport error
-    // [X] given the order is active or cancelled
+    // [X] given the tokenIn does not match
+    //   [X] it reverts with an InvalidReport error
+    // [X] given the order is active (Created status)
     //   [X] it updates the filled amount for the order
     //   [X] it transfers the pro-rata amount of the token in to the specified recipient
     //   [X] given the order is fully filled
     //     [X] it updates the order status to Completed
     //     [X] it emits an OrderCompleted event
+    // Note: cancelled order tests removed - reportFill only accepts Created status orders
 
     function setUp() public override {
         super.setUp();
@@ -289,167 +292,5 @@ contract ReportFillTest is OrderBookTestBase {
     {
         _placeOrder(users["alice"], params);
         _test_activeOrderFullFill_success();
-    }
-
-    function _test_cancelledOrderPartialFill_success() internal {
-        bytes32 orderId = _getOrderIdFromParams(users["alice"], 1, params);
-
-        // Request cancellation
-        vm.prank(users["alice"]);
-        orderBook.requestCancelOrder(orderId);
-
-        // Report partial fill (50%)
-        uint128 fillAmount = params.amountOut / 2;
-        uint128 expectedAmountIn = uint128((uint256(params.amountIn) * fillAmount) / params.amountOut);
-
-        // Record balances before
-        uint256 recipientBalanceBefore = tokenIn.balanceOf(users["solver"]);
-        uint256 orderBookBalanceBefore = tokenIn.balanceOf(address(orderBook));
-
-        // Report fill via messenger
-        vm.prank(address(messenger));
-        orderBook.reportFill(
-            IOrderBook.FillReport({
-                orderId: orderId,
-                amountOutFilled: fillAmount,
-                amountInToRelease: expectedAmountIn,
-                originRecipient: users["solver"].toBytes32(),
-                tokenIn: address(tokenIn).toBytes32()
-            })
-        );
-
-        // Verify tokenIn transferred
-        assertEq(
-            tokenIn.balanceOf(users["solver"]),
-            recipientBalanceBefore + expectedAmountIn,
-            "recipient should receive pro-rata tokenIn"
-        );
-        assertEq(
-            tokenIn.balanceOf(address(orderBook)),
-            orderBookBalanceBefore - expectedAmountIn,
-            "orderBook should release pro-rata tokenIn"
-        );
-
-        // Verify order status remains CancelRequested (not Completed)
-        IOrderBook.Order memory order = orderBook.getOrder(orderId);
-        assertEq(
-            uint8(order.status),
-            uint8(IOrderBook.OrderStatus.CancelRequested),
-            "order should still be CancelRequested"
-        );
-    }
-
-    function test_bothSixDecimals_cancelledOrderPartialFill_success()
-        public
-        givenTokenInDecimals(6)
-        givenTokenOutDecimals(6)
-    {
-        _placeOrder(users["alice"], params);
-        _test_cancelledOrderPartialFill_success();
-    }
-
-    function test_tokenInSmallerDecimals_cancelledOrderPartialFill_success()
-        public
-        givenTokenInDecimals(6)
-        givenTokenOutDecimals(18)
-    {
-        _placeOrder(users["alice"], params);
-        _test_cancelledOrderPartialFill_success();
-    }
-
-    function test_tokenInLargerDecimals_cancelledOrderPartialFill_success()
-        public
-        givenTokenInDecimals(18)
-        givenTokenOutDecimals(6)
-    {
-        _placeOrder(users["alice"], params);
-        _test_cancelledOrderPartialFill_success();
-    }
-
-    function test_bothEighteenDecimals_cancelledOrderPartialFill_success()
-        public
-        givenTokenInDecimals(18)
-        givenTokenOutDecimals(18)
-    {
-        _placeOrder(users["alice"], params);
-        _test_cancelledOrderPartialFill_success();
-    }
-
-    function _test_cancelledOrderFullFill_success() internal {
-        bytes32 orderId = _getOrderIdFromParams(users["alice"], 1, params);
-
-        // Request cancellation
-        vm.prank(users["alice"]);
-        orderBook.requestCancelOrder(orderId);
-
-        // Record balances before
-        uint256 recipientBalanceBefore = tokenIn.balanceOf(users["solver"]);
-        uint256 orderBookBalanceBefore = tokenIn.balanceOf(address(orderBook));
-
-        // Report full fill via messenger
-        vm.prank(address(messenger));
-        vm.expectEmit(true, false, false, true);
-        emit IOrderBook.OrderCompleted(orderId);
-        orderBook.reportFill(
-            IOrderBook.FillReport({
-                orderId: orderId,
-                amountOutFilled: params.amountOut,
-                amountInToRelease: params.amountIn,
-                originRecipient: users["solver"].toBytes32(),
-                tokenIn: address(tokenIn).toBytes32()
-            })
-        );
-
-        // Verify tokenIn transferred
-        assertEq(
-            tokenIn.balanceOf(users["solver"]),
-            recipientBalanceBefore + params.amountIn,
-            "recipient should receive full tokenIn"
-        );
-        assertEq(
-            tokenIn.balanceOf(address(orderBook)),
-            orderBookBalanceBefore - params.amountIn,
-            "orderBook should release full tokenIn"
-        );
-
-        // Verify order status changed to Completed
-        IOrderBook.Order memory order = orderBook.getOrder(orderId);
-        assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Completed), "order should be Completed");
-    }
-
-    function test_bothSixDecimals_cancelledOrderFullFill_success()
-        public
-        givenTokenInDecimals(6)
-        givenTokenOutDecimals(6)
-    {
-        _placeOrder(users["alice"], params);
-        _test_cancelledOrderFullFill_success();
-    }
-
-    function test_tokenInSmallerDecimals_cancelledOrderFullFill_success()
-        public
-        givenTokenInDecimals(6)
-        givenTokenOutDecimals(18)
-    {
-        _placeOrder(users["alice"], params);
-        _test_cancelledOrderFullFill_success();
-    }
-
-    function test_tokenInLargerDecimals_cancelledOrderFullFill_success()
-        public
-        givenTokenInDecimals(18)
-        givenTokenOutDecimals(6)
-    {
-        _placeOrder(users["alice"], params);
-        _test_cancelledOrderFullFill_success();
-    }
-
-    function test_bothEighteenDecimals_cancelledOrderFullFill_success()
-        public
-        givenTokenInDecimals(18)
-        givenTokenOutDecimals(18)
-    {
-        _placeOrder(users["alice"], params);
-        _test_cancelledOrderFullFill_success();
     }
 }

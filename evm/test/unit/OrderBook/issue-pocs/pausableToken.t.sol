@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { Test } from "../../../../lib/forge-std/src/Test.sol";
 import { ERC1967Proxy } from "../../../../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -59,7 +59,7 @@ contract PausableTokenTest is Test {
         // Configure
         messenger.setOrderBook(address(orderBook));
         vm.prank(admin);
-        orderBook.setDestinationConfig(DEST_CHAIN_ID, true, FINALITY_BUFFER);
+        orderBook.setDestinationSupported(DEST_CHAIN_ID, true);
 
         // Setup order params
         params = IOrderBook.OrderParams({
@@ -121,11 +121,19 @@ contract PausableTokenTest is Test {
         vm.warp(block.timestamp + 1 days);
         pausableToken.unpause();
 
-        // 6. Alice claims refund after fill deadline passes
-        vm.warp(order.fillDeadline + FINALITY_BUFFER + 1);
+        // 6. Simulate cancel report arriving from destination chain
+        //    With the new design, cancellation originates on destination and sends
+        //    a CancelReport to origin which triggers the refund
 
         uint256 aliceBalanceBefore = pausableToken.balanceOf(alice);
-        orderBook.claimRefund(orderId);
+        vm.prank(address(messenger));
+        orderBook.reportCancel(
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: alice.toBytes32(),
+                tokenIn: params.tokenIn.toBytes32()
+            })
+        );
         uint256 aliceBalanceAfter = pausableToken.balanceOf(alice);
 
         // Alice got her tokenIn back!

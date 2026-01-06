@@ -12,17 +12,43 @@ use anchor_spl::{
     token_interface::{Mint, TokenAccount, TokenInterface},
 };
 
-declare_program!(portal);
-use portal::{
+use crate::portal::{
     cpi::{accounts::SendFillReport, send_fill_report},
     program::Portal,
 };
+
+// Instructions related to filling orders
+// Orders must be filled on their destination chain.
+// From the perspective of the chain that this program is deployed on,
+// there are two main flows:
+// 1. filling a samechain order (i.e. current chain ID == origin chain ID == destination chain ID)
+//   a. for orders that both originate on the current chain
+//      and have the current chain as the destination
+//      the designated solver (if provided) or anyone (if no solver specified)
+//      fills the order by executing `FillNativeOrder`
+// 2. filling a cross-chain order
+//   a. for orders that have the current chain as the destination, (i.e. current chain ID == destination chain ID != origin chain ID)
+//      the designated solver (if provided) or anyone (if no solver specified)
+//      fills the order by executing `FillForeignOrder`
+//      this sends a cancel report back to the origin chain via a CPI to the Portal program
+//   b. for orders that originate on the current chain, (i.e. current chain ID == origin chain ID != destination chain ID)
+//      the relayer reports the fills back to the origin chain by executing `ReportOrderFill`
+//      via the Portal program
 
 // Handler Inputs
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct FillParams {
     pub amount_out_to_fill: u64,
     pub origin_recipient: [u8; 32],
+}
+
+#[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize)]
+pub struct FillReport {
+    pub order_id: [u8; 32],
+    pub amount_in_to_release: u128,
+    pub amount_out_filled: u128,
+    pub origin_recipient: [u8; 32],
+    pub token_in: [u8; 32],
 }
 
 // Events
@@ -39,7 +65,15 @@ pub struct OrderCompleted {
     pub order_id: [u8; 32],
 }
 
-// Account Contexts
+#[event]
+pub struct FillReported {
+    pub order_id: [u8; 32],
+    pub amount_in_to_release: u128,
+    pub amount_out_filled: u128,
+    pub origin_recipient: [u8; 32],
+}
+
+// Instruction Contexts and Handlers
 #[event_cpi]
 #[derive(Accounts)]
 #[instruction(order_id: [u8; 32], order_data: OrderData, fill_params: FillParams)]
@@ -324,9 +358,9 @@ impl<'info> FillForeignOrder<'info> {
         // Validate the params
         validate_params(order_id, order_data, fill_params, &self.solver.key())?;
 
-        // Validate the order is in a fillable state
+        // Validate the order status is fillable (i.e. DoesNotExist or Created, if already partially filled)
         require!(
-            self.order.data.amount_out_filled < order_data.amount_out,
+            self.order.data.status == OrderStatus::DoesNotExist || self.order.data.status == OrderStatus::Created,
             OrderBookError::OrderNotFillable
         );
 
@@ -341,10 +375,11 @@ impl<'info> FillForeignOrder<'info> {
         fill_params: FillParams,
     ) -> Result<()> {
         // If this is a new order, initialize it
-        if ctx.accounts.order.data.amount_out_filled == 0 {
+        if ctx.accounts.order.data.status == OrderStatus::DoesNotExist {
             ctx.accounts.order.order_type = OrderType::Foreign;
             ctx.accounts.order.bump = ctx.bumps.order;
             ctx.accounts.order.data = ForeignOrder {
+                status: OrderStatus::Created,
                 amount_in_released: 0,
                 amount_out_filled: 0,
             };
@@ -365,6 +400,9 @@ impl<'info> FillForeignOrder<'info> {
         require!(amount_out_remaining > 0, OrderBookError::OrderFilled);
         let full_fill: bool = fill_params.amount_out_to_fill as u128 >= amount_out_remaining;
         let (amount_in_to_release, amount_out_to_fill): (u64, u64) = if full_fill {
+            // Set the order status to completed
+            order.status = OrderStatus::Completed;
+
             // Set the fill amount out to the remaining amount
             // Set the amount in to release to the remaining amount in
             (
@@ -452,11 +490,17 @@ fn validate_params(
         OrderBookError::InvalidOrderId
     );
 
-    // Validate the order has not expired
     let current_timestamp = Clock::get()?.unix_timestamp as u64;
+    // Validate the order has not expired
     require!(
         current_timestamp <= order_data.fill_deadline as u64,
         OrderBookError::OrderExpired
+    );
+
+    // Validate the created_at timestamp is not in the future
+    require!(
+        current_timestamp >= order_data.created_at,
+        OrderBookError::InvalidCreatedAtTimestamp
     );
 
     // Validate the order is for the current version
@@ -482,3 +526,151 @@ fn validate_params(
 
     Ok(())
 }
+
+#[event_cpi]
+#[derive(Accounts)]
+#[instruction(fill_report: FillReport)]
+pub struct ReportOrderFill<'info> {
+    #[account(mut)]
+    pub relayer: Signer<'info>,
+
+    #[account(address = global_account.messenger_authority @ OrderBookError::NotAuthorized)]
+    pub messenger_authority: Signer<'info>,
+
+    #[account(
+        seeds = [GLOBAL_SEED],
+        bump = global_account.bump
+    )]
+    pub global_account: Account<'info, OrderBookGlobal>,
+
+    #[account(
+        mut,
+        seeds = [ORDER_SEED_PREFIX, fill_report.order_id.as_ref()],
+        bump = order.bump,
+    )]
+    pub order: Account<'info, Order::<NativeOrder>>,
+
+    #[account(
+        address = order.data.token_in @ OrderBookError::InvalidTokenMint,
+        mint::token_program = token_in_program,
+    )]
+    pub token_in_mint: InterfaceAccount<'info, Mint>,
+
+    /// CHECK: This is validated against the fill report
+    #[account(
+        address = Pubkey::new_from_array(fill_report.origin_recipient) @ OrderBookError::InvalidRecipient,
+    )]
+    pub origin_recipient: UncheckedAccount<'info>,
+
+    #[account(
+        init_if_needed,
+        payer = relayer,
+        associated_token::mint = token_in_mint,
+        associated_token::authority = origin_recipient,
+        associated_token::token_program = token_in_program
+    )]
+    pub recipient_token_in_ata: InterfaceAccount<'info, TokenAccount>,
+
+    #[account(
+        mut,
+        associated_token::mint = token_in_mint,
+        associated_token::authority = order.key(),
+        associated_token::token_program = token_in_program
+    )]
+    pub order_token_in_ata: InterfaceAccount<'info, TokenAccount>,
+
+    pub token_in_program: Interface<'info, TokenInterface>,
+
+    pub associated_token_program: Program<'info, AssociatedToken>,
+
+    pub system_program: Program<'info, System>,
+}
+
+impl ReportOrderFill<'_> {
+    fn validate(&self, fill_report: &FillReport) -> Result<()> {
+        // Validate the order type is native
+        require!(
+            self.order.order_type == OrderType::Native,
+            OrderBookError::InvalidOrderType
+        );
+
+        let status = &self.order.data.status;
+
+        // Validate the order can be filled
+        require!(
+            status == &OrderStatus::Created,
+            OrderBookError::OrderNotFillable
+        );
+
+        // Validate the fill amount is not zero
+        if fill_report.amount_out_filled == 0 {
+            return err!(OrderBookError::InvalidFillAmount);
+        }
+
+        Ok(())
+    }
+
+    #[access_control(ctx.accounts.validate(&fill_report))]
+    pub fn handler(ctx: Context<Self>, fill_report: FillReport) -> Result<()> {
+        let order = &mut ctx.accounts.order.data;
+
+        // Update the filled amounts on the order
+        order.amount_in_released += fill_report.amount_in_to_release as u128;
+        order.amount_out_filled += fill_report.amount_out_filled as u128;
+
+        let full_fill = if order.amount_out_filled >= order.amount_out {
+            // The amount_in_to_release is limited to the amount in the order tokenIn ATA
+            // Therefore, we don't need to check for overfills here.
+
+            // Mark the order as completed if fully filled
+            order.status = OrderStatus::Completed;
+            true
+        } else {
+            false
+        };
+
+        // Calculate the corresponding input amount to release to the solve
+        // If the order is completed by the fill, use the order token account balance
+        // Otherwise, use the reported amount
+        // If the reported amount is more than the order token account balance, it will error during the transfer.
+        // This shouldn't happen in normal operation and if it does, then the transfer error will stop the ix
+        // from completing.
+        let amount_in_to_release: u64 = if full_fill {
+            // Any tokens sent to this account after the order is created are donated to the solver
+            ctx.accounts.order_token_in_ata.amount
+        } else {
+            fill_report
+                .amount_in_to_release
+                .try_into()
+                .map_err(|_| OrderBookError::MathOverflow)?
+        };
+
+        // Transfer the input tokens from the order to the designated recipient
+        transfer_tokens_from_program(
+            &ctx.accounts.order_token_in_ata,
+            &ctx.accounts.recipient_token_in_ata,
+            amount_in_to_release,
+            &ctx.accounts.token_in_mint,
+            &ctx.accounts.order.to_account_info(),
+            &[&[
+                ORDER_SEED_PREFIX,
+                &fill_report.order_id,
+                &[ctx.accounts.order.bump],
+            ]],
+            &ctx.accounts.token_in_program,
+        )?;
+
+        // Emit an event for the fill report
+        emit_cpi!(FillReported {
+            order_id: fill_report.order_id,
+            amount_in_to_release: fill_report.amount_in_to_release,
+            amount_out_filled: fill_report.amount_out_filled,
+            origin_recipient: fill_report.origin_recipient,
+        });
+
+        Ok(())
+    }
+}
+
+
+
