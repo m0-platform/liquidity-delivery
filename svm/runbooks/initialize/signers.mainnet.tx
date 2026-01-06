@@ -1,0 +1,11 @@
+// connect a wallet that is on the multisig
+signer "initiator" "svm::web_wallet" {
+    description = "Initiator for multisig actions"
+}
+
+signer "caller" "svm::squads" {
+    description = "Program admin"
+    multisig_account_public_key = "BKEgAKFUBAYee5JuTAf6HjMHAiFLqvNtAKxxZb5aay5F"
+    create_key = "Ga8eDs74ZjWx7Prbm5Yu9pBc91YZgLqdURM4aK3HcYrX"
+    initiator = signer.initiator
+}

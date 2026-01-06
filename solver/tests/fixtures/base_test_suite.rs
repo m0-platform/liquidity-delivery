@@ -9,9 +9,10 @@ use alloy::{
     signers::local::PrivateKeySigner,
     sol,
 };
-use anchor_client::solana_sdk::signature::Keypair;
+use anchor_client::solana_sdk::{signature::Keypair, signer::Signer};
 use mockito::ServerGuard;
 use regex::Regex;
+use serde_json::json;
 use slog::{info, Drain, Logger};
 use solver::{
     config::{Environment, SupportedAssets},
@@ -20,11 +21,15 @@ use solver::{
     Config,
 };
 use std::{
-    process::Command,
     sync::Arc,
     time::{self, Duration},
 };
-use tokio::{sync::broadcast, time::sleep};
+use tokio::{
+    io::{AsyncBufReadExt, BufReader},
+    process::{self, Command},
+    sync::broadcast,
+    time::sleep,
+};
 
 use crate::common::{mock_api, Asset, LogBuffer};
 
@@ -51,8 +56,13 @@ pub struct BaseTestSuite {
     _mock_server: ServerGuard,
     pub log_buffer: LogBuffer,
     logger: Logger,
-    quoter_process: Option<std::process::Child>,
-    pub quoter_port: Option<u16>,
+    quoter_process: Option<ProcessWithPort>,
+    surfpool_process: Option<ProcessWithPort>,
+}
+
+pub struct ProcessWithPort {
+    pub process: process::Child,
+    pub port: u16,
 }
 
 pub struct ChainInstance {
@@ -77,10 +87,68 @@ impl BaseTestSuite {
         let mut chains = Vec::new();
         let evm_signer = PrivateKeySigner::from_bytes(&FixedBytes::from([1u8; 32])).unwrap();
         let evm_user = PrivateKeySigner::from_bytes(&FixedBytes::from([2u8; 32])).unwrap();
-        let svm_signer = Arc::new(Keypair::new());
+        let svm_signer = Arc::new(Keypair::from_base58_string("2MqZwxzsfaEvQvnj4CgvUo2aknYXxJW2bBn5ewbftnbjU9DAtWX1XzCHy7Wd8dBSq5bmRwj6Ya5XTAnEe8sy2qS9"));
+        let mut surfpool_process = None;
 
-        // Start Anvil nodes for each chain
+        // Start Anvil nodes for each chain (or Surfpool for Solana)
         for (i, &chain_id) in evm_chains.iter().enumerate() {
+            // Solana
+            if chain_id == 1399811149 {
+                let port = portpicker::pick_unused_port().expect("No free ports available");
+
+                let child = Command::new("surfpool")
+                    .args(&[
+                        "start",
+                        "--port",
+                        port.to_string().as_str(),
+                        "--no-deploy",
+                        "--no-tui",
+                        "--airdrop",
+                        &svm_signer.pubkey().to_string(),
+                        "--rpc-url",
+                        "https://hatty-73mn84-fast-mainnet.helius-rpc.com",
+                    ])
+                    .current_dir("..")
+                    .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::piped())
+                    .spawn()
+                    .expect("Failed to start surfpool");
+
+                sleep(Duration::from_millis(1000)).await;
+
+                for runbook in &["deployment", "initialize"] {
+                    let output = Command::new("surfpool")
+                        .args(&[
+                            "run",
+                            runbook,
+                            "--env",
+                            "localnet",
+                            "--unsupervised",
+                            "--input",
+                            format!("rpc_api_url=http://127.0.0.1:{}", port).as_str(),
+                        ])
+                        .current_dir("..")
+                        .stdout(std::process::Stdio::piped())
+                        .stderr(std::process::Stdio::piped())
+                        .output()
+                        .await
+                        .expect("failed to run surfpool cmd");
+
+                    println!(
+                        "Surfpool run {} stdout: {}",
+                        runbook,
+                        String::from_utf8_lossy(&output.stdout)
+                    );
+                }
+
+                surfpool_process = Some(ProcessWithPort {
+                    process: child,
+                    port,
+                });
+
+                continue;
+            }
+
             let anvil = alloy::node_bindings::Anvil::new()
                 .block_time_f64(0.1)
                 .arg("--prune-history")
@@ -229,7 +297,7 @@ impl BaseTestSuite {
         config.max_clip_reprocess_delay_sec = 1;
 
         // Start quoter API if requested
-        let (quoter_process, quoter_port) = if start_quoter_api {
+        let quoter_process = if start_quoter_api {
             let port = portpicker::pick_unused_port().expect("No free ports available");
             let grpc_port = portpicker::pick_unused_port().expect("No free ports available");
 
@@ -264,9 +332,12 @@ impl BaseTestSuite {
 
             config.quoter_grpc_url = format!("http://localhost:{}", grpc_port);
 
-            (Some(child), Some(port))
+            Some(ProcessWithPort {
+                process: child,
+                port,
+            })
         } else {
-            (None, None)
+            None
         };
 
         // Support created assets
@@ -293,12 +364,12 @@ impl BaseTestSuite {
             _evm_signer: evm_signer,
             evm_user,
             _svm_signer: svm_signer,
+            surfpool_process,
+            quoter_process,
             shutdown_tx,
             _mock_server: mock_server,
             log_buffer,
             logger,
-            quoter_process,
-            quoter_port,
         };
 
         // Wait for solver to start
@@ -316,7 +387,7 @@ impl BaseTestSuite {
         }
 
         if let Some(mut quoter) = self.quoter_process.take() {
-            let _ = quoter.kill();
+            let _ = quoter.process.kill();
         }
     }
 
@@ -405,7 +476,17 @@ impl BaseTestSuite {
     pub fn quote_endpoint(&self) -> String {
         format!(
             "http://localhost:{}/quote",
-            self.quoter_port.expect("Quoter port not set")
+            self.quoter_process.as_ref().expect("Quoter not set").port
+        )
+    }
+
+    pub fn surfpool_endpoint(&self) -> String {
+        format!(
+            "http://localhost:{}",
+            self.surfpool_process
+                .as_ref()
+                .expect("Surfpool not set")
+                .port
         )
     }
 }

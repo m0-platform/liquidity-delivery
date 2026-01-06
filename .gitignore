@@ -35,3 +35,7 @@ gasreport.ansi
 **/*.rs.bk
 test-ledger
 target
+
+
+# Surfpool files
+.surfpool/

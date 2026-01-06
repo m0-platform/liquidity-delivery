@@ -33,3 +33,11 @@ Tests for the `order_book` program are written in Rust using the [`anchor-litesv
 ```bash
 anchor test
 ```
+
+## Deployment and initialization
+The SVM programs use surfpool run books for deployment and initialization. See `txtx.yml` for runbooks and configurations.
+
+Example:
+```bash
+surfpool run initialize --env devnet
+```

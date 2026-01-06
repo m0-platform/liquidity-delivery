@@ -1,0 +1,12 @@
+addon "svm" {
+    rpc_api_url = input.rpc_api_url
+    network_id = input.network_id
+}
+
+action "deploy_order_book" "svm::deploy_program" {
+    description = "Deploy order_book program"
+    program = svm::get_program_from_anchor_project("order_book")
+    authority = signer.authority
+    payer = signer.payer
+    instant_surfnet_deployment = true
+}
