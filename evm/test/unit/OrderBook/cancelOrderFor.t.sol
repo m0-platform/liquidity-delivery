@@ -7,6 +7,7 @@ import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
 import { IOrderBook } from "../../../src/interfaces/IOrderBook.sol";
 
 import { OrderBookTestBase } from "./OrderBookTestBase.t.sol";
+import { MockERC20 } from "../../mock/MockERC20.t.sol";
 
 contract CancelOrderForTest is OrderBookTestBase {
     using TypeConverter for *;
@@ -46,6 +47,8 @@ contract CancelOrderForTest is OrderBookTestBase {
     VmSafe.Wallet internal recipient;
     VmSafe.Wallet internal sender;
     bytes32 internal orderId;
+    IOrderBook.OrderData internal xchainOrderData;
+    bytes32 internal xchainOrderId;
 
     function setUp() public override {
         super.setUp();
@@ -65,7 +68,27 @@ contract CancelOrderForTest is OrderBookTestBase {
         // Set recipient in params
         params.recipient = recipient.addr.toBytes32();
 
+        // Create local order for tests
+        params.destChainId = CHAIN_ID;
         orderId = _placeOrder(sender.addr, params);
+
+        // Create xchain order data that originates on another chain and is destined for this chain
+        xchainOrderData = IOrderBook.OrderData({
+            version: 1,
+            originChainId: DEST_CHAIN_ID, // Order originated from another chain
+            sender: sender.addr.toBytes32(),
+            nonce: 0,
+            destChainId: CHAIN_ID, // This chain is the destination
+            createdAt: uint64(block.timestamp),
+            fillDeadline: params.fillDeadline,
+            amountIn: params.amountIn,
+            amountOut: params.amountOut,
+            tokenIn: address(tokenIn).toBytes32(),
+            tokenOut: params.tokenOut,
+            recipient: recipient.addr.toBytes32(),
+            solver: params.solver
+        });
+        xchainOrderId = orderBook.getOrderId(xchainOrderData);
     }
 
     function _signStandardECDSA(VmSafe.Wallet memory wallet_, bytes32 orderId_) internal returns (bytes memory) {
@@ -149,25 +172,8 @@ contract CancelOrderForTest is OrderBookTestBase {
     }
 
     function test_givenOrderAlreadyFilledLocal_reverts() public {
-        // Create a local order
-        params.destChainId = CHAIN_ID;
-        bytes32 localOrderId = _placeOrder(sender.addr, params);
-
         // First, fill the order
-        _fillOrder(users["solver"], localOrderId, params.amountOut);
-
-        IOrderBook.Order memory order = orderBook.getOrder(localOrderId);
-        IOrderBook.OrderData memory orderData = _getOrderDataFromOrder(localOrderId, order);
-
-        // Attempt to cancel
-        bytes memory signature = _signStandardECDSA(recipient, localOrderId);
-        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
-        orderBook.cancelOrderFor(localOrderId, orderData, new bytes(0), signature);
-    }
-
-    function test_givenOrderAlreadyFilledXchain_reverts() public {
-        // First, report fill on cross-chain order
-        _reportFill(users["solver"], orderId, params.amountOut, params.amountIn);
+        _fillOrder(users["solver"], orderId, params.amountOut);
 
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
         IOrderBook.OrderData memory orderData = _getOrderDataFromOrder(orderId, order);
@@ -176,6 +182,23 @@ contract CancelOrderForTest is OrderBookTestBase {
         bytes memory signature = _signStandardECDSA(recipient, orderId);
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
         orderBook.cancelOrderFor(orderId, orderData, new bytes(0), signature);
+    }
+
+    function test_givenOrderAlreadyFilledXchain_reverts() public {
+        // First, fill on cross-chain order
+        vm.startPrank(users["solver"]);
+        MockERC20(xchainOrderData.tokenOut.toAddress()).approve(address(orderBook), params.amountOut);
+        orderBook.fillOrder(
+            xchainOrderId,
+            xchainOrderData,
+            IOrderBook.FillParams({ amountOutToFill: params.amountOut, originRecipient: xchainOrderData.solver })
+        );
+        vm.stopPrank();
+
+        // Attempt to cancel
+        bytes memory signature = _signStandardECDSA(recipient, xchainOrderId);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
+        orderBook.cancelOrderFor(xchainOrderId, xchainOrderData, new bytes(0), signature);
     }
 
     function test_givenOrderIdMismatch_reverts() public {
@@ -206,29 +229,25 @@ contract CancelOrderForTest is OrderBookTestBase {
     }
 
     function test_givenLocalOrder_success() public {
-        // Create a local order
-        params.destChainId = CHAIN_ID;
-        bytes32 localOrderId = _placeOrder(sender.addr, params);
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        IOrderBook.OrderData memory orderData = _getOrderDataFromOrder(orderId, order);
 
-        IOrderBook.Order memory order = orderBook.getOrder(localOrderId);
-        IOrderBook.OrderData memory orderData = _getOrderDataFromOrder(localOrderId, order);
+        bytes memory signature = _signStandardECDSA(recipient, orderId);
 
-        bytes memory signature = _signStandardECDSA(recipient, localOrderId);
-
-        vm.expectEmit(true, false, false, true);
-        emit IOrderBook.RefundClaimed(localOrderId, sender.addr, params.amountIn);
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.RefundClaimed(orderId, sender.addr, params.amountIn);
 
         vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(localOrderId);
+        emit IOrderBook.OrderCancelled(orderId);
 
         uint256 senderBalanceBefore = tokenIn.balanceOf(sender.addr);
 
-        orderBook.cancelOrderFor(localOrderId, orderData, new bytes(0), signature);
+        orderBook.cancelOrderFor(orderId, orderData, new bytes(0), signature);
 
         uint256 senderBalanceAfter = tokenIn.balanceOf(sender.addr);
         assertEq(senderBalanceAfter - senderBalanceBefore, params.amountIn);
 
-        IOrderBook.Order memory updatedOrder = orderBook.getOrder(localOrderId);
+        IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Cancelled));
     }
 
@@ -237,23 +256,6 @@ contract CancelOrderForTest is OrderBookTestBase {
         // that originated from a different chain (DEST_CHAIN_ID).
         // We construct orderData with originChainId = DEST_CHAIN_ID (not current chain)
         // and the order doesn't exist on this chain yet (DoesNotExist status is allowed for xchain)
-
-        IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
-            version: 1,
-            originChainId: DEST_CHAIN_ID, // Order originated from another chain
-            sender: sender.addr.toBytes32(),
-            nonce: 0,
-            destChainId: CHAIN_ID, // This chain is the destination
-            createdAt: uint64(block.timestamp),
-            fillDeadline: params.fillDeadline,
-            amountIn: params.amountIn,
-            amountOut: params.amountOut,
-            tokenIn: address(tokenIn).toBytes32(),
-            tokenOut: params.tokenOut,
-            recipient: recipient.addr.toBytes32(),
-            solver: params.solver
-        });
-        bytes32 xchainOrderId = orderBook.getOrderId(orderData);
 
         // Order doesn't exist on this chain (DoesNotExist status) - this is valid for cross-chain cancel
         IOrderBook.Order memory order = orderBook.getOrder(xchainOrderId);
@@ -264,7 +266,7 @@ contract CancelOrderForTest is OrderBookTestBase {
         vm.expectEmit(true, false, false, false);
         emit IOrderBook.OrderCancelled(xchainOrderId);
 
-        orderBook.cancelOrderFor(xchainOrderId, orderData, new bytes(0), signature);
+        orderBook.cancelOrderFor(xchainOrderId, xchainOrderData, new bytes(0), signature);
 
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(xchainOrderId);
         assertEq(
