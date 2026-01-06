@@ -396,7 +396,7 @@ interface IOrderBook {
      * @param orderId_ ID of the order to cancel
      * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
      * @param messageData_ Additional message data required by some crosschain message protocols (see PortalV2 for more info)
-     * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelRequestDigest)
+     * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelOrderDigest)
      */
     function cancelOrderFor(
         bytes32 orderId_,
@@ -490,8 +490,8 @@ interface IOrderBook {
     function getGaslessOrderDigest(GaslessOrderParams memory params_) external view returns (bytes32);
 
     /**
-     * @notice Returns the EIP-712 digest that a user must sign to request order cancellation gaslessly
+     * @notice Returns the EIP-712 digest that a user must sign to cancel orders gaslessly
      * @param orderId_ ID of the order to cancel
      */
-    function getCancelRequestDigest(bytes32 orderId_) external view returns (bytes32);
+    function getCancelOrderDigest(bytes32 orderId_) external view returns (bytes32);
 }

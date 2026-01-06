@@ -48,10 +48,9 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     /// @dev keccak256("GaslessOrderParams(uint16 version,address sender,uint64 nonce,uint32 originChainId,uint32 destChainId,uint32 fillDeadline,address tokenIn,bytes32 tokenOut,uint128 amountIn,uint128 amountOut,bytes32 recipient,bytes32 solver)")
     bytes32 public constant GASLESS_ORDER_TYPEHASH = 0xdcc220f897990a71a7c6f1069339af0681016bb96f2d791f2214e234d7029603;
 
-    /// @notice the type hash used for cancel request signatures
-    /// @dev keccak256("CancelRequest(bytes32 orderId)")
-    bytes32 public constant CANCEL_REQUEST_TYPEHASH =
-        0xb527222e97466d0fc0fe78079eb3beced1bb20e1103e09bb21df58dde41c6c92;
+    /// @notice the type hash used for cancel order signatures
+    /// @dev keccak256("CancelOrder(bytes32 orderId)")
+    bytes32 public constant CANCEL_ORDER_TYPEHASH = 0xab1417524886d631bf88c47a7f88d9a906122217bc08d3c5a21c80abcf1a8077;
 
     /// @notice the chain ID of this chain according to the messaging network used by this contract
     uint32 public immutable chainId;
@@ -305,9 +304,9 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         // Verify signature
         if (signature_.length == 64) {
             (bytes32 r, bytes32 vs) = abi.decode(signature_, (bytes32, bytes32));
-            _revertIfInvalidSignature(orderData_.recipient.toAddress(), getCancelRequestDigest(orderId_), r, vs);
+            _revertIfInvalidSignature(orderData_.recipient.toAddress(), getCancelOrderDigest(orderId_), r, vs);
         } else {
-            _revertIfInvalidSignature(orderData_.recipient.toAddress(), getCancelRequestDigest(orderId_), signature_);
+            _revertIfInvalidSignature(orderData_.recipient.toAddress(), getCancelOrderDigest(orderId_), signature_);
         }
 
         _cancelOrder(orderId_, orderData_, messageData_);
@@ -611,8 +610,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     }
 
     /// @inheritdoc IOrderBook
-    function getCancelRequestDigest(bytes32 orderId_) public view override returns (bytes32) {
-        return _getDigest(keccak256(abi.encode(CANCEL_REQUEST_TYPEHASH, orderId_)));
+    function getCancelOrderDigest(bytes32 orderId_) public view override returns (bytes32) {
+        return _getDigest(keccak256(abi.encode(CANCEL_ORDER_TYPEHASH, orderId_)));
     }
 
     /* ========== Internal Helper Functions ========== */
