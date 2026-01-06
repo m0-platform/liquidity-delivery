@@ -117,7 +117,10 @@ impl InventoryManager {
                     sort_results: None,
                 };
 
-                match client.get_program_accounts_with_config(&token_program, config) {
+                match client
+                    .get_program_accounts_with_config(&token_program, config)
+                    .await
+                {
                     Ok(accounts) => {
                         for (pubkey, account) in accounts {
                             let account = spl_token::state::Account::unpack(&account.data[..]);
@@ -155,7 +158,7 @@ impl InventoryManager {
             }
 
             // Also get native SOL balance
-            let sol_balance_result = client.get_balance(&address);
+            let sol_balance_result = client.get_balance(&address).await;
 
             match sol_balance_result {
                 Ok(lamports) => {

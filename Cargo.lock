@@ -10262,6 +10262,7 @@ version = "0.1.0"
 dependencies = [
  "alloy",
  "anchor-client",
+ "anchor-spl",
  "async-trait",
  "chrono",
  "ctor",
@@ -10284,6 +10285,7 @@ dependencies = [
  "slog-async",
  "slog-json",
  "slog-term",
+ "solana-client",
  "spl-associated-token-account 7.0.0",
  "spl-token 8.0.0",
  "test-context",

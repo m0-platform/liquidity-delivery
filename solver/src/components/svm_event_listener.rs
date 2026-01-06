@@ -4,7 +4,7 @@ use anchor_client::{Client, Cluster};
 use async_trait::async_trait;
 use m0_liquidity_sdk::types::ChainRuntime;
 use order_book::{OrderData, OrderOpened};
-use slog::{error, Logger};
+use slog::{error, info, Logger};
 use std::str::FromStr;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -80,6 +80,12 @@ impl SvmEventListener {
         if chain_runtime(chain.chain_id) != ChainRuntime::Svm {
             return;
         }
+
+        info!(
+            self.logger,
+            "Starting event listener for chain";
+            "chain_id" => %chain.chain_id,
+        );
 
         let cluster = self.cluster.clone();
         let event_bus = self.event_bus.clone();

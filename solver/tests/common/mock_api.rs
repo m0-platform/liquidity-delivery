@@ -1,10 +1,9 @@
-use alloy::primitives::Address;
 use mockito::ServerGuard;
 use solver::utils::chain_from_id;
 
 #[derive(Clone, Debug)]
 pub struct Asset {
-    pub address: Address,
+    pub address: String,
     pub chain_id: u32,
     pub symbol: String,
 }
@@ -39,9 +38,7 @@ pub async fn mock_api_with_assets(assets: Vec<Asset>) -> ServerGuard {
         [1, 8453]
             .iter()
             .map(|&chain_id| Asset {
-                address: "0x437cc33344a0B27A429f795ff6B469C72698B291"
-                    .parse()
-                    .unwrap(),
+                address: "0x437cc33344a0B27A429f795ff6B469C72698B291".to_string(),
                 chain_id,
                 symbol: "wM".to_string(),
             })

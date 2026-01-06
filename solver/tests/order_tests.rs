@@ -11,9 +11,9 @@ async fn test_order_rejected(ctx: &EvmChainTestSuite) {
 
     ctx.create_order(
         chain,
-        chain.tokens[0].address,
+        chain.tokens[0].address.clone(),
         // Unsupported token
-        alloy::primitives::Address::new([0u8; 20]),
+        alloy::primitives::Address::new([0u8; 20]).to_string(),
         ctx.chains[1].chain_id,
         1000000,
         1000000,
@@ -31,8 +31,8 @@ async fn test_order_processed_chain_a(ctx: &EvmChainTestSuite) {
 
     ctx.create_order(
         chain_a,
-        chain_a.tokens[0].address,
-        chain_b.tokens[1].address,
+        chain_a.tokens[0].address.clone(),
+        chain_b.tokens[1].address.clone(),
         chain_b.chain_id,
         1000000,
         1000000,
@@ -58,8 +58,8 @@ async fn test_order_processed_chain_b(ctx: &EvmChainTestSuite) {
 
     ctx.create_order(
         chain_a,
-        chain_a.tokens[0].address,
-        chain_b.tokens[1].address,
+        chain_a.tokens[0].address.clone(),
+        chain_b.tokens[1].address.clone(),
         chain_b.chain_id,
         500000,
         500000,
@@ -85,8 +85,8 @@ async fn test_order_invalid_out(ctx: &EvmChainTestSuite) {
 
     ctx.create_order(
         chain_a,
-        chain_a.tokens[0].address,
-        chain_b.tokens[2].address,
+        chain_a.tokens[0].address.clone(),
+        chain_b.tokens[2].address.clone(),
         chain_b.chain_id,
         500000,
         5000000,
@@ -110,8 +110,8 @@ async fn test_order_insufficient_solver_funds(ctx: &EvmChainTestSuite) {
 
     ctx.create_order(
         chain_a,
-        chain_a.tokens[0].address,
-        chain_b.tokens[2].address,
+        chain_a.tokens[0].address.clone(),
+        chain_b.tokens[2].address.clone(),
         chain_b.chain_id,
         50000000,
         50000000,
@@ -138,8 +138,8 @@ async fn test_order_multiple_clips(ctx: &EvmChainTestSuite) {
 
     ctx.create_order(
         chain_a,
-        chain_a.tokens[2].address,
-        chain_b.tokens[0].address,
+        chain_a.tokens[2].address.clone(),
+        chain_b.tokens[0].address.clone(),
         chain_b.chain_id,
         // max clip size is $100
         150_000_000,

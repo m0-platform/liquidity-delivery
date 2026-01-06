@@ -51,3 +51,5 @@ regex = "1.11"
 reqwest = { version = "0.12.23", features = ["json"] }
 quoter = { path = "../quoter" }
 portpicker = "0.1"
+anchor-spl = "0.31.1"
+solana-client = "2.2.4"

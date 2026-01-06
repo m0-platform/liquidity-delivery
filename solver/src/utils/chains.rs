@@ -4,10 +4,13 @@ use alloy::primitives::Address;
 use anchor_client::solana_sdk::pubkey::Pubkey;
 use m0_liquidity_sdk::types::{Chain, ChainRuntime};
 
+// non-evm chains don't have standard chain ids
+const SOLANA_CHAIN_ID: u32 = 1399811149;
+
 pub fn chain_id(chain: Chain) -> u32 {
     match chain {
         Chain::Ethereum => 1,
-        Chain::Solana => 4294967295,
+        Chain::Solana => SOLANA_CHAIN_ID,
         Chain::Arbitrum => 42161,
         Chain::Optimism => 10,
         Chain::Base => 8453,
@@ -23,7 +26,7 @@ pub fn chain_id(chain: Chain) -> u32 {
 pub fn chain_from_id(chain_id: u32) -> Chain {
     match chain_id {
         1 => Chain::Ethereum,
-        4294967295 => Chain::Solana,
+        SOLANA_CHAIN_ID => Chain::Solana,
         42161 => Chain::Arbitrum,
         10 => Chain::Optimism,
         8453 => Chain::Base,
@@ -52,7 +55,7 @@ pub fn supported_chains() -> Vec<Chain> {
 }
 
 pub fn chain_runtime(chain_id: u32) -> ChainRuntime {
-    if chain_id == 4294967295 || chain_id == 4294967294 {
+    if chain_id == SOLANA_CHAIN_ID || chain_id == 4294967294 {
         ChainRuntime::Svm
     } else {
         ChainRuntime::Evm

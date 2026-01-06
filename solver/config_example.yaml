@@ -3,6 +3,7 @@ network: devnet
 
 liquidity_api_url: https://api-mainnet-b325.up.railway.app
 quoter_grpc_url: http://127.0.0.1:50051
+connect_to_quote_stream: true
 
 rpc_rate_limit:
   max_requests_per_second: 5
@@ -10,7 +11,7 @@ rpc_rate_limit:
 
 # Order configuration
 max_order_clip_size: 10000
-max_clip_reprocess_delay_sec: 60 
+max_clip_reprocess_delay_sec: 60
 solver_fee_bps: 1
 auto_rebalance: true
 

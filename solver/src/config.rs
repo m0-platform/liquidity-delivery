@@ -78,6 +78,7 @@ pub struct Config {
     pub max_clip_reprocess_delay_sec: u64,
     pub supported_assets: SupportedAssets,
     pub quoter_grpc_url: String,
+    pub connect_to_quote_stream: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -95,6 +96,7 @@ struct ConfigFile {
     max_clip_reprocess_delay_sec: Option<u64>,
     supported_assets: Option<SupportedAssets>,
     quoter_grpc_url: String,
+    connect_to_quote_stream: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -159,6 +161,7 @@ impl Default for Config {
             supported_assets: SupportedAssets::default(),
             auto_rebalance: true,
             quoter_grpc_url: String::from("http://127.0.0.1:50051"),
+            connect_to_quote_stream: true,
         }
     }
 }
@@ -219,6 +222,7 @@ impl Config {
             liquidity_api_url: config_file.liquidity_api_url,
             quoter_grpc_url: config_file.quoter_grpc_url,
             signers: Signers::new(evm_private_key, svm_private_key),
+            connect_to_quote_stream: config_file.connect_to_quote_stream,
             ..Default::default()
         };
 

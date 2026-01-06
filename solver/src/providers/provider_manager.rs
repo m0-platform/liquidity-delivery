@@ -1,5 +1,7 @@
 use alloy::primitives::Address;
-use anchor_client::{solana_client::rpc_client::RpcClient, solana_sdk::pubkey::Pubkey};
+use anchor_client::{
+    solana_client::nonblocking::rpc_client::RpcClient, solana_sdk::pubkey::Pubkey,
+};
 use governor::{
     clock::DefaultClock,
     state::{InMemoryState, NotKeyed},
@@ -111,7 +113,7 @@ impl ProviderManager {
     }
 
     async fn add_svm_provider(&self, chain: &ChainConfig, _signers: &Signers) -> Result<()> {
-        let client = Arc::new(RpcClient::new(&chain.rpc_url));
+        let client = Arc::new(RpcClient::new(chain.rpc_url.clone()));
         let limiter = Arc::new(RateLimiter::direct(self.rate_limiter_quota));
 
         let svm_provider = Arc::new(SvmProvider {

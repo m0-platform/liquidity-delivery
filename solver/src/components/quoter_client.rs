@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use nanoid::nanoid;
-use slog::{error, info};
+use slog::{error, info, warn};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, Mutex};
@@ -27,6 +27,7 @@ pub struct QuoterClient {
     solver_fee_bps: u32,
     event_bus: Arc<crate::events::EventBus>,
     response_channels: Arc<Mutex<HashMap<String, oneshot::Sender<QuoteResponse>>>>,
+    connect: bool,
 }
 
 impl QuoterClient {
@@ -39,6 +40,7 @@ impl QuoterClient {
             solver_fee_bps: params.config.solver_fee_bps,
             event_bus: params.event_bus.clone(),
             response_channels: Arc::new(Mutex::new(HashMap::new())),
+            connect: params.config.connect_to_quote_stream,
         }
     }
 
@@ -183,12 +185,21 @@ impl QuoterClient {
 #[async_trait]
 impl EventHandler for QuoterClient {
     async fn initialize(&self) -> Result<()> {
+        if !self.connect {
+            warn!(
+                self.logger,
+                "QuoterClient not configured to connect to quote stream"
+            );
+            return Ok(());
+        }
+
         let self_clone = Self {
             quoter_url: self.quoter_url.clone(),
             logger: self.logger.clone(),
             solver_fee_bps: self.solver_fee_bps,
             event_bus: self.event_bus.clone(),
             response_channels: self.response_channels.clone(),
+            connect: self.connect,
         };
 
         // Spawn the subscription handler

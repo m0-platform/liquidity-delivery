@@ -8,6 +8,9 @@ runbooks:
   - name: initialize
     description: Initialize programs
     location: svm/runbooks/initialize
+  - name: configure
+    description: Configure programs
+    location: svm/runbooks/configure
 environments:
   localnet:
       network_id: localnet

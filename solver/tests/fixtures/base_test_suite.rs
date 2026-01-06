@@ -6,21 +6,26 @@ use alloy::{
     primitives::{Address, FixedBytes, U256},
     providers::{Provider, ProviderBuilder},
     rpc::types::TransactionRequest,
-    signers::local::PrivateKeySigner,
+    signers::{k256::sha2::digest::Key, local::PrivateKeySigner},
     sol,
 };
-use anchor_client::solana_sdk::{signature::Keypair, signer::Signer};
+use anchor_client::{
+    solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer, system_program},
+    Client, Cluster,
+};
 use mockito::ServerGuard;
 use regex::Regex;
 use serde_json::json;
 use slog::{info, Drain, Logger};
+use solana_client::nonblocking::rpc_client::RpcClient;
 use solver::{
     config::{Environment, SupportedAssets},
     providers::Signers,
-    utils::{chain_from_id, decode_evm_address},
+    utils::{chain_from_id, decode_address, decode_evm_address},
     Config,
 };
 use std::{
+    str::FromStr,
     sync::Arc,
     time::{self, Duration},
 };
@@ -31,6 +36,7 @@ use tokio::{
     time::sleep,
 };
 
+use crate::common::{create_and_mint_token, create_open_order, orderbook_pda, svm};
 use crate::common::{mock_api, Asset, LogBuffer};
 
 sol!(
@@ -52,6 +58,8 @@ pub struct BaseTestSuite {
     _evm_signer: PrivateKeySigner,
     evm_user: PrivateKeySigner,
     _svm_signer: Arc<Keypair>,
+    svm_user: Arc<Keypair>,
+    pub svm_mint: Option<Pubkey>,
     pub shutdown_tx: broadcast::Sender<()>,
     _mock_server: ServerGuard,
     pub log_buffer: LogBuffer,
@@ -88,7 +96,9 @@ impl BaseTestSuite {
         let evm_signer = PrivateKeySigner::from_bytes(&FixedBytes::from([1u8; 32])).unwrap();
         let evm_user = PrivateKeySigner::from_bytes(&FixedBytes::from([2u8; 32])).unwrap();
         let svm_signer = Arc::new(Keypair::from_base58_string("2MqZwxzsfaEvQvnj4CgvUo2aknYXxJW2bBn5ewbftnbjU9DAtWX1XzCHy7Wd8dBSq5bmRwj6Ya5XTAnEe8sy2qS9"));
+        let svm_user = Arc::new(Keypair::new());
         let mut surfpool_process = None;
+        let mut svm_mint = None;
 
         // Start Anvil nodes for each chain (or Surfpool for Solana)
         for (i, &chain_id) in evm_chains.iter().enumerate() {
@@ -105,6 +115,8 @@ impl BaseTestSuite {
                         "--no-tui",
                         "--airdrop",
                         &svm_signer.pubkey().to_string(),
+                        "--airdrop",
+                        &svm_user.pubkey().to_string(),
                         "--rpc-url",
                         "https://hatty-73mn84-fast-mainnet.helius-rpc.com",
                     ])
@@ -116,8 +128,8 @@ impl BaseTestSuite {
 
                 sleep(Duration::from_millis(1000)).await;
 
-                for runbook in &["deployment", "initialize"] {
-                    let output = Command::new("surfpool")
+                for runbook in &["deployment", "initialize", "configure"] {
+                    Command::new("surfpool")
                         .args(&[
                             "run",
                             runbook,
@@ -133,13 +145,19 @@ impl BaseTestSuite {
                         .output()
                         .await
                         .expect("failed to run surfpool cmd");
-
-                    println!(
-                        "Surfpool run {} stdout: {}",
-                        runbook,
-                        String::from_utf8_lossy(&output.stdout)
-                    );
                 }
+
+                let client = RpcClient::new(format!("http://localhost:{}", port));
+
+                client
+                    .request_airdrop(&svm_user.pubkey(), 2_000_000_000)
+                    .await
+                    .expect("failed to airdrop to svm user");
+
+                // Create and mint test token to svm_user
+                svm_mint = Some(
+                    create_and_mint_token(client, &svm_signer, &svm_user.pubkey(), 100000000).await,
+                );
 
                 surfpool_process = Some(ProcessWithPort {
                     process: child,
@@ -235,7 +253,7 @@ impl BaseTestSuite {
                     .expect("Failed to confirm mint transaction");
 
                 tokens.push(Asset {
-                    address: *token.address(),
+                    address: token.address().to_string(),
                     chain_id,
                     symbol: ["USDC", "USDT", "USDS"][i].to_string(),
                 });
@@ -269,10 +287,18 @@ impl BaseTestSuite {
         }
 
         // Create mock API with the test tokens
-        let api_tokens = chains
+        let mut api_tokens = chains
             .iter()
             .flat_map(|chain| chain.tokens.iter().cloned())
             .collect::<Vec<Asset>>();
+
+        if let Some(mint) = &svm_mint {
+            api_tokens.push(Asset {
+                address: mint.to_string(),
+                chain_id: 1399811149,
+                symbol: "wM".to_string(),
+            });
+        }
 
         let mock_server = mock_api::mock_api_with_assets(api_tokens).await;
 
@@ -291,10 +317,21 @@ impl BaseTestSuite {
             });
         }
 
+        if let Some(surfpool_process) = &surfpool_process {
+            config.chains.push(solver::config::ChainConfig {
+                chain_id: 1399811149,
+                chain: chain_from_id(1399811149),
+                rpc_url: format!("http://localhost:{}", surfpool_process.port),
+                ws_url: format!("ws://localhost:{}", surfpool_process.port),
+                order_book_address: "MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK".to_string(),
+            });
+        }
+
         config.liquidity_api_url = mock_server.url();
         config.signers = Signers::new(evm_signer.clone(), svm_signer.clone());
         config.max_order_clip_size = 100;
         config.max_clip_reprocess_delay_sec = 1;
+        config.connect_to_quote_stream = start_quoter_api;
 
         // Start quoter API if requested
         let quoter_process = if start_quoter_api {
@@ -364,6 +401,8 @@ impl BaseTestSuite {
             _evm_signer: evm_signer,
             evm_user,
             _svm_signer: svm_signer,
+            svm_user,
+            svm_mint,
             surfpool_process,
             quoter_process,
             shutdown_tx,
@@ -437,8 +476,8 @@ impl BaseTestSuite {
     pub async fn create_order(
         &self,
         chain: &ChainInstance,
-        token_in: Address,
-        token_out: Address,
+        token_in: String,
+        token_out: String,
         dest_chain_id: u32,
         amount_in: u128,
         amount_out: u128,
@@ -450,9 +489,9 @@ impl BaseTestSuite {
         let contract = IOrderBook::new(chain.contract_address, provider);
 
         let builder = contract.openOrder(OrderParams {
-            tokenIn: token_in,
+            tokenIn: token_in.parse().unwrap(),
             destChainId: dest_chain_id,
-            tokenOut: decode_evm_address(token_out).into(),
+            tokenOut: decode_address(token_out, dest_chain_id).unwrap().into(),
             amountIn: amount_in,
             amountOut: amount_out,
             recipient: decode_evm_address(self.evm_user.address()).into(),
@@ -460,17 +499,44 @@ impl BaseTestSuite {
             solver: [0u8; 32].into(),
         });
 
-        let receipt = builder
+        builder
             .send()
             .await
             .expect("Failed to send openOrder transaction")
             .get_receipt()
             .await
             .expect("Failed to confirm mint transaction");
+    }
 
-        info!(self.logger, "Created order on chain {}", chain.chain_id;
-            "block_number" => receipt.block_number.unwrap_or(0)
+    pub async fn create_svm_order(
+        &self,
+        token_in: &Pubkey,
+        token_out: String,
+        dest_chain_id: u32,
+        amount_in: u64,
+        amount_out: u64,
+    ) {
+        let client = Client::new(
+            Cluster::from_str(&self.surfpool_endpoint()).unwrap(),
+            self.svm_user.clone(),
         );
+
+        let program = client.program(order_book::ID).unwrap();
+
+        create_open_order(
+            program,
+            token_in,
+            &order_book::instructions::open::OrderParams {
+                token_out: decode_address(token_out, dest_chain_id).unwrap(),
+                dest_chain_id,
+                amount_in,
+                amount_out: amount_out as u128,
+                recipient: [0u8; 32],
+                fill_deadline: u64::MAX,
+                solver: [0u8; 32].into(),
+            },
+        )
+        .await;
     }
 
     pub fn quote_endpoint(&self) -> String {
