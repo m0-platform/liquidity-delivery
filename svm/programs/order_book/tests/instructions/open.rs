@@ -792,6 +792,38 @@ mod xchain_orders {
     }
 
     #[test]
+    fn test_xchain_order_recipient_zero_reverts() -> Result<(), Box<dyn Error>> {
+        // Setup test environment
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        let sender = test.users.get("alice").unwrap();
+        let token_in_mint = test.mints.get("token-in-spl-6").unwrap();
+        let sender_token_in_account = test.atas.get(&("token-in-spl-6", "alice")).unwrap();
+
+        // Prepare order parameters with amount_in greater than balance
+        let mut order_params = default_order_params(&test, "alice");
+
+        // Set recipient to zero address
+        order_params.recipient = [0u8; 32];
+
+        let (order_id, ix) = test.create_open_order_ix(
+            &sender.pubkey(),
+            &token_in_mint,
+            &sender_token_in_account,
+            None,
+            &order_params,
+        )?;
+
+        // Open the order
+        test.ctx
+            .execute_instruction(ix, &[sender])?
+            .assert_log_error("Invalid recipient address");
+
+        Ok(())
+    }
+
+    #[test]
     fn test_xchain_order_success_with_delegated_token_authority() -> Result<(), Box<dyn Error>> {
         // Setup test environment
         let mut test = OrderBookTest::new()?;
