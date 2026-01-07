@@ -126,8 +126,8 @@ pub mod order_book {
         ReportOrderFill::handler(ctx, source_chain_id, fill_report)
     }
 
-    pub fn report_order_cancel(ctx: Context<ReportOrderCancel>, cancel_report: CancelReport) -> Result<()> {
-        ReportOrderCancel::handler(ctx, cancel_report)
+    pub fn report_order_cancel(ctx: Context<ReportOrderCancel>, source_chain_id: u32, cancel_report: CancelReport) -> Result<()> {
+        ReportOrderCancel::handler(ctx, source_chain_id, cancel_report)
     } 
 
 

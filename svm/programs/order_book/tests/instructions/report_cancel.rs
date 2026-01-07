@@ -53,7 +53,6 @@ fn test_report_cancel_unauthorized_messenger_reverts() -> Result<(), Box<dyn Err
     // Build accounts with wrong messenger_authority (carol instead of the configured one)
     let relayer = test.get_user("bob");
     let wrong_messenger = test.get_user("carol");
-    let correct_messenger = test.get_user("messenger_authority");
 
     let (_, native_order) = test.get_native_order_account(&order_id)?;
     let order_account = test
@@ -86,6 +85,7 @@ fn test_report_cancel_unauthorized_messenger_reverts() -> Result<(), Box<dyn Err
         .program()
         .accounts(accounts)
         .args(order_book::instruction::ReportOrderCancel {
+            source_chain_id: order_params.dest_chain_id,
             cancel_report: cancel_report.clone(),
         })
         .instruction()?;
@@ -141,6 +141,7 @@ fn test_report_cancel_order_not_exist_reverts() -> Result<(), Box<dyn Error>> {
         .program()
         .accounts(accounts)
         .args(order_book::instruction::ReportOrderCancel {
+            source_chain_id: DEST_CHAIN_ID,
             cancel_report: cancel_report.clone(),
         })
         .instruction()?;
@@ -157,20 +158,19 @@ fn test_report_cancel_completed_order_reverts() -> Result<(), Box<dyn Error>> {
     let mut test = OrderBookTest::new()?;
     test.initialize()?;
 
-    // Create and complete a local order (so we can use fill_native_order)
-    let order_params = order_book::instructions::open::OrderParams {
-        dest_chain_id: CHAIN_ID, // local order
-        fill_deadline: test.current_time() + 100,
-        token_out: test.get_mint("token-out-spl-6").to_bytes(),
-        amount_in: 1_000_000,
-        amount_out: 1_000_000,
-        recipient: test.get_user("bob").pubkey().to_bytes(),
-        solver: test.get_user("solver").pubkey().to_bytes(),
-    };
+    // Create and complete a crosschain order
+    let order_params = default_order_params(&test);
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
     // Fully fill the order
-    test.fill_native_order("solver", order_id, 1_000_000)?;
+    let fill_report = order_book::instructions::FillReport {
+        order_id,
+        amount_in_to_release: order_params.amount_in as u128,
+        amount_out_filled: order_params.amount_out as u128,
+        origin_recipient: test.get_user("solver").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
+    test.report_fill("solver", order_params.dest_chain_id, &fill_report)?;
 
     // Verify order is completed
     let (_, order_data) = test.get_native_order_account(&order_id)?;
@@ -188,6 +188,7 @@ fn test_report_cancel_completed_order_reverts() -> Result<(), Box<dyn Error>> {
     let ix = test.create_report_cancel_ix(
         &relayer.pubkey(),
         &messenger_authority.pubkey(),
+        order_params.dest_chain_id,
         &cancel_report,
     )?;
 
@@ -246,6 +247,7 @@ fn test_report_cancel_wrong_sender_reverts() -> Result<(), Box<dyn Error>> {
         .program()
         .accounts(accounts)
         .args(order_book::instruction::ReportOrderCancel {
+            source_chain_id: order_params.dest_chain_id,
             cancel_report: cancel_report.clone(),
         })
         .instruction()?;
@@ -253,6 +255,33 @@ fn test_report_cancel_wrong_sender_reverts() -> Result<(), Box<dyn Error>> {
     test.ctx
         .execute_instruction(ix, &[&relayer, &messenger_authority])?
         .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidSender));
+
+    Ok(())
+}
+
+fn test_report_cancel_wrong_source_chain_id_reverts() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
+
+    // Create cross-chain order
+    let order_params = default_order_params(&test);
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+    let cancel_report = order_book::instructions::CancelReport { order_id };
+
+    let relayer = test.get_user("bob");
+    let messenger_authority = test.get_user("messenger_authority");
+
+    let ix = test.create_report_cancel_ix(
+        &relayer.pubkey(),
+        &messenger_authority.pubkey(),
+        order_params.dest_chain_id + 1, // Wrong source chain ID
+        &cancel_report,
+    )?;
+
+    test.ctx
+        .execute_instruction(ix, &[&relayer, &messenger_authority])?
+        .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidReportSource));
 
     Ok(())
 }
@@ -272,7 +301,7 @@ fn test_report_cancel_success() -> Result<(), Box<dyn Error>> {
 
     // Report cancel
     let cancel_report = order_book::instructions::CancelReport { order_id };
-    test.report_cancel("bob", &cancel_report)?;
+    test.report_cancel("bob", order_params.dest_chain_id, &cancel_report)?;
 
     // Verify order is cancelled
     let (_, order_data) = test.get_native_order_account(&order_id)?;
@@ -293,20 +322,19 @@ fn test_report_cancel_partial_fill_refunds_remaining() -> Result<(), Box<dyn Err
     let mut test = OrderBookTest::new()?;
     test.initialize()?;
 
-    // Create a local order for testing (xchain would need fill report which we don't have set up)
-    let order_params = order_book::instructions::open::OrderParams {
-        dest_chain_id: CHAIN_ID, // local order
-        fill_deadline: test.current_time() + 100,
-        token_out: test.get_mint("token-out-spl-6").to_bytes(),
-        amount_in: 1_000_000,
-        amount_out: 1_000_000,
-        recipient: test.get_user("bob").pubkey().to_bytes(),
-        solver: test.get_user("solver").pubkey().to_bytes(),
-    };
+    // Create a crosschain order
+    let order_params = default_order_params(&test);
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
-    // Partially fill (50%)
-    test.fill_native_order("solver", order_id, 500_000)?;
+    // Report partial fill (50%)
+    let fill_report = order_book::instructions::FillReport {
+        order_id,
+        amount_in_to_release: 500_000u128,
+        amount_out_filled: 500_000u128,
+        origin_recipient: test.get_user("solver").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
+    test.report_fill("admin", order_params.dest_chain_id, &fill_report)?;
 
     // Get balance after partial fill
     let sender_ata = test.get_ata("token-in-spl-6", "alice");
@@ -314,7 +342,7 @@ fn test_report_cancel_partial_fill_refunds_remaining() -> Result<(), Box<dyn Err
 
     // Report cancel
     let cancel_report = order_book::instructions::CancelReport { order_id };
-    test.report_cancel("bob", &cancel_report)?;
+    test.report_cancel("bob", order_params.dest_chain_id, &cancel_report)?;
 
     // Verify order is cancelled
     let (_, order_data) = test.get_native_order_account(&order_id)?;
@@ -341,7 +369,7 @@ fn test_report_cancel_already_cancelled_reverts() -> Result<(), Box<dyn Error>> 
 
     // Report cancel first time
     let cancel_report = order_book::instructions::CancelReport { order_id };
-    test.report_cancel("bob", &cancel_report)?;
+    test.report_cancel("bob", order_params.dest_chain_id, &cancel_report)?;
 
     // Verify order is cancelled
     let (_, order_data) = test.get_native_order_account(&order_id)?;
@@ -360,6 +388,7 @@ fn test_report_cancel_already_cancelled_reverts() -> Result<(), Box<dyn Error>> 
     let ix = test.create_report_cancel_ix(
         &relayer.pubkey(),
         &messenger_authority.pubkey(),
+        order_params.dest_chain_id,
         &cancel_report,
     )?;
 
