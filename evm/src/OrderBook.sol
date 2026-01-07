@@ -258,6 +258,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         // Requiring a nonce in the order provides replay protection for the sender
         if (orderParams_.nonce != $.senderNonces[orderParams_.sender]) revert InvalidNonce();
+        // Verify version matches the current version
+        if (orderParams_.version != VERSION) revert InvalidOrderVersion();
 
         // Open order on behalf of the sender
         return
