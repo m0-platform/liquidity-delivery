@@ -20,8 +20,8 @@ contract ReportFillTest is OrderBookTestBase {
     //   [X] it reverts with an InvalidReport error
     // [X] given the reported amount in to release would exceed the order amount in
     //   [X] it reverts with an InvalidReport error
-    // [ ] given the source chain ID does not match the order's dest chain ID
-    //   [ ] it reverts with an InvalidReportSource error
+    // [x] given the source chain ID does not match the order's dest chain ID
+    //   [x] it reverts with an InvalidReportSource error
     // [X] given the order is active or cancelled
     //   [X] it updates the filled amount for the order
     //   [X] it transfers the pro-rata amount of the token in to the specified recipient
