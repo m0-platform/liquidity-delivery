@@ -308,7 +308,7 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
         // Validate that the order can be cancelled and the caller is the sender
         if (order.status != OrderStatus.Created) revert InvalidOrderStatus();
-        if (uint256(order.fillDeadline) <= block.timestamp) revert OrderExpired();
+        if (uint256(order.fillDeadline) < block.timestamp) revert OrderExpired();
 
         // Mark the order as cancel requested
         order.status = OrderStatus.CancelRequested;

@@ -29,7 +29,7 @@ contract requestCancelOrderForTest is OrderBookTestBase {
     //   [X] it reverts with an InvalidOrderStatus error
     // [X] given the order exists but has already filled (cross-chain)
     //   [X] it reverts with an InvalidOrderStatus error
-    // [X] given the current timestamp is >= the fill deadline
+    // [X] given the current timestamp is > the fill deadline
     //   [X] it reverts with an OrderExpired error
     // [X] given the order can be cancelled
     //   [X] given the destination chain is different to the current chain (i.e. cross-chain order)
@@ -149,15 +149,6 @@ contract requestCancelOrderForTest is OrderBookTestBase {
     function test_givenPastFillDeadline_reverts() public {
         // Warp past fill deadline
         vm.warp(params.fillDeadline + 1);
-
-        bytes memory signature = _signStandardECDSA(sender, orderId);
-        vm.expectRevert(abi.encodeWithSelector(IOrderBook.OrderExpired.selector));
-        orderBook.requestCancelOrderFor(orderId, signature);
-    }
-
-    function test_givenAtFillDeadline_reverts() public {
-        // Warp to exactly the fill deadline
-        vm.warp(params.fillDeadline);
 
         bytes memory signature = _signStandardECDSA(sender, orderId);
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.OrderExpired.selector));

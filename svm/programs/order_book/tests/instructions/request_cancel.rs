@@ -14,6 +14,8 @@ use std::error::Error;
 //   [X] it reverts with an InvalidOrderStatus error
 // [X] given the order fill_deadline has passed
 //   [X] it reverts with an OrderExpired error
+// [X] given the current timestamp is exactly at the fill_deadline
+//   [X] it successfully requests cancellation
 // [X] given the order PDA is incorrect
 //   [X] it reverts with a ConstraintSeeds error
 // [X] given all checks pass
@@ -248,6 +250,37 @@ mod local_orders {
         // Fill amounts should still be zero
         assert_eq!(order_data.data.amount_in_released, 0);
         assert_eq!(order_data.data.amount_out_filled, 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_request_cancel_at_exact_deadline_succeeds() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Create an order with fill_deadline = 100
+        let order_params = default_order_params(&test);
+        let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+        // Warp to exactly the fill deadline (timestamp 100)
+        // Current time starts near 0, so warp forward to reach exactly fill_deadline
+        let current_time = test.current_time();
+        let warp_amount = order_params.fill_deadline - current_time;
+        test.warp_forward(warp_amount);
+
+        // Verify we're at exactly the deadline
+        assert_eq!(test.current_time(), order_params.fill_deadline);
+
+        // Request cancel should succeed at exactly the deadline
+        test.request_cancel("alice", order_id)?;
+
+        // Verify cancellation succeeded
+        let (_, order_data) = test.get_native_order_account(&order_id)?;
+        assert_eq!(
+            order_data.data.status,
+            order_book::state::OrderStatus::CancelRequested
+        );
 
         Ok(())
     }

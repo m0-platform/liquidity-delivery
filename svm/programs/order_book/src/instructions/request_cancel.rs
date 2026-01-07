@@ -29,7 +29,7 @@ impl RequestCancelOrder<'_> {
         }
 
         // Validate the fill deadline is in the future, otherwise, there is no need to cancel
-        if order.fill_deadline <= Clock::get()?.unix_timestamp as u64 {
+        if order.fill_deadline < Clock::get()?.unix_timestamp as u64 {
             return err!(OrderBookError::OrderExpired);
         }
 
