@@ -1039,6 +1039,24 @@ mod xchain_orders {
     }
 
     #[test]
+    fn fill_foreign_order_invalid_origin_chain_id_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+        let mut order_data = default_foreign_order_data(&test, "alice");
+        order_data.origin_chain_id = CHAIN_ID; // Wrong chain - foreign order should not be CHAIN_ID
+        let solver = test.get_user("solver");
+        let fill_params = default_fill_params(&test);
+
+        let ix = test.create_fill_foreign_order_ix(&solver.pubkey(), &order_data, &fill_params)?;
+
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidOriginChainId));
+
+        Ok(())
+    }
+
+    #[test]
     fn fill_foreign_order_token_out_account_mismatch_reverts() -> Result<(), Box<dyn Error>> {
         let mut test = OrderBookTest::new()?;
         test.initialize()?;
