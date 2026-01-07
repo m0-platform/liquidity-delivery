@@ -541,7 +541,8 @@ pub struct ReportOrderFill<'info> {
 
     #[account(
         seeds = [GLOBAL_SEED],
-        bump = global_account.bump
+        bump = global_account.bump,
+        constraint = !global_account.paused @ OrderBookError::ProgramPaused,
     )]
     pub global_account: Account<'info, OrderBookGlobal>,
 
