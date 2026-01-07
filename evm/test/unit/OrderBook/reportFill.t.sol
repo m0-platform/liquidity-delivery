@@ -2,6 +2,7 @@
 pragma solidity 0.8.33;
 
 import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
+import { PausableUpgradeable } from "../../../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol";
 
 import { OrderBookTestBase } from "./OrderBookTestBase.t.sol";
 import { IOrderBook } from "../../../src/interfaces/IOrderBook.sol";
@@ -10,6 +11,8 @@ contract ReportFillTest is OrderBookTestBase {
     using TypeConverter for *;
 
     // Test cases
+    // [X] given the contract is paused
+    //   [X] it completes successfully
     // [X] given the messenger is not the caller
     //   [X] it reverts with a NotAuthorized error
     // [X] given the order does not exist
@@ -35,6 +38,24 @@ contract ReportFillTest is OrderBookTestBase {
 
         // open a crosschain order for alice (nonce 0)
         _placeOrder(users["alice"], params);
+    }
+
+    function test_whenPaused_success() public {
+        vm.prank(pauser);
+        orderBook.pause();
+
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+
+        vm.prank(address(messenger));
+        orderBook.reportFill(
+            IOrderBook.FillReport({
+                orderId: orderId,
+                amountOutFilled: params.amountOut,
+                amountInToRelease: params.amountIn,
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
+            })
+        );
     }
 
     function test_messengerIsNotCaller_reverts() public {

@@ -4,5 +4,6 @@ mod destination;
 mod fill;
 mod initialize;
 mod open;
+mod pause;
 mod report_cancel;
 mod report_fill;

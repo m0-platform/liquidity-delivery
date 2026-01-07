@@ -42,8 +42,10 @@ use std::error::Error;
 //   [X] it changes status to Completed on final fill
 // [X] given extra tokens are donated to the order account
 //   [X] on full fill, it transfers all tokens (including donation)
-// [ ] given the order status is CancelRequested
-//   [ ] it still processes the fill (CancelRequested orders can be filled)
+// [X] given the order status is CancelRequested
+//   [X] it still processes the fill (CancelRequested orders can be filled)
+// [X] given the program is paused
+//   [X] it completes successfully
 
 fn default_fill_report(
     test: &OrderBookTest,
@@ -891,3 +893,51 @@ fn test_report_fill_with_donation_success() -> Result<(), Box<dyn Error>> {
 
 //     Ok(())
 // }
+
+#[test]
+fn test_report_fill_paused_reverts() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
+
+    // Create a cross-chain order (required for report_fill)
+    let order_params = order_book::instructions::open::OrderParams {
+        dest_chain_id: DEST_CHAIN_ID, // cross-chain order
+        fill_deadline: test
+            .ctx
+            .svm
+            .get_sysvar::<anchor_lang::prelude::Clock>()
+            .unix_timestamp as u64
+            + 86400,
+        token_out: test.get_mint("token-out-spl-6").to_bytes(),
+        amount_in: 1_000_000,
+        amount_out: 1_000_000,
+        recipient: test.get_user("alice").pubkey().to_bytes(),
+        solver: test.get_user("solver").pubkey().to_bytes(),
+    };
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+    // Pause the program
+    test.pause()?;
+
+    // Try to report a fill
+    let solver = test.get_user("solver");
+    let messenger_authority = test.get_user("messenger_authority");
+    let fill_report = FillReport {
+        order_id,
+        amount_in_to_release: 500_000,
+        amount_out_filled: 500_000,
+        origin_recipient: solver.pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
+    let ix = test.create_report_fill_ix(
+        &solver.pubkey(),
+        &messenger_authority.pubkey(),
+        &fill_report,
+    )?;
+
+    test.ctx
+        .execute_instruction(ix, &[&solver, &messenger_authority])?
+        .assert_success();
+
+    Ok(())
+}

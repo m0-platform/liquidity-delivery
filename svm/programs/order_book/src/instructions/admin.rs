@@ -41,6 +41,20 @@ impl AdminInstruction<'_> {
         ctx.accounts.global_account.new_admin = None;
         Ok(())
     }
+
+    pub fn pause(
+        ctx: Context<Self>,
+    ) -> Result<()> {
+        ctx.accounts.global_account.paused = true;
+        Ok(())
+    }
+
+    pub fn unpause(
+        ctx: Context<Self>,
+    ) -> Result<()> {
+        ctx.accounts.global_account.paused = false;
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]

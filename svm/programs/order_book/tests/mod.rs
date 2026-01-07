@@ -1139,4 +1139,64 @@ impl OrderBookTest {
         let clock = self.ctx.svm.get_sysvar::<anchor_lang::prelude::Clock>();
         clock.unix_timestamp as u64
     }
+
+    // Pause/unpause helpers
+
+    fn create_pause_ix(&self, admin: &Pubkey) -> Result<Instruction, Box<dyn Error>> {
+        let global_account = self
+            .ctx
+            .svm
+            .get_pda(&[order_book::state::GLOBAL_SEED], &order_book::ID);
+
+        let ix = self
+            .ctx
+            .program()
+            .accounts(order_book::accounts::AdminInstruction {
+                admin: *admin,
+                global_account,
+            })
+            .args(order_book::instruction::Pause {})
+            .instruction()?;
+
+        Ok(ix)
+    }
+
+    fn create_unpause_ix(&self, admin: &Pubkey) -> Result<Instruction, Box<dyn Error>> {
+        let global_account = self
+            .ctx
+            .svm
+            .get_pda(&[order_book::state::GLOBAL_SEED], &order_book::ID);
+
+        let ix = self
+            .ctx
+            .program()
+            .accounts(order_book::accounts::AdminInstruction {
+                admin: *admin,
+                global_account,
+            })
+            .args(order_book::instruction::Unpause {})
+            .instruction()?;
+
+        Ok(ix)
+    }
+
+    fn pause(&mut self) -> Result<(), Box<dyn Error>> {
+        let admin_keypair = self.users.get("admin").unwrap();
+        let ix = self.create_pause_ix(&admin_keypair.pubkey())?;
+
+        self.ctx.execute_instruction(ix, &[admin_keypair])?
+            .assert_success();
+
+        Ok(())
+    }
+
+    fn unpause(&mut self) -> Result<(), Box<dyn Error>> {
+        let admin_keypair = self.users.get("admin").unwrap();
+        let ix = self.create_unpause_ix(&admin_keypair.pubkey())?;
+
+        self.ctx.execute_instruction(ix, &[admin_keypair])?
+            .assert_success();
+
+        Ok(())
+    }
 }

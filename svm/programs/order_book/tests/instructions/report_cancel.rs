@@ -25,6 +25,8 @@ use std::error::Error;
 //   [X] it transfers remaining token_in to sender
 // [X] given a partial fill occurred
 //   [X] it refunds only the remaining tokens
+// [X] given the program is paused
+//   [X] it completes successfully
 
 fn default_order_params(test: &OrderBookTest) -> order_book::instructions::open::OrderParams {
     // Order that originates here but has a different destination
@@ -53,7 +55,6 @@ fn test_report_cancel_unauthorized_messenger_reverts() -> Result<(), Box<dyn Err
     // Build accounts with wrong messenger_authority (carol instead of the configured one)
     let relayer = test.get_user("bob");
     let wrong_messenger = test.get_user("carol");
-    let correct_messenger = test.get_user("messenger_authority");
 
     let (_, native_order) = test.get_native_order_account(&order_id)?;
     let order_account = test
@@ -366,6 +367,36 @@ fn test_report_cancel_already_cancelled_reverts() -> Result<(), Box<dyn Error>> 
     test.ctx
         .execute_instruction(ix, &[&relayer, &messenger_authority])?
         .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidOrderStatus));
+
+    Ok(())
+}
+
+#[test]
+fn test_report_cancel_paused_success() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
+
+    // Create a cross-chain order (required for report_cancel)
+    let order_params = default_order_params(&test);
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+    // Pause the program
+    test.pause()?;
+
+    // Try to report a cancel while paused
+    let relayer = test.get_user("bob");
+    let messenger_authority = test.get_user("messenger_authority");
+    let cancel_report = order_book::instructions::CancelReport { order_id };
+
+    let ix = test.create_report_cancel_ix(
+        &relayer.pubkey(),
+        &messenger_authority.pubkey(),
+        &cancel_report,
+    )?;
+
+    test.ctx
+        .execute_instruction(ix, &[&relayer, &messenger_authority])?
+        .assert_success();
 
     Ok(())
 }
