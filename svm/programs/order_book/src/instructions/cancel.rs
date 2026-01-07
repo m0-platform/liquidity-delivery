@@ -39,6 +39,8 @@ use crate::portal::{
 #[derive(Debug, Clone, AnchorSerialize, AnchorDeserialize)]
 pub struct CancelReport {
     pub order_id: [u8; 32],
+    pub order_sender: [u8; 32],
+    pub token_in: [u8; 32],
 }
 
 // Events
@@ -356,7 +358,7 @@ pub struct ReportOrderCancel<'info> {
 }
 
 impl ReportOrderCancel<'_> {
-    fn validate(&self) -> Result<()> {
+    fn validate(&self, cancel_report: &CancelReport) -> Result<()> {
         // Validate the order type is native
         require!(
             self.order.order_type == OrderType::Native,
@@ -371,10 +373,24 @@ impl ReportOrderCancel<'_> {
             OrderBookError::InvalidOrderStatus
         );
 
+        // Validate the reported order sender matches the stored order sender
+        require_keys_eq!(
+            Pubkey::new_from_array(cancel_report.order_sender),
+            self.order.data.sender,
+            OrderBookError::InvalidSender
+        );
+
+        // Validate the reported token_in matches the stored order token_in
+        require_keys_eq!(
+            Pubkey::new_from_array(cancel_report.token_in),
+            self.order.data.token_in,
+            OrderBookError::InvalidTokenMint
+        );
+
         Ok(())
     }
 
-    #[access_control(ctx.accounts.validate())]
+    #[access_control(ctx.accounts.validate(&cancel_report))]
     pub fn handler(ctx: Context<Self>, _source_chain_id: u32, cancel_report: CancelReport) -> Result<()> {
         let order = &mut ctx.accounts.order.data;
 

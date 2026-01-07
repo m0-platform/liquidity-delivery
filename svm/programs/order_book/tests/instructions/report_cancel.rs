@@ -1,4 +1,4 @@
-use super::super::{OrderBookTest, CHAIN_ID, DEST_CHAIN_ID};
+use super::super::{OrderBookTest, DEST_CHAIN_ID};
 use anchor_litesvm::{Signer, TestHelpers};
 use anchor_spl::associated_token::get_associated_token_address;
 use order_book::{error::OrderBookError, ORDER_SEED_PREFIX};
@@ -20,6 +20,10 @@ use std::error::Error;
 //   [X] it reverts with InvalidSender error
 // [X] given the order has been fully filled (no remaining tokens)
 //   [X] it reverts with OrderFilled error
+// [X] given the reported order_sender does not match the order's sender
+//   [X] it reverts with InvalidSender error
+// [X] given the reported token_in does not match the order's token_in
+//   [X] it reverts with InvalidTokenIn error
 // [X] given all checks pass
 //   [X] it sets order status to Cancelled
 //   [X] it transfers remaining token_in to sender
@@ -48,7 +52,7 @@ fn test_report_cancel_unauthorized_portal_reverts() -> Result<(), Box<dyn Error>
     let order_params = default_order_params(&test);
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
-    let cancel_report = order_book::instructions::CancelReport { order_id };
+    let cancel_report = order_book::instructions::CancelReport { order_id, order_sender: test.get_user("alice").pubkey().to_bytes(), token_in: test.get_mint("token-in-spl-6").to_bytes() };
 
     // Build accounts with wrong portal_authority (carol instead of the configured one)
     let relayer = test.get_user("bob");
@@ -105,6 +109,8 @@ fn test_report_cancel_order_not_exist_reverts() -> Result<(), Box<dyn Error>> {
     let fake_order_id = [99u8; 32];
     let cancel_report = order_book::instructions::CancelReport {
         order_id: fake_order_id,
+        order_sender: test.get_user("alice").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
     };
 
     let relayer = test.get_user("bob");
@@ -180,7 +186,11 @@ fn test_report_cancel_completed_order_reverts() -> Result<(), Box<dyn Error>> {
     );
 
     // Try to report cancel on completed order
-    let cancel_report = order_book::instructions::CancelReport { order_id };
+    let cancel_report = order_book::instructions::CancelReport { 
+        order_id,
+        order_sender: test.get_user("alice").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
 
     let relayer = test.get_user("bob");
     let portal_authority = test.get_user("portal_authority");
@@ -200,7 +210,7 @@ fn test_report_cancel_completed_order_reverts() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn test_report_cancel_wrong_sender_reverts() -> Result<(), Box<dyn Error>> {
+fn test_report_cancel_wrong_sender_account_reverts() -> Result<(), Box<dyn Error>> {
     let mut test = OrderBookTest::new()?;
     test.initialize()?;
 
@@ -208,7 +218,11 @@ fn test_report_cancel_wrong_sender_reverts() -> Result<(), Box<dyn Error>> {
     let order_params = default_order_params(&test);
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
-    let cancel_report = order_book::instructions::CancelReport { order_id };
+    let cancel_report = order_book::instructions::CancelReport { 
+        order_id,
+        order_sender: test.get_user("alice").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
 
     let relayer = test.get_user("bob");
     let portal_authority = test.get_user("portal_authority");
@@ -260,6 +274,72 @@ fn test_report_cancel_wrong_sender_reverts() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn test_report_cancel_reported_sender_mismatch_reverts() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
+
+    // Create cross-chain order
+    let order_params = default_order_params(&test);
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+    // Create cancel report with wrong sender (carol instead of alice)
+    let wrong_sender = test.get_user("carol");
+    let cancel_report = order_book::instructions::CancelReport { 
+        order_id,
+        order_sender: wrong_sender.pubkey().to_bytes(), // Wrong sender
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
+
+    let relayer = test.get_user("bob");
+    let portal_authority = test.get_user("portal_authority");
+
+    let ix = test.create_report_cancel_ix(
+        &relayer.pubkey(),
+        &portal_authority.pubkey(),
+        order_params.dest_chain_id,
+        &cancel_report,
+    )?;
+
+    test.ctx
+        .execute_instruction(ix, &[&relayer, &portal_authority])?
+        .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidSender));
+
+    Ok(())
+}
+
+#[test]
+fn test_report_cancel_reported_token_in_mismatch_reverts() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
+
+    // Create cross-chain order
+    let order_params = default_order_params(&test);
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+    // Create cancel report with wrong token_in (token-out-spl-6 instead of token-in-spl-6)
+    let cancel_report = order_book::instructions::CancelReport { 
+        order_id,
+        order_sender: test.get_user("alice").pubkey().to_bytes(),
+        token_in: test.get_mint("token-out-spl-6").to_bytes(), // Wrong token_in
+    };
+
+    let relayer = test.get_user("bob");
+    let portal_authority = test.get_user("portal_authority");
+    let ix = test.create_report_cancel_ix(
+        &relayer.pubkey(),
+        &portal_authority.pubkey(),
+        order_params.dest_chain_id,
+        &cancel_report,
+    )?;
+
+    test.ctx
+        .execute_instruction(ix, &[&relayer, &portal_authority])?
+        .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidTokenMint));
+
+    Ok(())
+}
+
+#[test]
 fn test_report_cancel_wrong_source_chain_id_reverts() -> Result<(), Box<dyn Error>> {
     let mut test = OrderBookTest::new()?;
     test.initialize()?;
@@ -268,7 +348,11 @@ fn test_report_cancel_wrong_source_chain_id_reverts() -> Result<(), Box<dyn Erro
     let order_params = default_order_params(&test);
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
-    let cancel_report = order_book::instructions::CancelReport { order_id };
+    let cancel_report = order_book::instructions::CancelReport { 
+        order_id,
+        order_sender: test.get_user("alice").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
 
     let relayer = test.get_user("bob");
     let portal_authority = test.get_user("portal_authority");
@@ -301,7 +385,11 @@ fn test_report_cancel_success() -> Result<(), Box<dyn Error>> {
     let initial_balance = test.get_token_balance(&sender_ata)?;
 
     // Report cancel
-    let cancel_report = order_book::instructions::CancelReport { order_id };
+    let cancel_report = order_book::instructions::CancelReport { 
+        order_id,
+        order_sender: test.get_user("alice").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
     test.report_cancel("bob", order_params.dest_chain_id, &cancel_report)?;
 
     // Verify order is cancelled
@@ -342,7 +430,11 @@ fn test_report_cancel_partial_fill_refunds_remaining() -> Result<(), Box<dyn Err
     let balance_after_fill = test.get_token_balance(&sender_ata)?;
 
     // Report cancel
-    let cancel_report = order_book::instructions::CancelReport { order_id };
+    let cancel_report = order_book::instructions::CancelReport { 
+        order_id,
+        order_sender: test.get_user("alice").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
     test.report_cancel("bob", order_params.dest_chain_id, &cancel_report)?;
 
     // Verify order is cancelled
@@ -369,7 +461,11 @@ fn test_report_cancel_already_cancelled_reverts() -> Result<(), Box<dyn Error>> 
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
     // Report cancel first time
-    let cancel_report = order_book::instructions::CancelReport { order_id };
+    let cancel_report = order_book::instructions::CancelReport { 
+        order_id,
+        order_sender: test.get_user("alice").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
     test.report_cancel("bob", order_params.dest_chain_id, &cancel_report)?;
 
     // Verify order is cancelled
