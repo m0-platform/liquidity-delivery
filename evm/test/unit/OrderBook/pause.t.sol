@@ -21,11 +21,7 @@ contract PauseTest is OrderBookTestBase {
 
         vm.prank(users["alice"]);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                users["alice"],
-                pauserRole
-            )
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, users["alice"], pauserRole)
         );
         orderBook.pause();
     }
@@ -40,11 +36,7 @@ contract PauseTest is OrderBookTestBase {
         // Try to unpause as non-pauser
         vm.prank(users["alice"]);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                users["alice"],
-                pauserRole
-            )
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, users["alice"], pauserRole)
         );
         orderBook.unpause();
     }

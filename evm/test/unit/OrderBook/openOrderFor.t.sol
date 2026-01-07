@@ -14,6 +14,8 @@ contract OpenOrderForTest is OrderBookTestBase {
     using TypeConverter for *;
 
     // Test cases
+    // [X] given the contract is paused
+    //    [X] it reverts with an EnforcedPause error
     // [X] given the signature is invalid
     //   [X] it reverts
     // [X] given the origin chain ID is not the current internal chain ID
@@ -279,6 +281,13 @@ contract OpenOrderForTest is OrderBookTestBase {
         orderBook.pause();
 
         vm.expectRevert(abi.encodeWithSelector(PausableUpgradeable.EnforcedPause.selector));
-        orderBook.openOrderForWithPermit(gaslessParams, orderSignature, block.timestamp + 1 hours, 0, bytes32(0), bytes32(0));
+        orderBook.openOrderForWithPermit(
+            gaslessParams,
+            orderSignature,
+            block.timestamp + 1 hours,
+            0,
+            bytes32(0),
+            bytes32(0)
+        );
     }
 }

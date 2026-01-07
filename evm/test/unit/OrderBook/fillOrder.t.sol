@@ -11,6 +11,8 @@ contract FillOrderTest is OrderBookTestBase {
     using TypeConverter for *;
 
     // Test cases
+    // [X] given the contract is paused
+    //    [X] it reverts with an EnforcedPause error
     // [X] given the destination chain ID of the order is not the current chain ID
     //   [X] it reverts with an InvalidDestinationChain error
     // [X] given the current timestamp is > fill deadline
@@ -44,12 +46,12 @@ contract FillOrderTest is OrderBookTestBase {
     //       [X] it transfers the fill amount out from the caller to the recipient
     //       [X] it transfers a pro-rata amount in to the caller
     //       [X] it emits a Fill event
-    //   [ ] given token in has a smaller number of decimals than token out (6 vs. 18)
-    //     [ ] same cases as above
-    //   [ ] given token in has a larger number of decimals than token out (18 vs. 6)
-    //     [ ] same cases as above
-    //   [ ] given both tokens have 18 decimals
-    //     [ ] same cases as above
+    //   [X] given token in has a smaller number of decimals than token out (6 vs. 18)
+    //     [X] same cases as above
+    //   [X] given token in has a larger number of decimals than token out (18 vs. 6)
+    //     [X] same cases as above
+    //   [X] given both tokens have 18 decimals
+    //     [X] same cases as above
     // [X] given the order originated on a different chain (i.e. it is cross-chain)
     //    [X] given both tokens have 6 decimals
     //      [X] given the fill amount is equal to the amount out remaining

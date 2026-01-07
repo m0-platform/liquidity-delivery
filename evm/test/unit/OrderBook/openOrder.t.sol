@@ -11,6 +11,8 @@ contract OpenOrderTest is OrderBookTestBase {
     using TypeConverter for *;
 
     // Test cases
+    // [X] given the contract is paused
+    //    [X] it reverts with an EnforcedPause error
     // [X] given the fill deadline is before the current block timestamp
     //    [X] it reverts with an InvalidDeadline error
     // [X] given the amount in is zero

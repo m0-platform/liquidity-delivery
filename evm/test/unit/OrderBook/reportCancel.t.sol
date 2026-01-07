@@ -32,7 +32,7 @@ contract ReportCancelTest is OrderBookTestBase {
     //     [X] it transfers remaining amountIn to order sender (amountIn - amountInReleased)
     //     [X] it sets order status to Cancelled
     //     [X] it emits RefundClaimed event
-    // [X] given the program is paused
+    // [X] given the contract is paused
     //   [X] it reverts with an EnforcedPause error
 
     function setUp() public override {
