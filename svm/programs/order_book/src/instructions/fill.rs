@@ -539,8 +539,8 @@ pub struct ReportOrderFill<'info> {
     #[account(mut)]
     pub relayer: Signer<'info>,
 
-    #[account(address = global_account.messenger_authority @ OrderBookError::NotAuthorized)]
-    pub messenger_authority: Signer<'info>,
+    #[account(address = global_account.portal_authority @ OrderBookError::NotAuthorized)]
+    pub portal_authority: Signer<'info>,
 
     #[account(
         seeds = [GLOBAL_SEED],

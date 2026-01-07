@@ -709,7 +709,7 @@
           "type": "u32"
         },
         {
-          "name": "messenger_authority",
+          "name": "portal_authority",
           "type": "pubkey"
         }
       ]
@@ -930,7 +930,7 @@
           "signer": true
         },
         {
-          "name": "messenger_authority",
+          "name": "portal_authority",
           "signer": true
         },
         {
@@ -1072,7 +1072,7 @@
           "signer": true
         },
         {
-          "name": "messenger_authority",
+          "name": "portal_authority",
           "signer": true
         },
         {
@@ -1205,7 +1205,7 @@
       ]
     },
     {
-      "name": "set_messenger_authority",
+      "name": "set_portal_authority",
       "discriminator": [145, 255, 61, 204, 135, 22, 251, 160],
       "accounts": [
         {
@@ -1228,7 +1228,7 @@
       ],
       "args": [
         {
-          "name": "messenger_authority",
+          "name": "portal_authority",
           "type": "pubkey"
         }
       ]
@@ -1775,7 +1775,7 @@
             "type": "u32"
           },
           {
-            "name": "messenger_authority",
+            "name": "portal_authority",
             "type": "pubkey"
           },
           {

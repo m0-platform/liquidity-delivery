@@ -36,7 +36,7 @@ contract CancelOrderForTest is OrderBookTestBase {
     // [X] given the order can be cancelled
     //   [X] given the destination chain is different to the current chain (i.e. cross-chain order)
     //     [X] it updates the order status to Cancelled
-    //     [X] it sends a CancelReport to the origin chain via messenger
+    //     [X] it sends a CancelReport to the origin chain via portal
     //     [X] it emits an OrderCancelled event
     //   [X] given the destination chain is the current chain (i.e. local order)
     //     [X] it immediately refunds the order amount in to the order sender
@@ -275,7 +275,7 @@ contract CancelOrderForTest is OrderBookTestBase {
             "order status should be Cancelled"
         );
 
-        // Verify cancel report was sent to messenger
-        assertTrue(messenger.isCancelReported(xchainOrderId), "cancel report should have been sent");
+        // Verify cancel report was sent to portal
+        assertTrue(portal.isCancelReported(xchainOrderId), "cancel report should have been sent");
     }
 }

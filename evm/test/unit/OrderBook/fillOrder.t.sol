@@ -53,16 +53,16 @@ contract FillOrderTest is OrderBookTestBase {
     //    [X] given both tokens have 6 decimals
     //      [X] given the fill amount is equal to the amount out remaining
     //        [X] it transfers the amount out remaining to be filled from the caller to the recipient
-    //        [X] it sends a fill report to the origin chain via the messenger
+    //        [X] it sends a fill report to the origin chain via the portal
     //        [X] it emits a Fill event
     //        [X] given the fill amount is greater than the amount out remaining to fill
     //     [X] the fill amount is reduced to the remaining amount out to fill
     //       [X] it transfers the amount out remaining to be filled from the caller to the
-    //       [X] it sends a fill report to the origin chain via the messenger
+    //       [X] it sends a fill report to the origin chain via the portal
     //       [X] it emits a Fill event
     //     [X] given the fill amount is less than the amount out remaining to fill
     //       [X] it transfers the fill amount out from the caller to the recipient
-    //       [X] it sends a fill report to the origin chain via the messenger
+    //       [X] it sends a fill report to the origin chain via the portal
     //       [X] it emits a Fill event
     //   [X] given token in has a smaller number of decimals than token out (6 vs. 18)
     //     [X] same cases as above
@@ -630,7 +630,7 @@ contract FillOrderTest is OrderBookTestBase {
             recipientTokenOutBefore + orderData.amountOut,
             "recipient should have received tokenOut"
         );
-        assertTrue(messenger.isFillReported(orderId), "fill report should have been sent to origin chain");
+        assertTrue(portal.isFillReported(orderId), "fill report should have been sent to origin chain");
     }
 
     function test_bothSixDecimals_crossChainOrderFullFill_success()
@@ -713,7 +713,7 @@ contract FillOrderTest is OrderBookTestBase {
             recipientTokenOutBefore + orderData.amountOut,
             "recipient should have received tokenOut"
         );
-        assertTrue(messenger.isFillReported(orderId), "fill report should have been sent to origin chain");
+        assertTrue(portal.isFillReported(orderId), "fill report should have been sent to origin chain");
     }
 
     function test_fuzz_bothSixDecimals_crossChainOrderOverfill_success(
@@ -788,7 +788,7 @@ contract FillOrderTest is OrderBookTestBase {
             recipientTokenOutBefore + fillAmount,
             "recipient should have received partial tokenOut"
         );
-        assertTrue(messenger.isFillReported(orderId), "fill report should have been sent to origin chain");
+        assertTrue(portal.isFillReported(orderId), "fill report should have been sent to origin chain");
     }
 
     function testFuzz_bothSixDecimals_crossChainOrderPartialFill_success(

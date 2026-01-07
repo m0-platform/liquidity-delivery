@@ -972,7 +972,7 @@ mod xchain_orders {
     //     [X] it transfers amount_out_to_fill of token_out to the recipient
     //     [X] it does NOT transfer any token_in (stays on origin chain)
     //     [X] it updates amount_out_filled and amount_in_released on the order
-    //     [X] it sends a fill report message via the messenger program
+    //     [X] it sends a fill report message via the portal program
     //   [X] given the amount_out_to_fill is greater than or equal to the amount out of the order
     //     [X] it creates the order account
     //     [X] it fully fills the order in one transaction

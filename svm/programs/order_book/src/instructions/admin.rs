@@ -19,11 +19,11 @@ pub struct AdminInstruction<'info> {
 
 impl AdminInstruction<'_> {
 
-    pub fn set_messenger_authority(
+    pub fn set_portal_authority(
         ctx: Context<Self>,
-        new_messenger_authority: Pubkey,
+        new_portal_authority: Pubkey,
     ) -> Result<()> {
-        ctx.accounts.global_account.messenger_authority = new_messenger_authority;
+        ctx.accounts.global_account.portal_authority = new_portal_authority;
         Ok(())
     }
 

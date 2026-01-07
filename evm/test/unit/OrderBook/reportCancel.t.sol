@@ -10,7 +10,7 @@ contract ReportCancelTest is OrderBookTestBase {
     using TypeConverter for *;
 
     // Test cases
-    // [X] given the messenger is not the caller
+    // [X] given the portal is not the caller
     //   [X] it reverts with a NotAuthorized error
     // [X] given the order does not exist
     //   [X] it reverts with an InvalidOrderStatus error
@@ -39,10 +39,10 @@ contract ReportCancelTest is OrderBookTestBase {
         _placeOrder(users["alice"], params);
     }
 
-    function test_messengerIsNotCaller_reverts() public {
+    function test_portalIsNotCaller_reverts() public {
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
-        // Try to report cancel as a regular user (not messenger)
+        // Try to report cancel as a regular user (not portal)
         vm.prank(users["bob"]);
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.NotAuthorized.selector));
         orderBook.reportCancel(
@@ -59,7 +59,7 @@ contract ReportCancelTest is OrderBookTestBase {
         bytes32 fakeOrderId = bytes32("fake order id");
 
         // Try to report cancel on non-existent order
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
         orderBook.reportCancel(
             params.destChainId,
@@ -78,7 +78,7 @@ contract ReportCancelTest is OrderBookTestBase {
         _reportFill(users["solver"], orderId, params.amountOut, params.amountIn);
 
         // Try to report cancel on the completed order
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
         orderBook.reportCancel(
             params.destChainId,
@@ -97,7 +97,7 @@ contract ReportCancelTest is OrderBookTestBase {
         _reportCancel(orderId, users["alice"], params.tokenIn);
 
         // Try to report cancel again
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
         orderBook.reportCancel(
             params.destChainId,
@@ -113,7 +113,7 @@ contract ReportCancelTest is OrderBookTestBase {
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
         // Report with wrong order sender, reverts
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
         orderBook.reportCancel(
             params.destChainId,
@@ -129,7 +129,7 @@ contract ReportCancelTest is OrderBookTestBase {
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
         // Report with wrong token in, reverts
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
         orderBook.reportCancel(
             params.destChainId,
@@ -145,7 +145,7 @@ contract ReportCancelTest is OrderBookTestBase {
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
         // Report with wrong source chain ID, reverts
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReportSource.selector));
         orderBook.reportCancel(
             params.destChainId + 1, // should be params.destChainId
@@ -166,8 +166,8 @@ contract ReportCancelTest is OrderBookTestBase {
         uint256 senderBalanceBefore = tokenIn.balanceOf(users["alice"]);
         uint256 orderBookBalanceBefore = tokenIn.balanceOf(address(orderBook));
 
-        // Report cancel via messenger
-        vm.prank(address(messenger));
+        // Report cancel via portal
+        vm.prank(address(portal));
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.RefundClaimed(orderId, users["alice"], order.amountIn);
         orderBook.reportCancel(
@@ -245,8 +245,8 @@ contract ReportCancelTest is OrderBookTestBase {
         uint256 senderBalanceBefore = tokenIn.balanceOf(users["alice"]);
         uint256 orderBookBalanceBefore = tokenIn.balanceOf(address(orderBook));
 
-        // Report cancel via messenger
-        vm.prank(address(messenger));
+        // Report cancel via portal
+        vm.prank(address(portal));
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.RefundClaimed(orderId, users["alice"], expectedRefund);
         orderBook.reportCancel(

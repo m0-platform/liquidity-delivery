@@ -16,7 +16,7 @@ contract FeeOnTransferTest is Test {
     using TypeConverter for *;
 
     OrderBook internal orderBook;
-    MockPortalV2 internal messenger;
+    MockPortalV2 internal portal;
     MockFeeToken internal feeToken;
     MockERC20 internal tokenOut;
 
@@ -49,15 +49,15 @@ contract FeeOnTransferTest is Test {
         tokenOut.mint(solver, MINT_AMOUNT);
 
         // Deploy OrderBook
-        messenger = new MockPortalV2();
+        portal = new MockPortalV2();
         vm.deal(admin, 1 ether);
-        address implementation = address(new OrderBook(CHAIN_ID, address(messenger)));
+        address implementation = address(new OrderBook(CHAIN_ID, address(portal)));
         orderBook = OrderBook(
             address(new ERC1967Proxy(implementation, abi.encodeWithSelector(OrderBook.initialize.selector, admin)))
         );
 
         // Configure
-        messenger.setOrderBook(address(orderBook));
+        portal.setOrderBook(address(orderBook));
         vm.prank(admin);
         orderBook.setDestinationSupported(DEST_CHAIN_ID, true);
 
@@ -92,7 +92,7 @@ contract FeeOnTransferTest is Test {
 
         // 3. Attempt reportFill - should revert because safeTransferExact will fail
         // The OrderBook expects to transfer exactly AMOUNT_IN, but fee will reduce actual amount
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         orderBook.reportFill(
             params.destChainId,
             IOrderBook.FillReport({
@@ -122,7 +122,7 @@ contract FeeOnTransferTest is Test {
 
         // 3. Simulate cancel report arriving from destination chain
         //    reportCancel triggers refund which uses safeTransfer
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         orderBook.reportCancel(
             DEST_CHAIN_ID,
             IOrderBook.CancelReport({

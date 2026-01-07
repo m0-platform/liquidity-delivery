@@ -8,7 +8,7 @@ use std::error::Error;
 // For reporting cancels back to the origin chain for orders that originated here
 // but had a different destination chain
 //
-// [X] given the messenger_authority does not match global account
+// [X] given the portal_authority does not match global account
 //   [X] it reverts with NotAuthorized error
 // [X] given the order does not exist
 //   [X] it reverts with AccountNotInitialized error
@@ -40,7 +40,7 @@ fn default_order_params(test: &OrderBookTest) -> order_book::instructions::open:
 }
 
 #[test]
-fn test_report_cancel_unauthorized_messenger_reverts() -> Result<(), Box<dyn Error>> {
+fn test_report_cancel_unauthorized_portal_reverts() -> Result<(), Box<dyn Error>> {
     let mut test = OrderBookTest::new()?;
     test.initialize()?;
 
@@ -50,9 +50,9 @@ fn test_report_cancel_unauthorized_messenger_reverts() -> Result<(), Box<dyn Err
 
     let cancel_report = order_book::instructions::CancelReport { order_id };
 
-    // Build accounts with wrong messenger_authority (carol instead of the configured one)
+    // Build accounts with wrong portal_authority (carol instead of the configured one)
     let relayer = test.get_user("bob");
-    let wrong_messenger = test.get_user("carol");
+    let wrong_portal = test.get_user("carol");
 
     let (_, native_order) = test.get_native_order_account(&order_id)?;
     let order_account = test
@@ -68,7 +68,7 @@ fn test_report_cancel_unauthorized_messenger_reverts() -> Result<(), Box<dyn Err
         program: order_book::ID,
         event_authority: test.get_event_authority()?,
         relayer: relayer.pubkey(),
-        messenger_authority: wrong_messenger.pubkey(), // Wrong messenger
+        portal_authority: wrong_portal.pubkey(), // Wrong portal
         global_account: test.get_global_account()?.0,
         order: order_account,
         token_in_mint,
@@ -91,7 +91,7 @@ fn test_report_cancel_unauthorized_messenger_reverts() -> Result<(), Box<dyn Err
         .instruction()?;
 
     test.ctx
-        .execute_instruction(ix, &[&relayer, &wrong_messenger])?
+        .execute_instruction(ix, &[&relayer, &wrong_portal])?
         .assert_anchor_error(&format!("{:?}", OrderBookError::NotAuthorized));
 
     Ok(())
@@ -108,7 +108,7 @@ fn test_report_cancel_order_not_exist_reverts() -> Result<(), Box<dyn Error>> {
     };
 
     let relayer = test.get_user("bob");
-    let messenger_authority = test.get_user("messenger_authority");
+    let portal_authority = test.get_user("portal_authority");
 
     let fake_order_account = test
         .ctx
@@ -124,7 +124,7 @@ fn test_report_cancel_order_not_exist_reverts() -> Result<(), Box<dyn Error>> {
         program: order_book::ID,
         event_authority: test.get_event_authority()?,
         relayer: relayer.pubkey(),
-        messenger_authority: messenger_authority.pubkey(),
+        portal_authority: portal_authority.pubkey(),
         global_account: test.get_global_account()?.0,
         order: fake_order_account,
         token_in_mint,
@@ -147,7 +147,7 @@ fn test_report_cancel_order_not_exist_reverts() -> Result<(), Box<dyn Error>> {
         .instruction()?;
 
     test.ctx
-        .execute_instruction(ix, &[&relayer, &messenger_authority])?
+        .execute_instruction(ix, &[&relayer, &portal_authority])?
         .assert_anchor_error("AccountNotInitialized");
 
     Ok(())
@@ -183,17 +183,17 @@ fn test_report_cancel_completed_order_reverts() -> Result<(), Box<dyn Error>> {
     let cancel_report = order_book::instructions::CancelReport { order_id };
 
     let relayer = test.get_user("bob");
-    let messenger_authority = test.get_user("messenger_authority");
+    let portal_authority = test.get_user("portal_authority");
 
     let ix = test.create_report_cancel_ix(
         &relayer.pubkey(),
-        &messenger_authority.pubkey(),
+        &portal_authority.pubkey(),
         order_params.dest_chain_id,
         &cancel_report,
     )?;
 
     test.ctx
-        .execute_instruction(ix, &[&relayer, &messenger_authority])?
+        .execute_instruction(ix, &[&relayer, &portal_authority])?
         .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidOrderStatus));
 
     Ok(())
@@ -211,7 +211,7 @@ fn test_report_cancel_wrong_sender_reverts() -> Result<(), Box<dyn Error>> {
     let cancel_report = order_book::instructions::CancelReport { order_id };
 
     let relayer = test.get_user("bob");
-    let messenger_authority = test.get_user("messenger_authority");
+    let portal_authority = test.get_user("portal_authority");
 
     let (_, native_order) = test.get_native_order_account(&order_id)?;
     let order_account = test
@@ -230,7 +230,7 @@ fn test_report_cancel_wrong_sender_reverts() -> Result<(), Box<dyn Error>> {
         program: order_book::ID,
         event_authority: test.get_event_authority()?,
         relayer: relayer.pubkey(),
-        messenger_authority: messenger_authority.pubkey(),
+        portal_authority: portal_authority.pubkey(),
         global_account: test.get_global_account()?.0,
         order: order_account,
         token_in_mint,
@@ -253,12 +253,13 @@ fn test_report_cancel_wrong_sender_reverts() -> Result<(), Box<dyn Error>> {
         .instruction()?;
 
     test.ctx
-        .execute_instruction(ix, &[&relayer, &messenger_authority])?
+        .execute_instruction(ix, &[&relayer, &portal_authority])?
         .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidSender));
 
     Ok(())
 }
 
+#[test]
 fn test_report_cancel_wrong_source_chain_id_reverts() -> Result<(), Box<dyn Error>> {
     let mut test = OrderBookTest::new()?;
     test.initialize()?;
@@ -270,17 +271,17 @@ fn test_report_cancel_wrong_source_chain_id_reverts() -> Result<(), Box<dyn Erro
     let cancel_report = order_book::instructions::CancelReport { order_id };
 
     let relayer = test.get_user("bob");
-    let messenger_authority = test.get_user("messenger_authority");
+    let portal_authority = test.get_user("portal_authority");
 
     let ix = test.create_report_cancel_ix(
         &relayer.pubkey(),
-        &messenger_authority.pubkey(),
+        &portal_authority.pubkey(),
         order_params.dest_chain_id + 1, // Wrong source chain ID
         &cancel_report,
     )?;
 
     test.ctx
-        .execute_instruction(ix, &[&relayer, &messenger_authority])?
+        .execute_instruction(ix, &[&relayer, &portal_authority])?
         .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidReportSource));
 
     Ok(())
@@ -383,17 +384,17 @@ fn test_report_cancel_already_cancelled_reverts() -> Result<(), Box<dyn Error>> 
 
     // Try to report cancel again
     let relayer = test.get_user("bob");
-    let messenger_authority = test.get_user("messenger_authority");
+    let portal_authority = test.get_user("portal_authority");
 
     let ix = test.create_report_cancel_ix(
         &relayer.pubkey(),
-        &messenger_authority.pubkey(),
+        &portal_authority.pubkey(),
         order_params.dest_chain_id,
         &cancel_report,
     )?;
 
     test.ctx
-        .execute_instruction(ix, &[&relayer, &messenger_authority])?
+        .execute_instruction(ix, &[&relayer, &portal_authority])?
         .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidOrderStatus));
 
     Ok(())

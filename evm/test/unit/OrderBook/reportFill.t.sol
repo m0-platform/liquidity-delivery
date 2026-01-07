@@ -10,7 +10,7 @@ contract ReportFillTest is OrderBookTestBase {
     using TypeConverter for *;
 
     // Test cases
-    // [X] given the messenger is not the caller
+    // [X] given the portal is not the caller
     //   [X] it reverts with a NotAuthorized error
     // [X] given the order does not exist
     //   [X] it reverts with an InvalidOrderStatus error
@@ -39,10 +39,10 @@ contract ReportFillTest is OrderBookTestBase {
         _placeOrder(users["alice"], params);
     }
 
-    function test_messengerIsNotCaller_reverts() public {
+    function test_portalIsNotCaller_reverts() public {
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
-        // Try to report fill as a regular user (not messenger)
+        // Try to report fill as a regular user (not portal)
         vm.prank(users["bob"]);
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.NotAuthorized.selector));
         orderBook.reportFill(
@@ -61,7 +61,7 @@ contract ReportFillTest is OrderBookTestBase {
         bytes32 fakeOrderId = bytes32("fake order id");
 
         // Try to report fill on non-existent order
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
         orderBook.reportFill(
             params.destChainId,
@@ -82,7 +82,7 @@ contract ReportFillTest is OrderBookTestBase {
         _reportFill(users["solver"], orderId, params.amountOut, params.amountIn);
 
         // Try to report another fill on the completed order
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
         orderBook.reportFill(
             params.destChainId,
@@ -100,7 +100,7 @@ contract ReportFillTest is OrderBookTestBase {
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
         // Try to report fill with amountOutFilled exceeding order amountOut
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
         orderBook.reportFill(
             params.destChainId,
@@ -118,7 +118,7 @@ contract ReportFillTest is OrderBookTestBase {
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
         // Try to report fill with amountInToRelease exceeding order amountIn
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
         orderBook.reportFill(
             params.destChainId,
@@ -136,7 +136,7 @@ contract ReportFillTest is OrderBookTestBase {
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
         // Try to report fill with wrong tokenIn
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
         orderBook.reportFill(
             params.destChainId,
@@ -154,7 +154,7 @@ contract ReportFillTest is OrderBookTestBase {
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
         // Try to report fill with wrong source chain ID
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReportSource.selector));
         orderBook.reportFill(
             params.destChainId + 1, // incorrect source chain ID
@@ -179,8 +179,8 @@ contract ReportFillTest is OrderBookTestBase {
         uint256 recipientBalanceBefore = tokenIn.balanceOf(users["solver"]);
         uint256 orderBookBalanceBefore = tokenIn.balanceOf(address(orderBook));
 
-        // Report fill via messenger
-        vm.prank(address(messenger));
+        // Report fill via portal
+        vm.prank(address(portal));
         orderBook.reportFill(
             params.destChainId,
             IOrderBook.FillReport({
@@ -254,8 +254,8 @@ contract ReportFillTest is OrderBookTestBase {
         uint256 recipientBalanceBefore = tokenIn.balanceOf(users["solver"]);
         uint256 orderBookBalanceBefore = tokenIn.balanceOf(address(orderBook));
 
-        // Report full fill via messenger
-        vm.prank(address(messenger));
+        // Report full fill via portal
+        vm.prank(address(portal));
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.OrderCompleted(orderId);
         orderBook.reportFill(

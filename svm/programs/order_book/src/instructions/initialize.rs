@@ -22,12 +22,12 @@ pub struct Initialize<'info> {
 }
 
 impl Initialize<'_> {
-    pub fn handler(ctx: Context<Self>, chain_id: u32, messenger_authority: Pubkey) -> Result<()> {
+    pub fn handler(ctx: Context<Self>, chain_id: u32, portal_authority: Pubkey) -> Result<()> {
         ctx.accounts.global_account.set_inner(OrderBookGlobal {
             admin: ctx.accounts.admin.key(),
             new_admin: None,
             chain_id,
-            messenger_authority,
+            portal_authority,
             bump: ctx.bumps.global_account,
             reserved: [0u8; 128],
         });

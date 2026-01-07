@@ -16,7 +16,7 @@ contract MEarnerYieldAccrualTest is Test {
     using TypeConverter for *;
 
     OrderBook internal orderBook;
-    MockPortalV2 internal messenger;
+    MockPortalV2 internal portal;
     MockMEarnerToken internal mToken;
     MockERC20 internal tokenOut;
 
@@ -49,15 +49,15 @@ contract MEarnerYieldAccrualTest is Test {
         tokenOut.mint(solver, MINT_AMOUNT);
 
         // Deploy OrderBook
-        messenger = new MockPortalV2();
+        portal = new MockPortalV2();
         vm.deal(admin, 1 ether);
-        address implementation = address(new OrderBook(CHAIN_ID, address(messenger)));
+        address implementation = address(new OrderBook(CHAIN_ID, address(portal)));
         orderBook = OrderBook(
             address(new ERC1967Proxy(implementation, abi.encodeWithSelector(OrderBook.initialize.selector, admin)))
         );
 
         // Configure
-        messenger.setOrderBook(address(orderBook));
+        portal.setOrderBook(address(orderBook));
         vm.prank(admin);
         orderBook.setDestinationSupported(DEST_CHAIN_ID, true);
 
@@ -105,7 +105,7 @@ contract MEarnerYieldAccrualTest is Test {
         // 4. Solver fills order, reportFill transfers 100e6 to solver
         uint256 solverBalanceBefore = mToken.balanceOf(solver);
 
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         orderBook.reportFill(
             params.destChainId,
             IOrderBook.FillReport({
@@ -151,7 +151,7 @@ contract MEarnerYieldAccrualTest is Test {
         //    With the new design, cancellation originates on destination and sends
         //    a CancelReport to origin which triggers the refund
         uint256 aliceBalanceBefore = mToken.balanceOf(alice);
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         orderBook.reportCancel(
             DEST_CHAIN_ID,
             IOrderBook.CancelReport({
@@ -212,7 +212,7 @@ contract MEarnerYieldAccrualTest is Test {
         assertGt(yieldToTreasury, 9e6, "treasury should receive yield");
 
         // 4. Now fill the order
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         orderBook.reportFill(
             params.destChainId,
             IOrderBook.FillReport({

@@ -16,7 +16,7 @@ contract PausableTokenTest is Test {
     using TypeConverter for *;
 
     OrderBook internal orderBook;
-    MockPortalV2 internal messenger;
+    MockPortalV2 internal portal;
     MockPausableToken internal pausableToken;
     MockERC20 internal tokenOut;
 
@@ -49,15 +49,15 @@ contract PausableTokenTest is Test {
         tokenOut.mint(solver, MINT_AMOUNT);
 
         // Deploy OrderBook
-        messenger = new MockPortalV2();
+        portal = new MockPortalV2();
         vm.deal(admin, 1 ether);
-        address implementation = address(new OrderBook(CHAIN_ID, address(messenger)));
+        address implementation = address(new OrderBook(CHAIN_ID, address(portal)));
         orderBook = OrderBook(
             address(new ERC1967Proxy(implementation, abi.encodeWithSelector(OrderBook.initialize.selector, admin)))
         );
 
         // Configure
-        messenger.setOrderBook(address(orderBook));
+        portal.setOrderBook(address(orderBook));
         vm.prank(admin);
         orderBook.setDestinationSupported(DEST_CHAIN_ID, true);
 
@@ -101,7 +101,7 @@ contract PausableTokenTest is Test {
         pausableToken.pause();
 
         // 4. reportFill arrives but reverts because token is paused
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         vm.expectRevert(abi.encodeWithSelector(MockPausableToken.EnforcedPause.selector));
         orderBook.reportFill(
             params.destChainId,
@@ -127,7 +127,7 @@ contract PausableTokenTest is Test {
         //    a CancelReport to origin which triggers the refund
 
         uint256 aliceBalanceBefore = pausableToken.balanceOf(alice);
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         orderBook.reportCancel(
             DEST_CHAIN_ID,
             IOrderBook.CancelReport({

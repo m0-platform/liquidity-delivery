@@ -36,15 +36,15 @@ contract Deploy is ScriptBase, DeployHelpers {
      * @param deployer_ The address of the deployer.
      * @param admin_ The address to set as the admin of the contract.
      * @param chainId_ The M0 chain ID to use for the OrderBook on the chain being deployed to.
-     * @param messenger_ The address of the messenger contract for cross-chain communication.
+     * @param portal_ The address of the portal contract for cross-chain communication.
      */
     function _deployOrderBook(
         address deployer_,
         address admin_,
         uint32 chainId_,
-        address messenger_
+        address portal_
     ) internal returns (address implementation_, address proxy_) {
-        implementation_ = address(new OrderBook(chainId_, messenger_));
+        implementation_ = address(new OrderBook(chainId_, portal_));
 
         proxy_ = _deployCreate3TransparentProxy(
             implementation_,

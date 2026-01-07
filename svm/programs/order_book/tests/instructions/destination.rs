@@ -22,9 +22,9 @@ mod add_destination {
         let mut test = OrderBookTest::new()?;
         // Initialize without adding destination
         let admin = test.get_user("admin");
-        let messenger_authority = test.get_user("messenger_authority");
+        let portal_authority = test.get_user("portal_authority");
 
-        let ix = test.create_initialize_ix(&admin.pubkey(), CHAIN_ID, &messenger_authority.pubkey())?;
+        let ix = test.create_initialize_ix(&admin.pubkey(), CHAIN_ID, &portal_authority.pubkey())?;
         test.ctx.execute_instruction(ix, &[&admin])?.assert_success();
 
         // Try to add destination with non-admin (alice)
@@ -44,9 +44,9 @@ mod add_destination {
         let mut test = OrderBookTest::new()?;
         // Initialize without adding destination
         let admin = test.get_user("admin");
-        let messenger_authority = test.get_user("messenger_authority");
+        let portal_authority = test.get_user("portal_authority");
 
-        let ix = test.create_initialize_ix(&admin.pubkey(), CHAIN_ID, &messenger_authority.pubkey())?;
+        let ix = test.create_initialize_ix(&admin.pubkey(), CHAIN_ID, &portal_authority.pubkey())?;
         test.ctx.execute_instruction(ix, &[&admin])?.assert_success();
 
         // Try to add current chain as destination
@@ -88,9 +88,9 @@ mod add_destination {
         let mut test = OrderBookTest::new()?;
         // Initialize without adding destination
         let admin = test.get_user("admin");
-        let messenger_authority = test.get_user("messenger_authority");
+        let portal_authority = test.get_user("portal_authority");
 
-        let ix = test.create_initialize_ix(&admin.pubkey(), CHAIN_ID, &messenger_authority.pubkey())?;
+        let ix = test.create_initialize_ix(&admin.pubkey(), CHAIN_ID, &portal_authority.pubkey())?;
         test.ctx.execute_instruction(ix, &[&admin])?.assert_success();
 
         // Verify destination doesn't exist yet
@@ -177,9 +177,9 @@ mod remove_destination {
         let mut test = OrderBookTest::new()?;
         // Initialize without adding destination
         let admin = test.get_user("admin");
-        let messenger_authority = test.get_user("messenger_authority");
+        let portal_authority = test.get_user("portal_authority");
 
-        let ix = test.create_initialize_ix(&admin.pubkey(), CHAIN_ID, &messenger_authority.pubkey())?;
+        let ix = test.create_initialize_ix(&admin.pubkey(), CHAIN_ID, &portal_authority.pubkey())?;
         test.ctx.execute_instruction(ix, &[&admin])?.assert_success();
 
         // Add destination chain 3

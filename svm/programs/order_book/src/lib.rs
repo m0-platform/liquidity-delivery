@@ -34,9 +34,9 @@ pub mod order_book {
     pub fn initialize(
         ctx: Context<Initialize>,
         chain_id: u32,
-        messenger_authority: Pubkey,
+        portal_authority: Pubkey,
     ) -> Result<()> {
-        Initialize::handler(ctx, chain_id, messenger_authority)
+        Initialize::handler(ctx, chain_id, portal_authority)
     }
 
     pub fn add_destination(
@@ -53,11 +53,11 @@ pub mod order_book {
         RemoveDestination::handler(ctx, dest_chain_id)
     }
 
-    pub fn set_messenger_authority(
+    pub fn set_portal_authority(
         ctx: Context<AdminInstruction>,
-        messenger_authority: Pubkey,
+        portal_authority: Pubkey,
     ) -> Result<()> {
-        AdminInstruction::set_messenger_authority(ctx, messenger_authority)
+        AdminInstruction::set_portal_authority(ctx, portal_authority)
     }
 
     pub fn set_new_admin(

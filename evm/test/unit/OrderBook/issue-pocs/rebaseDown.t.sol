@@ -16,7 +16,7 @@ contract RebaseDownTest is Test {
     using TypeConverter for *;
 
     OrderBook internal orderBook;
-    MockPortalV2 internal messenger;
+    MockPortalV2 internal portal;
     MockRebaseDownToken internal rebaseToken;
     MockERC20 internal tokenOut;
 
@@ -49,15 +49,15 @@ contract RebaseDownTest is Test {
         tokenOut.mint(solver, MINT_AMOUNT);
 
         // Deploy OrderBook
-        messenger = new MockPortalV2();
+        portal = new MockPortalV2();
         vm.deal(admin, 1 ether);
-        address implementation = address(new OrderBook(CHAIN_ID, address(messenger)));
+        address implementation = address(new OrderBook(CHAIN_ID, address(portal)));
         orderBook = OrderBook(
             address(new ERC1967Proxy(implementation, abi.encodeWithSelector(OrderBook.initialize.selector, admin)))
         );
 
         // Configure
-        messenger.setOrderBook(address(orderBook));
+        portal.setOrderBook(address(orderBook));
         vm.prank(admin);
         orderBook.setDestinationSupported(DEST_CHAIN_ID, true);
 
@@ -95,7 +95,7 @@ contract RebaseDownTest is Test {
         assertEq(newBalance, 90e6, "OrderBook balance should be 90% of original");
 
         // 3. Attempt reportFill - should revert because OrderBook has insufficient balance
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         vm.expectRevert(); // Will revert due to insufficient balance
         orderBook.reportFill(
             params.destChainId,
@@ -126,7 +126,7 @@ contract RebaseDownTest is Test {
 
         // 3. Simulate cancel report arriving from destination chain
         //    reportCancel triggers refund which should fail due to insufficient balance
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         vm.expectRevert(); // Will revert due to insufficient balance
         orderBook.reportCancel(
             DEST_CHAIN_ID,
