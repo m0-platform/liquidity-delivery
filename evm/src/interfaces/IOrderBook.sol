@@ -43,14 +43,6 @@ interface IOrderBook {
     );
 
     /**
-     * @notice Emitted when a cancellation is requested for an order by the sender
-     * @dev This event is emitted on the origin chain
-     * @param orderId The ID of the order being cancelled
-     * @param cancelRequestedAt The timestamp when the cancellation was requested
-     */
-    event CancelRequested(bytes32 indexed orderId, uint32 cancelRequestedAt);
-
-    /**
      * @notice Emitted when a refund is claimed for an order
      * @dev This event is emitted on the origin chain
      * @param orderId The ID of the order being refunded
@@ -67,19 +59,41 @@ interface IOrderBook {
     event OrderCompleted(bytes32 orderId);
 
     /**
-     * @notice Emitted when the configuration for a destination chain is updated
+     * @notice Emitted when an order is cancelled
+     * @dev This event is emitted on the destination chain
+     * @param orderId The ID of the cancelled order
+     */
+    event OrderCancelled(bytes32 indexed orderId);
+
+    /**
+     * @notice Emitted when the support for a destination chain is updated
      * @dev This event is emitted on the origin chain
      * @param destChainId The internal chain ID of the destination chain
-     * @param newIsSupported Whether orders can be created with this chain as the destination
-     * @param newFinalityBuffer The new finality buffer duration (in seconds)
-     * @param newFinalityBufferEffectiveTimestamp The timestamp when the new finality buffer becomes effective
+     * @param isSupported Whether orders can be created with this chain as the destination
      */
-    event DestinationConfigUpdated(
-        uint32 indexed destChainId,
-        bool newIsSupported,
-        uint32 newFinalityBuffer,
-        uint64 newFinalityBufferEffectiveTimestamp
+    event DestinationSupportUpdated(uint32 indexed destChainId, bool isSupported);
+
+    /**
+     * @notice Emitted when a fill is reported from a destination chain
+     * @dev This event is emitted on the origin chain
+     * @param orderId The ID of the order that was filled
+     * @param originRecipient The address on the origin chain that received released funds
+     * @param amountInToRelease The amount of input token released to the filler on the origin chain
+     * @param amountOutFilled The amount of output token that was filled on the destination chain
+     */
+    event FillReported(
+        bytes32 indexed orderId,
+        address indexed originRecipient,
+        uint128 amountInToRelease,
+        uint128 amountOutFilled
     );
+
+    /**
+     * @notice Emitted when a cancellation is reported from a destination chain
+     * @dev This event is emitted on the origin chain
+     * @param orderId The ID of the cancelled order
+     */
+    event CancelReported(bytes32 indexed orderId);
 
     /* ========== Errors ========== */
     error AmountInZero();
@@ -89,15 +103,19 @@ interface IOrderBook {
     error InvalidDeadline();
     error InvalidDestinationChain();
     error InvalidFinalityBuffer();
+    error InvalidMsgValue();
     error InvalidNonce();
     error InvalidOrderStatus();
     error InvalidOrderVersion();
     error InvalidOriginChain();
     error InvalidRecipient();
+    error InvalidSolver();
     error InvalidReport();
+    error InvalidTimestamp();
     error InvalidReportSource();
     error NotAuthorized();
     error OrderExpired();
+    error OrderAlreadyExists();
     error OrderAlreadyFilled();
     error OrderIdMismatch();
 
@@ -165,7 +183,7 @@ interface IOrderBook {
     enum OrderStatus {
         DoesNotExist,
         Created,
-        CancelRequested,
+        Cancelled,
         Completed
     }
 
@@ -177,8 +195,8 @@ interface IOrderBook {
      * @param sender Address that provided the funds on the origin chain
      * @param nonce A counter tied to the sender to allow unique orders
      * @param destChainId Destination chain ID where the order is to be filled
+     * @param createdAt Timestamp when the order was created
      * @param fillDeadline Timestamp by which the order must be filled on the destination chain
-     * @param cancelRequestedAt Timestamp when the cancel was requested, 0 if no cancel requested
      * @param tokenIn Address of the input token on this chain
      * @param tokenOut Address of the output token on the destination chain
      * @param amountIn Amount of input token provided
@@ -192,8 +210,8 @@ interface IOrderBook {
         address sender; //             20 +
         uint64 nonce; //               8 = 31 bytes
         uint32 destChainId; // slot 2: 4 +
+        uint32 createdAt; //           4 +
         uint32 fillDeadline; //        4 +
-        uint32 cancelRequestedAt; //   4 +
         address tokenIn; //            20 = 32 bytes
         bytes32 tokenOut; //   slot 3
         uint128 amountIn; //   slot 4: 16 +
@@ -212,6 +230,7 @@ interface IOrderBook {
      * @param nonce A counter tied to the sender to allow unique orders
      * @param originChainId internal chain ID where the order was created
      * @param destChainId Destination chain ID where the order is to be filled
+     * @param createdAt Timestamp when the order was created
      * @param fillDeadline Timestamp by which the order must be filled on the destination chain
      * @param tokenIn Address of the input token on the origin chain
      * @param tokenOut Address of the output token on the destination chain
@@ -226,6 +245,7 @@ interface IOrderBook {
         uint64 nonce;
         uint32 originChainId;
         uint32 destChainId;
+        uint64 createdAt;
         uint64 fillDeadline;
         bytes32 tokenIn;
         bytes32 tokenOut;
@@ -238,8 +258,8 @@ interface IOrderBook {
     /**
      * @notice Data reported from a destination chain back to the origin chain about a fill
      * @dev This struct is sent by the messenger contract to report fills that occurred
-     *      on the destination chain back to the origin chain for refund processing
-     * @param orderId The ID of the order being reported
+     *      on the destination chain back to the origin chain for processing
+     * @param orderId The ID of the order that a fill is being reported for
      * @param amountInToRelease The amount of input token to release to the filler on the origin chain
      * @param amountOutFilled The amount of output token that was filled on the destination chain
      * @param originRecipient The address on the origin chain that should receive released funds
@@ -255,6 +275,21 @@ interface IOrderBook {
     }
 
     /**
+     * @notice Data reported from a destination chain back to the origin chain about a cancelled order
+     * @dev This struct is sent by the messenger contract to report order cancellations and refunds
+     *      that occurred on the destination chain back to the origin chain for processing
+     * @param orderId The ID of the order that a cancellation is being reported for
+     * @param orderSender The address on the origin chain that created the order
+     * @param tokenIn The address of the input token on the origin chain
+     * The last two are included for non-EVM chains to provide a way to resolve the sender and token
+     */
+    struct CancelReport {
+        bytes32 orderId;
+        bytes32 orderSender;
+        bytes32 tokenIn;
+    }
+
+    /**
      * @notice Parameters supplied by the filler of an order
      * @dev This struct contains parameters that are specific to the filler
      *      and are not part of the original order data
@@ -264,20 +299,6 @@ interface IOrderBook {
     struct FillParams {
         uint128 amountOutToFill;
         bytes32 originRecipient;
-    }
-
-    /**
-     * @notice Configuration for a supported destination chain
-     * @param isSupported Whether orders can be created with this chain as the destination
-     * @param finalityBuffer Duration (in seconds) to wait after the fill deadline before allowing refunds
-     * @param newFinalityBuffer New duration (in seconds) to wait after the fill deadline before allowing refunds
-     * @param newFinalityBufferEffectiveTimestamp Timestamp when the new finality buffer becomes effective
-     */
-    struct Destination {
-        bool isSupported;
-        uint32 finalityBuffer;
-        uint32 newFinalityBuffer;
-        uint64 newFinalityBufferEffectiveTimestamp;
     }
 
     /**
@@ -386,30 +407,106 @@ interface IOrderBook {
     /* ========== Refunding Orders ========== */
 
     /**
-     * @notice Request cancellation of an order before its fill deadline
-     * @dev Must be called by the order's sender
+     * @notice Cancel an order
+     * @dev Must be called by the order's recipient (or sender if same chain order) before fill deadline
+     * @dev Can be called by anyone after the fill deadline (permissionless refunds)
      * @param orderId_ - ID of the order to cancel
+     * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
+     * @dev   The payable amount is forwarded to the underlying messenger contract to send crosschain messages.
+     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        getting a quote for the required fee
      */
-    function requestCancelOrder(bytes32 orderId_) external;
+    function cancelOrder(bytes32 orderId_, OrderData calldata orderData_) external payable;
 
     /**
-     * @notice Request cancellation of an order before its fill deadline
-     * @dev Can be called by anyone with a valid signature from the order's sender
+     * @notice Cancel an order with additional message data required by some crosschain messages
+     * @dev Must be called by the order's recipient (or sender if same chain order) before fill deadline
+     * @dev Can be called by anyone after the fill deadline (permissionless refunds)
      * @param orderId_ ID of the order to cancel
-     * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelRequestDigest)
+     * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
+     * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
+     * @dev   The payable amount is forwarded to the underlying messenger contract to send crosschain messages.
+     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        getting a quote for the required fee
      */
-    function requestCancelOrderFor(bytes32 orderId_, bytes calldata signature_) external;
+    function cancelOrder(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        bytes calldata bridgeAdapterArgs_
+    ) external payable;
 
     /**
-     * @notice Refund any remaining unfilled amount of an order to the originator
-     *         after its (fill deadline or request cancellation)
-     *         timestamp + finality buffer has passed
-     * @dev    Can be called by anyone. This allows applications to gracefully
-     *         handle refunds for orders that weren't filled
-     *         Alternatively, if a user requested a refund, they can claim it here
-     * @param  orderId_ ID of the order to claim a refund for
+     * @notice Cancel an order with additional message data required by some crosschain messages
+     * @dev Must be called by the order's recipient (or sender if same chain order) before fill deadline
+     * @dev Can be called by anyone after the fill deadline (permissionless refunds)
+     * @param orderId_ ID of the order to cancel
+     * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
+     * @param bridgeAdapter_ Address of the bridge adapter to use for crosschain messages (must be supported by Portal V2)
+     * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
+     * @dev   The payable amount is forwarded to the underlying messenger contract to send crosschain messages.
+     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        getting a quote for the required fee
      */
-    function claimRefund(bytes32 orderId_) external;
+    function cancelOrder(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        address bridgeAdapter_,
+        bytes calldata bridgeAdapterArgs_
+    ) external payable;
+
+    /**
+     * @notice Cancel an order on behalf of the recipient
+     * @dev Can be called by anyone with a valid signature from the order's recipient
+     * @param orderId_ ID of the order to cancel
+     * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
+     * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelOrderDigest)
+     * @dev   The payable amount is forwarded to the underlying messenger contract to send crosschain messages.
+     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        getting a quote for the required fee
+     */
+    function cancelOrderFor(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        bytes calldata signature_
+    ) external payable;
+
+    /**
+     * @notice Cancel an order on behalf of the recipient with additional message data required by some crosschain messages
+     * @dev Can be called by anyone with a valid signature from the order's recipient
+     * @param orderId_ ID of the order to cancel
+     * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
+     * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelOrderDigest)
+     * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
+     * @dev   The payable amount is forwarded to the underlying messenger contract to send crosschain messages.
+     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        getting a quote for the required fee
+     */
+    function cancelOrderFor(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        bytes calldata signature_,
+        bytes calldata bridgeAdapterArgs_
+    ) external payable;
+
+    /**
+     * @notice Cancel an order on behalf of the recipient with additional message data required by some crosschain messages
+     * @dev Can be called by anyone with a valid signature from the order's recipient
+     * @param orderId_ ID of the order to cancel
+     * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
+     * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelOrderDigest)
+     * @param bridgeAdapter_ Address of the bridge adapter to use for crosschain messages (must be supported by Portal V2)
+     * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
+     * @dev   The payable amount is forwarded to the underlying messenger contract to send crosschain messages.
+     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        getting a quote for the required fee
+     */
+    function cancelOrderFor(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        bytes calldata signature_,
+        address bridgeAdapter_,
+        bytes calldata bridgeAdapterArgs_
+    ) external payable;
 
     /* ========== Filling Orders ========== */
 
@@ -419,23 +516,53 @@ interface IOrderBook {
      * @param orderData_ OrderData payload with all order information required to identify an order to be filled
      * @param fillerParams_ Parameters supplied by the solver of the order
      * @dev   The orderData is packed and hashed to verify the order ID as a safeguard for solvers
+     * @dev   The payable amount is forwarded to the underlying messenger contract to send crosschain messages.
+     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        getting a quote for the required fee
      */
-    function fillOrder(bytes32 orderId_, OrderData calldata orderData_, FillParams calldata fillerParams_) external;
+    function fillOrder(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        FillParams calldata fillerParams_
+    ) external payable;
 
     /**
      * @notice Fill an order on this chain with additional message data required by some crosschain messages
      * @param orderId_ ID of the order to fill
      * @param orderData_ OrderData payload with all order information required to identify an order to be filled
      * @param fillerParams_ Parameters supplied by the solver of the order
-     * @param messageData_ Additional message data required by some crosschain message protocols (see PortalV2 for more info)
+     * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
      * @dev   The orderData is packed and hashed to verify the order ID as a safeguard for solvers
+     * @dev   The payable amount is forwarded to the underlying messenger contract to send crosschain messages.
+     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        getting a quote for the required fee
      */
     function fillOrder(
         bytes32 orderId_,
         OrderData calldata orderData_,
         FillParams calldata fillerParams_,
-        bytes calldata messageData_
-    ) external;
+        bytes calldata bridgeAdapterArgs_
+    ) external payable;
+
+    /**
+     * @notice Fill an order on this chain with additional message data required by some crosschain messages
+     * @param orderId_ ID of the order to fill
+     * @param orderData_ OrderData payload with all order information required to identify an order to be filled
+     * @param fillerParams_ Parameters supplied by the solver of the order
+     * @param bridgeAdapter_ Address of the bridge adapter to use for crosschain messages (must be supported by Portal V2)
+     * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
+     * @dev   The orderData is packed and hashed to verify the order ID as a safeguard for solvers
+     * @dev   The payable amount is forwarded to the underlying messenger contract to send crosschain messages.
+     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        getting a quote for the required fee
+     */
+    function fillOrder(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        FillParams calldata fillerParams_,
+        address bridgeAdapter_,
+        bytes calldata bridgeAdapterArgs_
+    ) external payable;
 
     /**
      * @notice Report a fill that was made on another chain back to this chain as the origin chain
@@ -445,19 +572,22 @@ interface IOrderBook {
      */
     function reportFill(uint32 sourceChainId_, FillReport calldata report_) external;
 
+    /**
+     * @notice Report a cross-chain cancellation of an order.
+     * @dev Must be called by the messenger contract
+     * @param report_ Cancel data sent from the destination chain
+     */
+    function reportCancel(CancelReport calldata report_) external;
+
     /* ========== Admin Functions ========== */
 
     /**
-     * @notice Set external chain support and finality buffer configuration
+     * @notice Set external chain support for orders
      * @dev Must be DEFAULT_ADMIN_ROLE to call
-     * @dev The new finality buffer becomes effective after waiting for the existing buffer duration
-     *      to avoid certain race conditions that could result in lost funds for solvers
      * @param destChainId_ The chain ID for the destination chain used by the messenger
      * @param isSupported_ whether support for the chain should be enabled (true activates, false deactivates)
-     * @param finalityBuffer_ new duration (in seconds) to wait for messages from the destination
-     *        chain to be finalized after deadlines for safe processing
      */
-    function setDestinationConfig(uint32 destChainId_, bool isSupported_, uint32 finalityBuffer_) external;
+    function setDestinationSupported(uint32 destChainId_, bool isSupported_) external;
 
     /* ========== View Functions ========== */
 
@@ -485,15 +615,6 @@ interface IOrderBook {
     /// @notice Returns whether orders can be created with the provided chain ID as the destination
     function isDestinationSupported(uint32 destChainId_) external view returns (bool);
 
-    /**
-     * @notice Returns the configured finality buffer for the provided chain ID
-     * @dev If a chain is not supported, this will return 0
-     */
-    function getDestinationFinalityBuffer(uint32 destChainId_) external view returns (uint32);
-
-    /// @notice Returns the full destination configuration for the provided chain ID
-    function getDestinationConfig(uint32 destChainId_) external view returns (Destination memory);
-
     /* ========== EIP-712 Digest Functions ========== */
 
     /**
@@ -503,8 +624,8 @@ interface IOrderBook {
     function getGaslessOrderDigest(GaslessOrderParams memory params_) external view returns (bytes32);
 
     /**
-     * @notice Returns the EIP-712 digest that a user must sign to request order cancellation gaslessly
+     * @notice Returns the EIP-712 digest that a user must sign to cancel orders gaslessly
      * @param orderId_ ID of the order to cancel
      */
-    function getCancelRequestDigest(bytes32 orderId_) external view returns (bytes32);
+    function getCancelOrderDigest(bytes32 orderId_) external view returns (bytes32);
 }

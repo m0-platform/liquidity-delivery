@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { Test } from "../../../../lib/forge-std/src/Test.sol";
 import { ERC1967Proxy } from "../../../../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { TypeConverter } from "../../../../lib/common/src/libs/TypeConverter.sol";
 
 import { OrderBook, IOrderBook } from "../../../../src/OrderBook.sol";
-import { MockMessenger } from "../../../mock/MockMessenger.t.sol";
+import { MockPortalV2 } from "../../../mock/MockPortalV2.t.sol";
 import { MockERC20 } from "../../../mock/MockERC20.t.sol";
 import { MockPausableToken } from "../../../mock/issue-pocs/MockPausableToken.t.sol";
 
@@ -16,7 +16,7 @@ contract PausableTokenTest is Test {
     using TypeConverter for *;
 
     OrderBook internal orderBook;
-    MockMessenger internal messenger;
+    MockPortalV2 internal messenger;
     MockPausableToken internal pausableToken;
     MockERC20 internal tokenOut;
 
@@ -49,7 +49,7 @@ contract PausableTokenTest is Test {
         tokenOut.mint(solver, MINT_AMOUNT);
 
         // Deploy OrderBook
-        messenger = new MockMessenger();
+        messenger = new MockPortalV2();
         vm.deal(admin, 1 ether);
         address implementation = address(new OrderBook(CHAIN_ID, address(messenger)));
         orderBook = OrderBook(
@@ -59,7 +59,7 @@ contract PausableTokenTest is Test {
         // Configure
         messenger.setOrderBook(address(orderBook));
         vm.prank(admin);
-        orderBook.setDestinationConfig(DEST_CHAIN_ID, true, FINALITY_BUFFER);
+        orderBook.setDestinationSupported(DEST_CHAIN_ID, true);
 
         // Setup order params
         params = IOrderBook.OrderParams({
@@ -122,11 +122,19 @@ contract PausableTokenTest is Test {
         vm.warp(block.timestamp + 1 days);
         pausableToken.unpause();
 
-        // 6. Alice claims refund after fill deadline passes
-        vm.warp(order.fillDeadline + FINALITY_BUFFER + 1);
+        // 6. Simulate cancel report arriving from destination chain
+        //    With the new design, cancellation originates on destination and sends
+        //    a CancelReport to origin which triggers the refund
 
         uint256 aliceBalanceBefore = pausableToken.balanceOf(alice);
-        orderBook.claimRefund(orderId);
+        vm.prank(address(messenger));
+        orderBook.reportCancel(
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: alice.toBytes32(),
+                tokenIn: params.tokenIn.toBytes32()
+            })
+        );
         uint256 aliceBalanceAfter = pausableToken.balanceOf(alice);
 
         // Alice got her tokenIn back!

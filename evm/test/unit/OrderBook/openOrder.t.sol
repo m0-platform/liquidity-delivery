@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
 
@@ -18,6 +18,8 @@ contract OpenOrderTest is OrderBookTestBase {
     //    [X] it reverts with an AmountOutZero error
     // [X] given the destination chain is invalid
     //   [X] it reverts with an InvalidDestinationChain error
+    // [X] given the solver is the recipient
+    //   [X] it reverts with an InvalidSolver error
     // [X] given the sender has not approved the order book to spend their token in
     //   [X] it reverts with an ERC20 transfer error
     // [X] given the sender has not enough balance of the token in
@@ -69,6 +71,13 @@ contract OpenOrderTest is OrderBookTestBase {
         params.destChainId = 100;
         vm.prank(users["alice"]);
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidDestinationChain.selector));
+        orderBook.openOrder(params);
+    }
+
+    function test_solverIsRecipient_reverts() public {
+        params.solver = params.recipient;
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidSolver.selector));
         orderBook.openOrder(params);
     }
 

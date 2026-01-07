@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { Test } from "../../../../lib/forge-std/src/Test.sol";
 import { ERC1967Proxy } from "../../../../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { TypeConverter } from "../../../../lib/common/src/libs/TypeConverter.sol";
 
 import { OrderBook, IOrderBook } from "../../../../src/OrderBook.sol";
-import { MockMessenger } from "../../../mock/MockMessenger.t.sol";
+import { MockPortalV2 } from "../../../mock/MockPortalV2.t.sol";
 import { MockERC20 } from "../../../mock/MockERC20.t.sol";
 import { MockRebaseDownToken } from "../../../mock/issue-pocs/MockRebaseDownToken.t.sol";
 
@@ -16,7 +16,7 @@ contract RebaseDownTest is Test {
     using TypeConverter for *;
 
     OrderBook internal orderBook;
-    MockMessenger internal messenger;
+    MockPortalV2 internal messenger;
     MockRebaseDownToken internal rebaseToken;
     MockERC20 internal tokenOut;
 
@@ -49,7 +49,7 @@ contract RebaseDownTest is Test {
         tokenOut.mint(solver, MINT_AMOUNT);
 
         // Deploy OrderBook
-        messenger = new MockMessenger();
+        messenger = new MockPortalV2();
         vm.deal(admin, 1 ether);
         address implementation = address(new OrderBook(CHAIN_ID, address(messenger)));
         orderBook = OrderBook(
@@ -59,7 +59,7 @@ contract RebaseDownTest is Test {
         // Configure
         messenger.setOrderBook(address(orderBook));
         vm.prank(admin);
-        orderBook.setDestinationConfig(DEST_CHAIN_ID, true, FINALITY_BUFFER);
+        orderBook.setDestinationSupported(DEST_CHAIN_ID, true);
 
         // Setup order params
         params = IOrderBook.OrderParams({
@@ -109,31 +109,31 @@ contract RebaseDownTest is Test {
         );
     }
 
-    /// @notice Test claimRefund behavior when token rebases down
+    /// @notice Test reportCancel behavior when token rebases down
     /// @dev Verify whether refund also fails when balance < amountIn
-    function test_rebaseDown_claimRefundReverts() public {
+    function test_rebaseDown_reportCancelReverts() public {
         // 1. Create order - OrderBook receives 100e6 tokens
         vm.startPrank(alice);
         rebaseToken.approve(address(orderBook), AMOUNT_IN);
         bytes32 orderId = orderBook.openOrder(params);
         vm.stopPrank();
 
-        // 2. Request cancellation
-        vm.prank(alice);
-        orderBook.requestCancelOrder(orderId);
-
-        // 3. Rebase DOWN by 10%
+        // 2. Rebase DOWN by 10%
         rebaseToken.rebaseDownAccount(address(orderBook), 1000);
 
         // Verify balance decreased
         assertEq(rebaseToken.balanceOf(address(orderBook)), 90e6);
 
-        // 4. Warp past finality buffer
-        IOrderBook.Order memory order = orderBook.getOrder(orderId);
-        vm.warp(order.cancelRequestedAt + FINALITY_BUFFER + 1);
-
-        // 5. Attempt claimRefund - should revert because OrderBook has insufficient balance
+        // 3. Simulate cancel report arriving from destination chain
+        //    reportCancel triggers refund which should fail due to insufficient balance
+        vm.prank(address(messenger));
         vm.expectRevert(); // Will revert due to insufficient balance
-        orderBook.claimRefund(orderId);
+        orderBook.reportCancel(
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: alice.toBytes32(),
+                tokenIn: params.tokenIn.toBytes32()
+            })
+        );
     }
 }

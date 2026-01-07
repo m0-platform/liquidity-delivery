@@ -56,6 +56,10 @@ pub enum OrderBookError {
     FinalityPending,
     #[msg("Invalid destination account")]
     InvalidDestinationAccount,
+    #[msg("Order has not been created yet")]
+    InvalidCreatedAtTimestamp,
+    #[msg("Sender address does not match order sender")]
+    InvalidSender,
     #[msg("Invalid report source chain ID")]
     InvalidReportSource,
 }

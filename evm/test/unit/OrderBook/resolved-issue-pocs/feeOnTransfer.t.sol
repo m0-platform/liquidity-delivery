@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { Test } from "../../../../lib/forge-std/src/Test.sol";
 import { ERC1967Proxy } from "../../../../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { TypeConverter } from "../../../../lib/common/src/libs/TypeConverter.sol";
 
 import { OrderBook, IOrderBook } from "../../../../src/OrderBook.sol";
-import { MockMessenger } from "../../../mock/MockMessenger.t.sol";
+import { MockPortalV2 } from "../../../mock/MockPortalV2.t.sol";
 import { MockERC20 } from "../../../mock/MockERC20.t.sol";
 import { MockFeeToken } from "../../../mock/issue-pocs/MockFeeToken.t.sol";
 
@@ -16,7 +16,7 @@ contract FeeOnTransferTest is Test {
     using TypeConverter for *;
 
     OrderBook internal orderBook;
-    MockMessenger internal messenger;
+    MockPortalV2 internal messenger;
     MockFeeToken internal feeToken;
     MockERC20 internal tokenOut;
 
@@ -49,7 +49,7 @@ contract FeeOnTransferTest is Test {
         tokenOut.mint(solver, MINT_AMOUNT);
 
         // Deploy OrderBook
-        messenger = new MockMessenger();
+        messenger = new MockPortalV2();
         vm.deal(admin, 1 ether);
         address implementation = address(new OrderBook(CHAIN_ID, address(messenger)));
         orderBook = OrderBook(
@@ -59,7 +59,7 @@ contract FeeOnTransferTest is Test {
         // Configure
         messenger.setOrderBook(address(orderBook));
         vm.prank(admin);
-        orderBook.setDestinationConfig(DEST_CHAIN_ID, true, FINALITY_BUFFER);
+        orderBook.setDestinationSupported(DEST_CHAIN_ID, true);
 
         // Setup order params
         params = IOrderBook.OrderParams({
@@ -115,21 +115,21 @@ contract FeeOnTransferTest is Test {
         bytes32 orderId = orderBook.openOrder(params);
         vm.stopPrank();
 
-        // 2. Request cancellation
-        vm.prank(alice);
-        orderBook.requestCancelOrder(orderId);
-
-        // 3. Enable 1% fee on the token
+        // 2. Enable 1% fee on the token before refund
         feeToken.setFeePercent(100); // 100 basis points = 1%
-
-        // 4. Warp past finality buffer
-        IOrderBook.Order memory order = orderBook.getOrder(orderId);
-        vm.warp(order.cancelRequestedAt + FINALITY_BUFFER + 1);
 
         uint256 aliceBalanceBefore = feeToken.balanceOf(alice);
 
-        // 5. claimRefund does NOT revert - uses safeTransfer instead of safeTransferExact
-        orderBook.claimRefund(orderId);
+        // 3. Simulate cancel report arriving from destination chain
+        //    reportCancel triggers refund which uses safeTransfer
+        vm.prank(address(messenger));
+        orderBook.reportCancel(
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: alice.toBytes32(),
+                tokenIn: params.tokenIn.toBytes32()
+            })
+        );
 
         // 6. Verify alice received less than expected due to fee
         uint256 aliceBalanceAfter = feeToken.balanceOf(alice);

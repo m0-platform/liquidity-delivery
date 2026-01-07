@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { VmSafe } from "../../../lib/forge-std/src/Vm.sol";
 import { console } from "../../../lib/forge-std/src/console.sol";
@@ -21,6 +21,8 @@ contract OpenOrderForTest is OrderBookTestBase {
     //   [X] it reverts with an InvalidNonce error
     // [X] given the sender has not approved the orderbook contract for the tokenIn
     //   [X] it reverts with an insufficient allowance error
+    // [X] given the order version does not match the current version of the contract
+    //   [X] it reverts with an InvalidOrderVersion error
     // [X] given the signature is a valid standard ECDSA signature
     //   [X] it creates the order successfully
     //   [X] it transfers the amount in from the "sender" to the orderbook contract
@@ -151,6 +153,17 @@ contract OpenOrderForTest is OrderBookTestBase {
         orderBook.openOrderFor(gaslessParams, signature);
     }
 
+    function test_givenWrongOrderVersion_reverts() public {
+        // Set the version to an invalid value
+        gaslessParams.version = VERSION + 1;
+
+        // Try to sign and submit the order
+        bytes memory signature = _signStandardECDSA(sender, gaslessParams);
+
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderVersion.selector));
+        orderBook.openOrderFor(gaslessParams, signature);
+    }
+
     function test_noApproval_reverts() public {
         vm.prank(sender.addr);
         tokenIn.approve(address(orderBook), 0);
@@ -190,7 +203,7 @@ contract OpenOrderForTest is OrderBookTestBase {
         assertEq(order.version, VERSION, "version");
         assertEq(order.destChainId, gaslessParams.destChainId, "destChainId");
         assertEq(order.fillDeadline, gaslessParams.fillDeadline, "fillDeadline");
-        assertEq(order.cancelRequestedAt, uint32(0), "cancelRequestedAt");
+        assertEq(order.createdAt, uint32(block.timestamp), "createdAt");
         assertEq(order.nonce, gaslessParams.nonce, "nonce");
         assertEq(order.tokenIn, gaslessParams.tokenIn, "tokenIn");
         assertEq(order.tokenOut, gaslessParams.tokenOut, "tokenOut");
@@ -234,7 +247,7 @@ contract OpenOrderForTest is OrderBookTestBase {
         assertEq(order.version, VERSION, "version");
         assertEq(order.destChainId, gaslessParams.destChainId, "destChainId");
         assertEq(order.fillDeadline, gaslessParams.fillDeadline, "fillDeadline");
-        assertEq(order.cancelRequestedAt, uint32(0), "cancelRequestedAt");
+        assertEq(order.createdAt, uint32(block.timestamp), "createdAt");
         assertEq(order.nonce, gaslessParams.nonce, "nonce");
         assertEq(order.tokenIn, gaslessParams.tokenIn, "tokenIn");
         assertEq(order.tokenOut, gaslessParams.tokenOut, "tokenOut");
