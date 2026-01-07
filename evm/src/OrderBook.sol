@@ -389,6 +389,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         if (chainId != orderData_.destChainId) revert InvalidDestinationChain();
 
         if (orderData_.originChainId == chainId) {
+            if (msg.value != 0) revert InvalidMsgValue();
+
             // Local orders can be immediately refunded
             _claimRefund(orderId_, order);
         } else {

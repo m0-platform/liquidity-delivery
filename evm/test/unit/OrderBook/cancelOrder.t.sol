@@ -38,6 +38,8 @@ contract CancelOrderTest is OrderBookTestBase {
     //     [X] it sends a CancelReport to the origin chain via messenger
     //     [X] it emits an OrderCancelled event
     //   [X] given the destination chain is the origin chain (i.e. local order)
+    //     [X] given the msg.value is not zero
+    //       [X] it reverts with an InvalidMsgValue error
     //     [X] it immediately refunds the order amount in to the order sender
     //     [X] it sets the order status to Cancelled
     //     [X] it emits an OrderCancelled event
@@ -197,6 +199,19 @@ contract CancelOrderTest is OrderBookTestBase {
         vm.prank(users["alice"]);
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidDestinationChain.selector));
         orderBook.cancelOrder(orderId, orderData, new bytes(0));
+    }
+
+    function test_givenLocalOrder_givenMsgValueNotZero_reverts() public {
+        // User local order
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        IOrderBook.OrderData memory orderData = _getOrderDataFromOrder(orderId, order);
+
+        uint256 aliceStartingBalance = tokenIn.balanceOf(users["alice"]);
+
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidMsgValue.selector));
+        orderBook.cancelOrder{ value: 1 }(orderId, orderData, new bytes(0));
     }
 
     function test_givenXChainOrder_givenChainIsNotDestinationChain_reverts() public {
