@@ -570,7 +570,10 @@ interface IOrderBook {
     /**
      * @notice Pauses the contract.
      * @dev    Can only be called by an account with the PAUSER_ROLE.
-     * @dev    When paused, all order creation, filling, and refund claiming is disabled.
+     * @dev    When paused, all external order actions are disabled (open, fill, and cancel).
+     *         However, processing of crosschain fill and cancel reports is still allowed.
+     *         This enables safe upgrades of the contract by pausing all instances and
+     *         waiting until inflight messages are processed.
      */
     function pause() external;
 
