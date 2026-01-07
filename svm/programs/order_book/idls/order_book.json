@@ -1487,6 +1487,18 @@
             "type": {
               "array": ["u8", 32]
             }
+          },
+          {
+            "name": "order_sender",
+            "type": {
+              "array": ["u8", 32]
+            }
+          },
+          {
+            "name": "token_in",
+            "type": {
+              "array": ["u8", 32]
+            }
           }
         ]
       }
