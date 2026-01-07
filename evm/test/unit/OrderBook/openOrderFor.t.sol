@@ -21,8 +21,8 @@ contract OpenOrderForTest is OrderBookTestBase {
     //   [X] it reverts with an InvalidNonce error
     // [X] given the sender has not approved the orderbook contract for the tokenIn
     //   [X] it reverts with an insufficient allowance error
-    // [ ] given the order version does not match the current version of the contract
-    //   [ ] it reverts with an InvalidOrderVersion error
+    // [X] given the order version does not match the current version of the contract
+    //   [X] it reverts with an InvalidOrderVersion error
     // [X] given the signature is a valid standard ECDSA signature
     //   [X] it creates the order successfully
     //   [X] it transfers the amount in from the "sender" to the orderbook contract
