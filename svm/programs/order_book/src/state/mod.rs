@@ -34,19 +34,5 @@ pub const DESTINATION_SEED_PREFIX: &[u8] = b"destination";
 #[derive(Debug, InitSpace)]
 pub struct Destination {
     pub is_supported: bool,
-    pub finality_buffer: u64,
-    pub new_finality_buffer: u64,
-    pub new_finality_buffer_effective_timestamp: u64,
     pub bump: u8,
-}
-
-impl Destination {
-    pub fn effective_finality_buffer(&self, timestamp: u64) -> u64 {
-        if timestamp >= self.new_finality_buffer_effective_timestamp
-        {
-            self.new_finality_buffer
-        } else {
-            self.finality_buffer
-        }
-    }
 }

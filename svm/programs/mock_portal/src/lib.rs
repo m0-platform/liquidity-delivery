@@ -9,7 +9,7 @@ pub mod mock_portal {
     use super::*;
 
     pub fn send_fill_report(
-        _ctx: Context<SendFillReport>,
+        _ctx: Context<SendReport>,
         order_id: [u8; 32],
         token_in: [u8; 32],
         amount_in_to_release: u128,
@@ -24,13 +24,30 @@ pub mod mock_portal {
         );
         Ok(())
     }
+
+    pub fn send_cancel_report(
+        _ctx: Context<SendReport>,
+        order_id: [u8; 32],
+        order_sender: [u8; 32],
+        token_in: [u8; 32],
+        origin_chain_id: u32,
+    ) -> Result<()> {
+        msg!(
+            "Sending order cancel message to chain {}: {:?}",
+            origin_chain_id,
+            (order_id, order_sender, token_in)
+        );
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
-pub struct SendFillReport<'info> {
+pub struct SendReport<'info> {
     /// CHECK: any account can pay for the message
+    #[account(mut)]
     pub sender: Signer<'info>,
 
+    #[account(mut)]
     pub order_book_global: Signer<'info>,
 
     /// CHECK: we don't validate this in the mock

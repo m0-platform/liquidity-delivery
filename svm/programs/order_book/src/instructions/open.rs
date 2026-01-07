@@ -78,6 +78,7 @@ pub struct OpenOrder<'info> {
                     nonce: sender_nonce_account.value,
                     origin_chain_id: global_account.chain_id,
                     dest_chain_id: params.dest_chain_id,
+                    created_at: Clock::get()?.unix_timestamp as u64,
                     fill_deadline: params.fill_deadline,
                     token_in: token_in_mint.key().to_bytes(),
                     token_out: params.token_out,
@@ -129,6 +130,13 @@ impl OpenOrder<'_> {
             params.fill_deadline >= Clock::get()?.unix_timestamp as u64,
             OrderBookError::InvalidFillDeadline
         );
+        require!(params.recipient != [0u8; 32], OrderBookError::InvalidRecipient);
+
+        // Recipient != Solver to avoid issues with token transfers from one to the other
+        require!(
+            params.recipient != params.solver,
+            OrderBookError::InvalidRecipient
+        );
 
         Ok(())
     }
@@ -136,6 +144,8 @@ impl OpenOrder<'_> {
     #[access_control(ctx.accounts.validate(&params))]
     pub fn handler(ctx: Context<Self>, params: OrderParams) -> Result<()> {
         let sender: Pubkey = (&ctx.accounts.sender_token_in_account).owner;
+
+        let created_at = Clock::get()?.unix_timestamp as u64;
 
         // Populate the order data
         ctx.accounts.order.set_inner(Order {
@@ -147,8 +157,8 @@ impl OpenOrder<'_> {
                 sender,
                 nonce: ctx.accounts.sender_nonce_account.value,
                 dest_chain_id: params.dest_chain_id,
+                created_at,
                 fill_deadline: params.fill_deadline,
-                cancel_requested_at: 0,
                 token_in: ctx.accounts.token_in_mint.key(),
                 token_out: params.token_out,
                 amount_in: params.amount_in as u128,
@@ -166,6 +176,7 @@ impl OpenOrder<'_> {
             nonce: ctx.accounts.sender_nonce_account.value,
             origin_chain_id: ctx.accounts.global_account.chain_id,
             dest_chain_id: params.dest_chain_id,
+            created_at,
             fill_deadline: params.fill_deadline,
             token_in: ctx.accounts.token_in_mint.key().to_bytes(),
             token_out: params.token_out,
