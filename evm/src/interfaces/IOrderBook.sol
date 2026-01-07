@@ -73,6 +73,28 @@ interface IOrderBook {
      */
     event DestinationSupportUpdated(uint32 indexed destChainId, bool isSupported);
 
+    /**
+     * @notice Emitted when a fill is reported from a destination chain
+     * @dev This event is emitted on the origin chain
+     * @param orderId The ID of the order that was filled
+     * @param originRecipient The address on the origin chain that received released funds
+     * @param amountInToRelease The amount of input token released to the filler on the origin chain
+     * @param amountOutFilled The amount of output token that was filled on the destination chain
+     */
+    event FillReported(
+        bytes32 indexed orderId,
+        address indexed originRecipient,
+        uint128 amountInToRelease,
+        uint128 amountOutFilled
+    );
+
+    /**
+     * @notice Emitted when a cancellation is reported from a destination chain
+     * @dev This event is emitted on the origin chain
+     * @param orderId The ID of the cancelled order
+     */
+    event CancelReported(bytes32 indexed orderId);
+
     /* ========== Errors ========== */
     error AmountInZero();
     error AmountOutZero();

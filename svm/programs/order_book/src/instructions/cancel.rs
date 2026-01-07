@@ -54,6 +54,11 @@ pub struct OrderCancelled {
     pub order_id: [u8; 32],
 }
 
+#[event]
+pub struct CancelReported {
+    pub order_id: [u8; 32],
+}
+
 // Instruction Contexts and Handlers
 #[event_cpi]
 #[derive(Accounts)]
@@ -401,8 +406,8 @@ impl ReportOrderCancel<'_> {
             amount,
         });
 
-        // Emit an event for the fill report
-        emit_cpi!(OrderCancelled {
+        // Emit an event for the cancel report
+        emit_cpi!(CancelReported {
             order_id: cancel_report.order_id,
         });
 

@@ -608,6 +608,13 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         // Transfer the amount in to release to the recipient specified by the filler
         // We do not check fee on transfer here to avoid potential reverts on reported fills
         IERC20(order.tokenIn).safeTransfer(report_.originRecipient.toAddress(), uint256(report_.amountInToRelease));
+
+        emit FillReported(
+            report_.orderId,
+            report_.originRecipient.toAddress(),
+            report_.amountInToRelease,
+            report_.amountOutFilled
+        );
     }
 
     /// @inheritdoc IOrderBook
@@ -623,6 +630,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         // but invalid reports should not be sent so we prevent this
         if (order.tokenIn != report_.tokenIn.toAddress() || order.sender != report_.orderSender.toAddress())
             revert InvalidReport();
+
+        emit CancelReported(report_.orderId);
 
         _claimRefund(report_.orderId, order);
     }
