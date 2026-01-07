@@ -6,7 +6,7 @@ import { ERC1967Proxy } from "../../../../lib/common/lib/openzeppelin-contracts-
 import { TypeConverter } from "../../../../lib/common/src/libs/TypeConverter.sol";
 
 import { OrderBook, IOrderBook } from "../../../../src/OrderBook.sol";
-import { MockMessenger } from "../../../mock/MockMessenger.t.sol";
+import { MockPortalV2 } from "../../../mock/MockPortalV2.t.sol";
 import { MockERC20 } from "../../../mock/MockERC20.t.sol";
 import { MockRebaseDownToken } from "../../../mock/issue-pocs/MockRebaseDownToken.t.sol";
 
@@ -16,7 +16,7 @@ contract RebaseDownTest is Test {
     using TypeConverter for *;
 
     OrderBook internal orderBook;
-    MockMessenger internal messenger;
+    MockPortalV2 internal messenger;
     MockRebaseDownToken internal rebaseToken;
     MockERC20 internal tokenOut;
 
@@ -49,7 +49,7 @@ contract RebaseDownTest is Test {
         tokenOut.mint(solver, MINT_AMOUNT);
 
         // Deploy OrderBook
-        messenger = new MockMessenger();
+        messenger = new MockPortalV2();
         vm.deal(admin, 1 ether);
         address implementation = address(new OrderBook(CHAIN_ID, address(messenger)));
         orderBook = OrderBook(

@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity >=0.8.33;
 
-import { IMessenger, IOrderBook } from "../../src/interfaces/IMessenger.sol";
+import { IPortalV2Like, IOrderBook } from "../../src/interfaces/IPortalV2Like.sol";
 
-contract MockMessenger is IMessenger {
+contract MockPortalV2 is IPortalV2Like {
     event FillReportSent(uint32 destinationChainId, IOrderBook.FillReport report);
     event CancelReportSent(uint32 destinationChainId, IOrderBook.CancelReport report);
 
@@ -19,8 +19,20 @@ contract MockMessenger is IMessenger {
     function sendFillReport(
         uint32 destinationChainId,
         IOrderBook.FillReport calldata report,
-        bytes calldata messageData
-    ) external override {
+        bytes32 refundAddress,
+        bytes calldata message
+    ) external payable override returns (bytes32 messageId) {
+        fillReports[report.orderId] = report;
+        emit FillReportSent(destinationChainId, report);
+    }
+
+    function sendFillReport(
+        uint32 destinationChainId,
+        IOrderBook.FillReport calldata report,
+        bytes32 refundAddress,
+        address bridgeAdapter,
+        bytes calldata bridgeAdapterArgs
+    ) external payable override returns (bytes32 messageId) {
         fillReports[report.orderId] = report;
         emit FillReportSent(destinationChainId, report);
     }
@@ -28,8 +40,20 @@ contract MockMessenger is IMessenger {
     function sendCancelReport(
         uint32 destinationChainId,
         IOrderBook.CancelReport calldata report,
-        bytes calldata messageData
-    ) external override {
+        bytes32 refundAddress,
+        bytes calldata bridgeAdapterArgs
+    ) external payable override returns (bytes32 messageId) {
+        cancelReports[report.orderId] = true;
+        emit CancelReportSent(destinationChainId, report);
+    }
+
+    function sendCancelReport(
+        uint32 destinationChainId,
+        IOrderBook.CancelReport calldata report,
+        bytes32 refundAddress,
+        address bridgeAdapter,
+        bytes calldata bridgeAdapterArgs
+    ) external payable override returns (bytes32 messageId) {
         cancelReports[report.orderId] = true;
         emit CancelReportSent(destinationChainId, report);
     }

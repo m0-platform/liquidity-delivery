@@ -6,14 +6,14 @@ import { ERC1967Proxy } from "../../../lib/common/lib/openzeppelin-contracts-upg
 import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
 
 import { OrderBook, IOrderBook } from "../../../src/OrderBook.sol";
-import { MockMessenger } from "../../mock/MockMessenger.t.sol";
+import { MockPortalV2 } from "../../mock/MockPortalV2.t.sol";
 import { MockERC20 } from "../../mock/MockERC20.t.sol";
 
 abstract contract OrderBookTestBase is Test {
     using TypeConverter for *;
 
     OrderBook internal orderBook;
-    MockMessenger internal messenger;
+    MockPortalV2 internal messenger;
 
     uint16 internal constant VERSION = 1;
     uint32 internal constant CHAIN_ID = 1;
@@ -81,7 +81,7 @@ abstract contract OrderBookTestBase is Test {
         }
 
         // Deploy
-        messenger = new MockMessenger();
+        messenger = new MockPortalV2();
         admin = users["admin"];
         vm.deal(admin, 1 ether);
         address implementation = address(new OrderBook(CHAIN_ID, address(messenger)));
