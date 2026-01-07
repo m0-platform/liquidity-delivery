@@ -18,7 +18,7 @@ use std::error::Error;
 //   [X] open_order succeeds
 //
 // Note: Pause blocking tests for individual instructions are located in their
-// respective test files (open.rs, fill.rs, request_cancel.rs, claim_refund.rs, report_fill.rs)
+// respective test files (open.rs, fill.rs, cancel_native_order.rs, cancel_foreign_order.rs)
 
 // Helper functions
 
