@@ -624,7 +624,7 @@ contract OrderBook is
     }
 
     /// @inheritdoc IOrderBook
-    function reportCancel(CancelReport calldata report_) external override {
+    function reportCancel(CancelReport calldata report_) external override whenNotPaused {
         Order storage order = _getOrderBookStorageLocation().orders[report_.orderId];
 
         // Validate the cancel report and sender

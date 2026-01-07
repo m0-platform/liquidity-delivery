@@ -2,6 +2,7 @@
 pragma solidity 0.8.33;
 
 import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
+import { PausableUpgradeable } from "../../../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol";
 
 import { OrderBookTestBase } from "./OrderBookTestBase.t.sol";
 import { IOrderBook } from "../../../src/interfaces/IOrderBook.sol";
@@ -31,6 +32,8 @@ contract ReportCancelTest is OrderBookTestBase {
     //     [X] it transfers remaining amountIn to order sender (amountIn - amountInReleased)
     //     [X] it sets order status to Cancelled
     //     [X] it emits RefundClaimed event
+    // [X] given the program is paused
+    //   [X] it reverts with an EnforcedPause error
 
     function setUp() public override {
         super.setUp();
@@ -285,5 +288,23 @@ contract ReportCancelTest is OrderBookTestBase {
     {
         _placeOrder(users["alice"], params);
         _test_activeOrderPartialFills_success();
+    }
+
+    function test_whenPaused_reverts() public {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+
+        // Pause the contract
+        vm.prank(pauser);
+        orderBook.pause();
+
+        vm.prank(address(messenger));
+        vm.expectRevert(abi.encodeWithSelector(PausableUpgradeable.EnforcedPause.selector));
+        orderBook.reportCancel(
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: users["alice"].toBytes32(),
+                tokenIn: params.tokenIn.toBytes32()
+            })
+        );
     }
 }
