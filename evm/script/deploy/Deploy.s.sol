@@ -23,7 +23,7 @@ contract Deploy is ScriptBase, DeployHelpers {
             deployer_,
             vm.envAddress("ADMIN_ADDRESS"),
             m0ChainId_,
-            vm.envAddress("MESSENGER_ADDRESS")
+            vm.envAddress("PORTAL_ADDRESS")
         );
 
         vm.stopBroadcast();
