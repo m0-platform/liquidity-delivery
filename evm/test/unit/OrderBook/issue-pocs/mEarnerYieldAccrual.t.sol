@@ -53,7 +53,9 @@ contract MEarnerYieldAccrualTest is Test {
         vm.deal(admin, 1 ether);
         address implementation = address(new OrderBook(CHAIN_ID, address(portal)));
         orderBook = OrderBook(
-            address(new ERC1967Proxy(implementation, abi.encodeWithSelector(OrderBook.initialize.selector, admin)))
+            address(
+                new ERC1967Proxy(implementation, abi.encodeWithSelector(OrderBook.initialize.selector, admin, admin))
+            )
         );
 
         // Configure

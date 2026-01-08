@@ -1,17 +1,11 @@
 mod instructions;
 
-use anchor_lang::{
-    prelude::declare_program,
-    solana_program::instruction::Instruction,
-};
+use anchor_lang::{prelude::declare_program, solana_program::instruction::Instruction};
 use anchor_litesvm::{
     get_anchor_account, AnchorContext, AnchorLiteSVM, Keypair, Pubkey, Signer, TestHelpers,
 };
-use anchor_spl::{
-    associated_token::get_associated_token_address,
-    token::TokenAccount,
-};
-use order_book::{GLOBAL_SEED, ORDER_SEED_PREFIX, OrderData};
+use anchor_spl::{associated_token::get_associated_token_address, token::TokenAccount};
+use order_book::{OrderData, GLOBAL_SEED, ORDER_SEED_PREFIX};
 use std::{collections::HashMap, error::Error};
 
 declare_program!(portal);
@@ -357,6 +351,19 @@ impl OrderBookTest {
         Ok(ata)
     }
 
+    /// Mint tokens to any ATA (used for simulating dust/griefing donations)
+    fn mint_to_ata(
+        &mut self,
+        token_name: &str,
+        ata: &Pubkey,
+        amount: u64,
+    ) -> Result<(), Box<dyn Error>> {
+        let admin = self.get_user("admin");
+        let mint = self.get_mint(token_name);
+        self.ctx.svm.mint_to(&mint, ata, &admin, amount)?;
+        Ok(())
+    }
+
     // Helpers to construct account objects to pass to instructions
     fn build_fill_native_order_accounts(
         &self,
@@ -463,18 +470,9 @@ impl OrderBookTest {
             system_program: anchor_lang::solana_program::system_program::ID,
             order: order_account,
             portal_program: portal::ID, // the following accounts are not checked by the mock
-            portal_global: self.ctx.svm.get_pda(
-                &[GLOBAL_SEED],
-                &portal::ID,
-            ),
-            portal_authority: self.ctx.svm.get_pda(
-                &[b"authority"],
-                &portal::ID,
-            ),
-            bridge_adapter: self.ctx.svm.get_pda(
-                &[b"bridge_adapter"],
-                &portal::ID,
-            )
+            portal_global: self.ctx.svm.get_pda(&[GLOBAL_SEED], &portal::ID),
+            portal_authority: self.ctx.svm.get_pda(&[b"authority"], &portal::ID),
+            bridge_adapter: self.ctx.svm.get_pda(&[b"bridge_adapter"], &portal::ID),
         })
     }
 
@@ -542,10 +540,10 @@ impl OrderBookTest {
         cancel_report: &order_book::instructions::CancelReport,
     ) -> Result<order_book::accounts::ReportOrderCancel, Box<dyn Error>> {
         let (global_account, _) = self.get_global_account()?;
-        let order_account = self
-            .ctx
-            .svm
-            .get_pda(&[ORDER_SEED_PREFIX, &cancel_report.order_id], &order_book::ID);
+        let order_account = self.ctx.svm.get_pda(
+            &[ORDER_SEED_PREFIX, &cancel_report.order_id],
+            &order_book::ID,
+        );
         let (_, native_order_data) = self.get_native_order_account(&cancel_report.order_id)?;
 
         let token_in_mint = native_order_data.data.token_in;
@@ -735,9 +733,7 @@ impl OrderBookTest {
                 destination_account,
                 system_program: anchor_lang::solana_program::system_program::ID,
             })
-            .args(order_book::instruction::AddDestination {
-                dest_chain_id,
-            })
+            .args(order_book::instruction::AddDestination { dest_chain_id })
             .instruction()?;
 
         Ok(ix)
@@ -771,9 +767,7 @@ impl OrderBookTest {
                 destination_account,
                 system_program: anchor_lang::solana_program::system_program::ID,
             })
-            .args(order_book::instruction::RemoveDestination {
-                dest_chain_id,
-            })
+            .args(order_book::instruction::RemoveDestination { dest_chain_id })
             .instruction()?;
 
         Ok(ix)
@@ -969,41 +963,32 @@ impl OrderBookTest {
             order_params,
         )?;
 
-        self.ctx.execute_instruction(ix, &[sender_keypair])?
+        self.ctx
+            .execute_instruction(ix, &[sender_keypair])?
             .assert_success();
 
         Ok(order_id)
     }
 
-    fn add_destination(
-        &mut self,
-        dest_chain_id: u32,
-    ) -> Result<(), Box<dyn Error>> {
+    fn add_destination(&mut self, dest_chain_id: u32) -> Result<(), Box<dyn Error>> {
         let admin_keypair = self.users.get("admin").unwrap();
 
-        let ix = self.create_add_destination_ix(
-            &admin_keypair.pubkey(),
-            dest_chain_id,
-        )?;
+        let ix = self.create_add_destination_ix(&admin_keypair.pubkey(), dest_chain_id)?;
 
-        self.ctx.execute_instruction(ix, &[admin_keypair])?
+        self.ctx
+            .execute_instruction(ix, &[admin_keypair])?
             .assert_success();
 
         Ok(())
     }
 
-    fn remove_destination(
-        &mut self,
-        dest_chain_id: u32,
-    ) -> Result<(), Box<dyn Error>> {
+    fn remove_destination(&mut self, dest_chain_id: u32) -> Result<(), Box<dyn Error>> {
         let admin_keypair = self.users.get("admin").unwrap();
 
-        let ix = self.create_remove_destination_ix(
-            &admin_keypair.pubkey(),
-            dest_chain_id,
-        )?;
+        let ix = self.create_remove_destination_ix(&admin_keypair.pubkey(), dest_chain_id)?;
 
-        self.ctx.execute_instruction(ix, &[admin_keypair])?
+        self.ctx
+            .execute_instruction(ix, &[admin_keypair])?
             .assert_success();
 
         Ok(())
@@ -1025,7 +1010,8 @@ impl OrderBookTest {
         let ix =
             self.create_fill_native_order_ix(&solver_keypair.pubkey(), order_id, &fill_params)?;
 
-        self.ctx.execute_instruction(ix, &[solver_keypair])?
+        self.ctx
+            .execute_instruction(ix, &[solver_keypair])?
             .assert_success();
 
         Ok(())
@@ -1047,7 +1033,8 @@ impl OrderBookTest {
         let ix =
             self.create_fill_foreign_order_ix(&solver_keypair.pubkey(), order_data, &fill_params)?;
 
-        self.ctx.execute_instruction(ix, &[solver_keypair])?
+        self.ctx
+            .execute_instruction(ix, &[solver_keypair])?
             .assert_success();
 
         Ok(())
@@ -1090,7 +1077,8 @@ impl OrderBookTest {
             order_id,
         )?;
 
-        self.ctx.execute_instruction(ix, &[signer_keypair])?
+        self.ctx
+            .execute_instruction(ix, &[signer_keypair])?
             .assert_success();
 
         Ok(())
@@ -1105,7 +1093,8 @@ impl OrderBookTest {
 
         let ix = self.create_cancel_foreign_order_ix(&signer_keypair.pubkey(), order_data)?;
 
-        self.ctx.execute_instruction(ix, &[signer_keypair])?
+        self.ctx
+            .execute_instruction(ix, &[signer_keypair])?
             .assert_success();
 
         Ok(())
@@ -1134,6 +1123,87 @@ impl OrderBookTest {
         Ok(())
     }
 
+    fn create_close_order_token_account_ix(
+        &self,
+        payer: &Pubkey,
+        order_id: [u8; 32],
+    ) -> Result<Instruction, Box<dyn Error>> {
+        let (order_account, native_order_data) = self.get_native_order_account(&order_id)?;
+        let token_in_mint = native_order_data.data.token_in;
+        let order_token_in_ata = get_associated_token_address(&order_account, &token_in_mint);
+        let sender_token_ata =
+            get_associated_token_address(&native_order_data.data.sender, &token_in_mint);
+
+        let ix = self
+            .ctx
+            .program()
+            .accounts(order_book::accounts::CloseOrderTokenAccount {
+                sender: native_order_data.data.sender.into(),
+                payer: *payer,
+                order: order_account,
+                token_in_mint,
+                recipient_token_account: Some(sender_token_ata),
+                order_token_in_ata,
+                token_in_program: anchor_spl::token::ID,
+            })
+            .args(order_book::instruction::CloseOrderTokenAccount { order_id })
+            .instruction()?;
+
+        Ok(ix)
+    }
+
+    fn close_order_token_account(
+        &mut self,
+        payer_name: &str,
+        order_id: [u8; 32],
+    ) -> Result<(), Box<dyn Error>> {
+        let payer = self.get_user(payer_name);
+        let ix = self.create_close_order_token_account_ix(&payer.pubkey(), order_id)?;
+
+        self.ctx
+            .execute_instruction(ix, &[&payer])?
+            .assert_success();
+
+        Ok(())
+    }
+
+    /// Create close instruction with custom payer/sender (for testing validation errors)
+    fn create_close_order_token_account_ix_custom(
+        &self,
+        payer: &Pubkey,
+        sender: &Pubkey,
+        order_id: [u8; 32],
+        include_recipient: bool,
+    ) -> Result<Instruction, Box<dyn Error>> {
+        let (order_account, native_order_data) = self.get_native_order_account(&order_id)?;
+        let token_in_mint = native_order_data.data.token_in;
+        let order_token_in_ata = get_associated_token_address(&order_account, &token_in_mint);
+        let sender_token_ata = get_associated_token_address(sender, &token_in_mint);
+
+        let recipient_token_account = if include_recipient {
+            Some(sender_token_ata)
+        } else {
+            None
+        };
+
+        let ix = self
+            .ctx
+            .program()
+            .accounts(order_book::accounts::CloseOrderTokenAccount {
+                sender: *sender,
+                payer: *payer,
+                order: order_account,
+                token_in_mint,
+                recipient_token_account,
+                order_token_in_ata,
+                token_in_program: anchor_spl::token::ID,
+            })
+            .args(order_book::instruction::CloseOrderTokenAccount { order_id })
+            .instruction()?;
+
+        Ok(ix)
+    }
+
     // Convenience functions for common test actions can go here
 
     fn warp_forward(&mut self, seconds: u64) {
@@ -1146,5 +1216,65 @@ impl OrderBookTest {
     fn current_time(&self) -> u64 {
         let clock = self.ctx.svm.get_sysvar::<anchor_lang::prelude::Clock>();
         clock.unix_timestamp as u64
+    }
+
+    // Pause/unpause helpers
+
+    fn create_pause_ix(&self, admin: &Pubkey) -> Result<Instruction, Box<dyn Error>> {
+        let global_account = self
+            .ctx
+            .svm
+            .get_pda(&[order_book::state::GLOBAL_SEED], &order_book::ID);
+
+        let ix = self
+            .ctx
+            .program()
+            .accounts(order_book::accounts::AdminInstruction {
+                admin: *admin,
+                global_account,
+            })
+            .args(order_book::instruction::Pause {})
+            .instruction()?;
+
+        Ok(ix)
+    }
+
+    fn create_unpause_ix(&self, admin: &Pubkey) -> Result<Instruction, Box<dyn Error>> {
+        let global_account = self
+            .ctx
+            .svm
+            .get_pda(&[order_book::state::GLOBAL_SEED], &order_book::ID);
+
+        let ix = self
+            .ctx
+            .program()
+            .accounts(order_book::accounts::AdminInstruction {
+                admin: *admin,
+                global_account,
+            })
+            .args(order_book::instruction::Unpause {})
+            .instruction()?;
+
+        Ok(ix)
+    }
+
+    fn pause(&mut self) -> Result<(), Box<dyn Error>> {
+        let admin_keypair = self.users.get("admin").unwrap();
+        let ix = self.create_pause_ix(&admin_keypair.pubkey())?;
+
+        self.ctx.execute_instruction(ix, &[admin_keypair])?
+            .assert_success();
+
+        Ok(())
+    }
+
+    fn unpause(&mut self) -> Result<(), Box<dyn Error>> {
+        let admin_keypair = self.users.get("admin").unwrap();
+        let ix = self.create_unpause_ix(&admin_keypair.pubkey())?;
+
+        self.ctx.execute_instruction(ix, &[admin_keypair])?
+            .assert_success();
+
+        Ok(())
     }
 }

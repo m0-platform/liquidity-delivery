@@ -2,6 +2,7 @@
 pragma solidity 0.8.33;
 
 import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
+import { PausableUpgradeable } from "../../../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol";
 
 import { OrderBookTestBase } from "./OrderBookTestBase.t.sol";
 import { IOrderBook } from "../../../src/interfaces/IOrderBook.sol";
@@ -10,6 +11,8 @@ contract FillOrderTest is OrderBookTestBase {
     using TypeConverter for *;
 
     // Test cases
+    // [X] given the contract is paused
+    //    [X] it reverts with an EnforcedPause error
     // [X] given the destination chain ID of the order is not the current chain ID
     //   [X] it reverts with an InvalidDestinationChain error
     // [X] given the current timestamp is > fill deadline
@@ -43,12 +46,12 @@ contract FillOrderTest is OrderBookTestBase {
     //       [X] it transfers the fill amount out from the caller to the recipient
     //       [X] it transfers a pro-rata amount in to the caller
     //       [X] it emits a Fill event
-    //   [ ] given token in has a smaller number of decimals than token out (6 vs. 18)
-    //     [ ] same cases as above
-    //   [ ] given token in has a larger number of decimals than token out (18 vs. 6)
-    //     [ ] same cases as above
-    //   [ ] given both tokens have 18 decimals
-    //     [ ] same cases as above
+    //   [X] given token in has a smaller number of decimals than token out (6 vs. 18)
+    //     [X] same cases as above
+    //   [X] given token in has a larger number of decimals than token out (18 vs. 6)
+    //     [X] same cases as above
+    //   [X] given both tokens have 18 decimals
+    //     [X] same cases as above
     // [X] given the order originated on a different chain (i.e. it is cross-chain)
     //    [X] given both tokens have 6 decimals
     //      [X] given the fill amount is equal to the amount out remaining
@@ -1018,5 +1021,76 @@ contract FillOrderTest is OrderBookTestBase {
         // Check order status
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Completed), "order should be completed");
+    }
+
+    function test_whenPaused_reverts() public {
+        // Create a local order before pausing
+        params.destChainId = CHAIN_ID;
+        bytes32 orderId = _placeOrder(users["alice"], params);
+
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+
+        // Pause the contract
+        vm.prank(pauser);
+        orderBook.pause();
+
+        // Attempt to fill
+        vm.prank(params.solver.toAddress());
+        vm.expectRevert(abi.encodeWithSelector(PausableUpgradeable.EnforcedPause.selector));
+        orderBook.fillOrder(
+            orderId,
+            IOrderBook.OrderData({
+                version: order.version,
+                originChainId: CHAIN_ID,
+                sender: order.sender.toBytes32(),
+                nonce: order.nonce,
+                destChainId: order.destChainId,
+                createdAt: order.createdAt,
+                fillDeadline: order.fillDeadline,
+                amountIn: order.amountIn,
+                amountOut: order.amountOut,
+                tokenIn: order.tokenIn.toBytes32(),
+                tokenOut: order.tokenOut,
+                recipient: order.recipient,
+                solver: order.solver
+            }),
+            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
+        );
+    }
+
+    function test_fillOrderWithMessageData_whenPaused_reverts() public {
+        // Create a local order before pausing
+        params.destChainId = CHAIN_ID;
+        bytes32 orderId = _placeOrder(users["alice"], params);
+
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+
+        // Pause the contract
+        vm.prank(pauser);
+        orderBook.pause();
+
+        // Attempt to fill with messageData
+        vm.prank(params.solver.toAddress());
+        vm.expectRevert(abi.encodeWithSelector(PausableUpgradeable.EnforcedPause.selector));
+        orderBook.fillOrder(
+            orderId,
+            IOrderBook.OrderData({
+                version: order.version,
+                originChainId: CHAIN_ID,
+                sender: order.sender.toBytes32(),
+                nonce: order.nonce,
+                destChainId: order.destChainId,
+                createdAt: order.createdAt,
+                fillDeadline: order.fillDeadline,
+                amountIn: order.amountIn,
+                amountOut: order.amountOut,
+                tokenIn: order.tokenIn.toBytes32(),
+                tokenOut: order.tokenOut,
+                recipient: order.recipient,
+                solver: order.solver
+            }),
+            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver }),
+            new bytes(0)
+        );
     }
 }

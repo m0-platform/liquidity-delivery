@@ -34,6 +34,7 @@ pub struct NativeOrder {
     pub status: OrderStatus,
     pub version: u16,
     pub sender: Pubkey,
+    pub payer: Pubkey,
     pub nonce: u64,
     pub dest_chain_id: u32,
     pub created_at: u64,

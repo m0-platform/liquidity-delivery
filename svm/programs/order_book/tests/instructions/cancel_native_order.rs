@@ -1,6 +1,7 @@
 use super::super::{OrderBookTest, CHAIN_ID, DEST_CHAIN_ID};
 use anchor_litesvm::{Signer, TestHelpers};
-use order_book::{error::OrderBookError, ORDER_SEED_PREFIX, state::OrderData};
+use anchor_spl::associated_token::get_associated_token_address;
+use order_book::{error::OrderBookError, state::OrderData, ORDER_SEED_PREFIX};
 use std::error::Error;
 
 // CancelNativeOrder instruction tests
@@ -31,6 +32,8 @@ use std::error::Error;
 // [X] given all checks pass
 //   [X] it sets order status to Cancelled
 //   [X] it transfers remaining token_in to sender
+// [X] given the program is paused
+//   [X] it reverts with a ProgramPaused error
 
 mod local_orders {
     use super::*;
@@ -80,7 +83,8 @@ mod local_orders {
             token_in_program: anchor_spl::token::ID,
         };
 
-        let ix = test.create_cancel_native_order_ix_with_custom_accounts(accounts, fake_order_id)?;
+        let ix =
+            test.create_cancel_native_order_ix_with_custom_accounts(accounts, fake_order_id)?;
 
         test.ctx
             .execute_instruction(ix, &[&signer])?
@@ -203,23 +207,18 @@ mod local_orders {
             amount_out: 1_000_000,
             recipient: test.get_user("alice").pubkey().to_bytes(),
             solver: test.get_user("solver").pubkey().to_bytes(),
-        }; 
+        };
         let order_id = order_data.compute_order_id();
-        
+
         // Create the accounts for the ix manually since it will fail on the order account lookup
         let order_account = test
             .ctx
             .svm
             .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
         let token_in_mint = test.get_mint("token-in-spl-6");
-        let sender_token_in_ata = test.get_ata(
-            "token-in-spl-6",
-            "alice"
-        );
-        let order_token_in_ata = test.create_associated_token_account(
-            &token_in_mint,
-            &order_account,
-        )?;
+        let sender_token_in_ata = test.get_ata("token-in-spl-6", "alice");
+        let order_token_in_ata =
+            test.create_associated_token_account(&token_in_mint, &order_account)?;
         let signer = test.get_user("alice");
 
         let accounts = order_book::accounts::CancelNativeOrder {
@@ -246,7 +245,7 @@ mod local_orders {
         test.ctx
             .execute_instruction(ix, &[&signer])
             .unwrap()
-            .assert_anchor_error("AccountNotInitialized"); 
+            .assert_anchor_error("AccountNotInitialized");
 
         Ok(())
     }
@@ -284,14 +283,9 @@ mod local_orders {
             .svm
             .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
         let token_in_mint = test.get_mint("token-in-spl-6");
-        let sender_token_in_ata = test.get_ata(
-            "token-in-spl-6",
-            "alice"
-        );
-        let order_token_in_ata = test.create_associated_token_account(
-            &token_in_mint,
-            &order_account,
-        )?;
+        let sender_token_in_ata = test.get_ata("token-in-spl-6", "alice");
+        let order_token_in_ata =
+            test.create_associated_token_account(&token_in_mint, &order_account)?;
         let signer = test.get_user("alice");
 
         let accounts = order_book::accounts::CancelNativeOrder {
@@ -318,7 +312,7 @@ mod local_orders {
         test.ctx
             .execute_instruction(ix, &[&signer])
             .unwrap()
-            .assert_anchor_error("AccountDidNotDeserialize"); // Fails due to deserialization error 
+            .assert_anchor_error("AccountDidNotDeserialize"); // Fails due to deserialization error
 
         Ok(())
     }
@@ -527,8 +521,8 @@ mod local_orders {
     }
 
     #[test]
-    fn test_cancel_native_order_third_party_on_behalf_of_sender_success() -> Result<(), Box<dyn Error>>
-    {
+    fn test_cancel_native_order_third_party_on_behalf_of_sender_success(
+    ) -> Result<(), Box<dyn Error>> {
         let mut test = OrderBookTest::new()?;
         test.initialize()?;
 
@@ -559,6 +553,32 @@ mod local_orders {
         // Verify tokens went to sender (alice) not signer (carol)
         let final_balance = test.get_token_balance(&sender_ata)?;
         assert_eq!(final_balance, initial_balance + 1_000_000);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cancel_native_order_paused_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Create an order before pausing
+        let order_params = default_order_params(&test);
+        let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+        // Pause the program
+        test.pause()?;
+
+        // Try to cancel the order while paused
+        let ix = test.create_cancel_native_order_ix(
+            &test.get_user("alice").pubkey(),
+            &test.get_user("alice").pubkey(),
+            order_id,
+        )?;
+
+        test.ctx
+            .execute_instruction(ix, &[&test.get_user("alice")])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::ProgramPaused));
 
         Ok(())
     }

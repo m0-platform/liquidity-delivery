@@ -3,6 +3,7 @@ pragma solidity 0.8.33;
 
 import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
 import { console } from "../../../lib/forge-std/src/console.sol";
+import { PausableUpgradeable } from "../../../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol";
 
 import { OrderBookTestBase } from "./OrderBookTestBase.t.sol";
 import { IOrderBook } from "../../../src/interfaces/IOrderBook.sol";
@@ -12,6 +13,8 @@ contract CancelOrderTest is OrderBookTestBase {
     using TypeConverter for *;
 
     // Test cases
+    // [X] given the contract is paused
+    //    [X] it reverts with an EnforcedPause error
     // [X] given the order does not exist
     //   [X] it reverts with an InvalidOrderStatus error
     // [X] given the order exists but already cancelled
@@ -72,6 +75,28 @@ contract CancelOrderTest is OrderBookTestBase {
             solver: params.solver
         });
         xchainOrderId = orderBook.getOrderId(xchainOrderData);
+    }
+
+    function test_whenPaused_localOrder_reverts() public {
+        vm.prank(pauser);
+        orderBook.pause();
+
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        IOrderBook.OrderData memory orderData = _getOrderDataFromOrder(orderId, order);
+
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(PausableUpgradeable.EnforcedPause.selector));
+        orderBook.cancelOrder(orderId, orderData, new bytes(0));
+    }
+
+    function test_whenPaused_xchainOrder_reverts() public {
+        vm.prank(pauser);
+        orderBook.pause();
+
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(PausableUpgradeable.EnforcedPause.selector));
+        orderBook.cancelOrder(xchainOrderId, xchainOrderData, new bytes(0));
     }
 
     function test_givenOrderDoesNotExist_reverts() public {

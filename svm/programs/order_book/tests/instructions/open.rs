@@ -27,6 +27,8 @@ mod local_orders {
     //     [X] it successfully opens the order
     //   [X] given a delegated authority signs the instruction
     //     [X] it successfully opens the order
+    // [X] given the program is paused
+    //   [X] it reverts with a ProgramPaused error
 
     use super::*;
 
@@ -389,6 +391,35 @@ mod local_orders {
             test.get_token_balance(&get_associated_token_address(&order_account, token_in_mint))?,
             order_params.amount_in
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_open_order_paused_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Pause the program
+        test.pause()?;
+
+        // Try to open an order
+        let alice = test.get_user("alice");
+        let token_in_mint = test.get_mint("token-in-spl-6");
+        let sender_token_in_account = test.get_ata("token-in-spl-6", "alice");
+        let order_params = default_order_params(&test, "alice");
+
+        let (_, ix) = test.create_open_order_ix(
+            &alice.pubkey(),
+            &token_in_mint,
+            &sender_token_in_account,
+            None,
+            &order_params,
+        )?;
+
+        test.ctx
+            .execute_instruction(ix, &[&alice])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::ProgramPaused));
 
         Ok(())
     }
