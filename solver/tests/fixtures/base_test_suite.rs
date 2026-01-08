@@ -10,7 +10,12 @@ use alloy::{
     sol,
 };
 use anchor_client::{
-    solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer, system_program},
+    solana_sdk::{
+        pubkey::Pubkey,
+        signature::{Keypair, Signature},
+        signer::Signer,
+        system_program,
+    },
     Client, Cluster,
 };
 use mockito::ServerGuard;
@@ -96,7 +101,7 @@ impl BaseTestSuite {
         let evm_signer = PrivateKeySigner::from_bytes(&FixedBytes::from([1u8; 32])).unwrap();
         let evm_user = PrivateKeySigner::from_bytes(&FixedBytes::from([2u8; 32])).unwrap();
         let svm_signer = Arc::new(Keypair::from_base58_string("2MqZwxzsfaEvQvnj4CgvUo2aknYXxJW2bBn5ewbftnbjU9DAtWX1XzCHy7Wd8dBSq5bmRwj6Ya5XTAnEe8sy2qS9"));
-        let svm_user = Arc::new(Keypair::new());
+        let svm_user = Arc::new(Keypair::from_base58_string("24VxBmMCYGp7SZquR2PdN3CJMErv1jVVbp5KFdHuVzv3sZ3537uiPDfyDATS5H7AMHS7b7nq1LFqxQMUKHSAQgDQ"));
         let mut surfpool_process = None;
         let mut svm_mint = None;
 
@@ -111,6 +116,8 @@ impl BaseTestSuite {
                         "start",
                         "--port",
                         port.to_string().as_str(),
+                        "--ws-port",
+                        (port + 1).to_string().as_str(),
                         "--no-deploy",
                         "--no-tui",
                         "--airdrop",
@@ -322,7 +329,7 @@ impl BaseTestSuite {
                 chain_id: 1399811149,
                 chain: chain_from_id(1399811149),
                 rpc_url: format!("http://localhost:{}", surfpool_process.port),
-                ws_url: format!("ws://localhost:{}", surfpool_process.port),
+                ws_url: format!("ws://localhost:{}", surfpool_process.port + 1),
                 order_book_address: "MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK".to_string(),
             });
         }
@@ -515,7 +522,7 @@ impl BaseTestSuite {
         dest_chain_id: u32,
         amount_in: u64,
         amount_out: u64,
-    ) {
+    ) -> Signature {
         let client = Client::new(
             Cluster::from_str(&self.surfpool_endpoint()).unwrap(),
             self.svm_user.clone(),
@@ -531,12 +538,12 @@ impl BaseTestSuite {
                 dest_chain_id,
                 amount_in,
                 amount_out: amount_out as u128,
-                recipient: [0u8; 32],
+                recipient: decode_evm_address(self.evm_user.address()),
                 fill_deadline: u64::MAX,
                 solver: [0u8; 32].into(),
             },
         )
-        .await;
+        .await
     }
 
     pub fn quote_endpoint(&self) -> String {

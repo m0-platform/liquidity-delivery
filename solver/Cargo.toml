@@ -39,6 +39,8 @@ nanoid = "0.4"
 tonic = "0.12"
 prost = "0.13"
 tokio-stream = "0.1"
+solana-client = "2.2.4"
+solana-transaction-status-client-types = "2.2.4"
 
 [build-dependencies]
 tonic-build = "0.12"
@@ -52,4 +54,3 @@ reqwest = { version = "0.12.23", features = ["json"] }
 quoter = { path = "../quoter" }
 portpicker = "0.1"
 anchor-spl = "0.31.1"
-solana-client = "2.2.4"

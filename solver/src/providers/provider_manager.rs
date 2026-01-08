@@ -8,6 +8,7 @@ use governor::{
     Quota, RateLimiter,
 };
 use m0_liquidity_sdk::types::ChainRuntime;
+use solana_client::nonblocking::pubsub_client::PubsubClient;
 use std::collections::HashMap;
 use std::num::NonZeroU32;
 use std::sync::Arc;
@@ -43,6 +44,7 @@ impl EvmProvider {
 
 /// Wrapper around SVM RPC client with rate limiting
 pub struct SvmProvider {
+    pub pubsub_client: Arc<PubsubClient>,
     client: Arc<RpcClient>,
     rate_limiter: Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClock>>,
 }
@@ -116,8 +118,16 @@ impl ProviderManager {
         let client = Arc::new(RpcClient::new(chain.rpc_url.clone()));
         let limiter = Arc::new(RateLimiter::direct(self.rate_limiter_quota));
 
+        let pubsub_client = Arc::new(PubsubClient::new(&chain.ws_url).await.map_err(|e| {
+            SolverError::Component(format!(
+                "Failed to create PubsubClient ({}): {}",
+                chain.ws_url, e
+            ))
+        })?);
+
         let svm_provider = Arc::new(SvmProvider {
             client,
+            pubsub_client,
             rate_limiter: limiter,
         });
 

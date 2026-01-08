@@ -91,7 +91,9 @@ pub async fn create_and_mint_token(
     user: &Pubkey,
     amount: u64,
 ) -> Pubkey {
-    let mint = Keypair::new();
+    let mint = Keypair::from_base58_string(
+        "5MWfiivY5yu2Q3M9uJqP2owncWtw8CuzyMqrbLAXMvUQLEhr2WZRgR5H3RQN5kMveS17vxXrRd3tXYVNaXEWZYrB",
+    );
     let mint_pubkey = mint.pubkey();
 
     let rent = rpc_client

@@ -33,8 +33,8 @@ impl EventHandler for EventLogger {
                     self.logger,
                     "OrderCreated";
                     "order_id" => %e.order_id,
-                    "from_asset" => ?e.order.token_in,
-                    "to_asset" => ?e.order.token_out,
+                    "from_asset" => hex::encode(e.order.token_in),
+                    "to_asset" => hex::encode(e.order.token_out),
                     "amount" => %e.order.amount_out,
                 );
             }

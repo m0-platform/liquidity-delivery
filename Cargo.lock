@@ -10286,6 +10286,7 @@ dependencies = [
  "slog-json",
  "slog-term",
  "solana-client",
+ "solana-transaction-status-client-types",
  "spl-associated-token-account 7.0.0",
  "spl-token 8.0.0",
  "test-context",
