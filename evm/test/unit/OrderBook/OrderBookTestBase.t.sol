@@ -33,6 +33,7 @@ abstract contract OrderBookTestBase is Test {
     string[] internal USERS;
 
     address internal admin;
+    address internal pauser;
     MockERC20 internal tokenIn;
     MockERC20 internal tokenOut;
     mapping(string => MockERC20) internal tokens;
@@ -49,6 +50,7 @@ abstract contract OrderBookTestBase is Test {
 
         // Insert users to be created
         USERS.push("admin");
+        USERS.push("pauser");
         USERS.push("solver");
         USERS.push("alice");
         USERS.push("bob");
@@ -83,10 +85,12 @@ abstract contract OrderBookTestBase is Test {
         // Deploy
         messenger = new MockPortalV2();
         admin = users["admin"];
-        vm.deal(admin, 1 ether);
+        pauser = users["pauser"];
         address implementation = address(new OrderBook(CHAIN_ID, address(messenger)));
         orderBook = OrderBook(
-            address(new ERC1967Proxy(implementation, abi.encodeWithSelector(OrderBook.initialize.selector, admin)))
+            address(
+                new ERC1967Proxy(implementation, abi.encodeWithSelector(OrderBook.initialize.selector, admin, pauser))
+            )
         );
 
         // Configure

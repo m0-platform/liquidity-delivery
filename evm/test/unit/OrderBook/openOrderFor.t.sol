@@ -4,6 +4,7 @@ pragma solidity 0.8.33;
 import { VmSafe } from "../../../lib/forge-std/src/Vm.sol";
 import { console } from "../../../lib/forge-std/src/console.sol";
 import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
+import { PausableUpgradeable } from "../../../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol";
 
 import { IOrderBook } from "../../../src/interfaces/IOrderBook.sol";
 
@@ -13,6 +14,8 @@ contract OpenOrderForTest is OrderBookTestBase {
     using TypeConverter for *;
 
     // Test cases
+    // [X] given the contract is paused
+    //    [X] it reverts with an EnforcedPause error
     // [X] given the signature is invalid
     //   [X] it reverts
     // [X] given the origin chain ID is not the current internal chain ID
@@ -259,5 +262,32 @@ contract OpenOrderForTest is OrderBookTestBase {
 
         // Confirm the correct amount was transferred from the sender
         assertEq(tokenIn.balanceOf(sender.addr), startingBalance - gaslessParams.amountIn);
+    }
+
+    function test_whenPaused_reverts() public {
+        bytes memory signature = _signStandardECDSA(sender, gaslessParams);
+
+        vm.prank(pauser);
+        orderBook.pause();
+
+        vm.expectRevert(abi.encodeWithSelector(PausableUpgradeable.EnforcedPause.selector));
+        orderBook.openOrderFor(gaslessParams, signature);
+    }
+
+    function test_openOrderForWithPermit_whenPaused_reverts() public {
+        bytes memory orderSignature = _signStandardECDSA(sender, gaslessParams);
+
+        vm.prank(pauser);
+        orderBook.pause();
+
+        vm.expectRevert(abi.encodeWithSelector(PausableUpgradeable.EnforcedPause.selector));
+        orderBook.openOrderForWithPermit(
+            gaslessParams,
+            orderSignature,
+            block.timestamp + 1 hours,
+            0,
+            bytes32(0),
+            bytes32(0)
+        );
     }
 }

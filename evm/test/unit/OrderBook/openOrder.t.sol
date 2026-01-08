@@ -2,6 +2,7 @@
 pragma solidity 0.8.33;
 
 import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
+import { PausableUpgradeable } from "../../../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol";
 
 import { OrderBookTestBase } from "./OrderBookTestBase.t.sol";
 import { IOrderBook } from "../../../src/interfaces/IOrderBook.sol";
@@ -10,6 +11,8 @@ contract OpenOrderTest is OrderBookTestBase {
     using TypeConverter for *;
 
     // Test cases
+    // [X] given the contract is paused
+    //    [X] it reverts with an EnforcedPause error
     // [X] given the fill deadline is before the current block timestamp
     //    [X] it reverts with an InvalidDeadline error
     // [X] given the amount in is zero
@@ -170,5 +173,26 @@ contract OpenOrderTest is OrderBookTestBase {
         givenTokenOutDecimals(18)
     {
         _test_success();
+    }
+
+    function test_whenPaused_reverts() public {
+        vm.prank(users["alice"]);
+        tokenIn.approve(address(orderBook), params.amountIn);
+
+        vm.prank(pauser);
+        orderBook.pause();
+
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(PausableUpgradeable.EnforcedPause.selector));
+        orderBook.openOrder(params);
+    }
+
+    function test_openOrderWithPermit_whenPaused_reverts() public {
+        vm.prank(pauser);
+        orderBook.pause();
+
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(PausableUpgradeable.EnforcedPause.selector));
+        orderBook.openOrderWithPermit(params, block.timestamp + 1 hours, 0, bytes32(0), bytes32(0));
     }
 }

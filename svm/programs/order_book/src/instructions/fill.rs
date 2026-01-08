@@ -85,6 +85,7 @@ pub struct FillNativeOrder<'info> {
         seeds = [GLOBAL_SEED],
         bump = global_account.bump,
         constraint = order_data.dest_chain_id == global_account.chain_id @ OrderBookError::InvalidDestChainId,
+        constraint = !global_account.paused @ OrderBookError::ProgramPaused,
     )]
     pub global_account: Account<'info, OrderBookGlobal>,
 
@@ -286,6 +287,7 @@ pub struct FillForeignOrder<'info> {
         seeds = [GLOBAL_SEED],
         bump = global_account.bump,
         constraint = order_data.dest_chain_id == global_account.chain_id @ OrderBookError::InvalidDestChainId,
+        constraint = !global_account.paused @ OrderBookError::ProgramPaused,
     )]
     pub global_account: Account<'info, OrderBookGlobal>,
 

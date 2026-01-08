@@ -118,6 +118,8 @@ interface IOrderBook {
     error OrderAlreadyExists();
     error OrderAlreadyFilled();
     error OrderIdMismatch();
+    error ZeroAdmin();
+    error ZeroPauser();
 
     /* ========== Structs and Enums ========== */
 
@@ -589,6 +591,22 @@ interface IOrderBook {
      * @param isSupported_ whether support for the chain should be enabled (true activates, false deactivates)
      */
     function setDestinationSupported(uint32 destChainId_, bool isSupported_) external;
+
+    /**
+     * @notice Pauses the contract.
+     * @dev    Can only be called by an account with the PAUSER_ROLE.
+     * @dev    When paused, all external order actions are disabled (open, fill, and cancel).
+     *         However, processing of crosschain fill and cancel reports is still allowed.
+     *         This enables safe upgrades of the contract by pausing all instances and
+     *         waiting until inflight messages are processed.
+     */
+    function pause() external;
+
+    /**
+     * @notice Unpauses the contract.
+     * @dev    Can only be called by an account with the PAUSER_ROLE.
+     */
+    function unpause() external;
 
     /* ========== View Functions ========== */
 

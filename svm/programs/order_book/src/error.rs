@@ -48,8 +48,8 @@ pub enum OrderBookError {
     OrderNotExpired,
     #[msg("Destination chain not supported")]
     DestinationNotSupported,
-    #[msg("Destination account required")]
-    DestinationAccountRequired,
+    #[msg("Recipient token account required - order token account has dust balance that must be swept")]
+    DustRecipientRequired,
     #[msg("Order is already filled")]
     OrderFilled,
     #[msg("Order status is not finalized")]
@@ -62,4 +62,10 @@ pub enum OrderBookError {
     InvalidSender,
     #[msg("Invalid report source chain ID")]
     InvalidReportSource,
+    #[msg("Payer address does not match order payer")]
+    InvalidPayer,
+    #[msg("Token account has non-zero balance - cannot close")]
+    TokenAccountNotEmpty,
+    #[msg("Program is paused")]
+    ProgramPaused,
 }
