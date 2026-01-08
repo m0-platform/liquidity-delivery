@@ -68,4 +68,6 @@ pub enum OrderBookError {
     TokenAccountNotEmpty,
     #[msg("Program is paused")]
     ProgramPaused,
+    #[msg("Portal authority cannot be default pubkey")]
+    InvalidPortalAuthority,
 }

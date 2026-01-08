@@ -120,6 +120,7 @@ interface IOrderBook {
     error OrderIdMismatch();
     error ZeroAdmin();
     error ZeroPauser();
+    error ZeroPortal();
 
     /* ========== Structs and Enums ========== */
 

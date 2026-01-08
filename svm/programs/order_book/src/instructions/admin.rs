@@ -23,6 +23,10 @@ impl AdminInstruction<'_> {
         ctx: Context<Self>,
         new_portal_authority: Pubkey,
     ) -> Result<()> {
+        require!(
+            new_portal_authority != Pubkey::default(),
+            OrderBookError::InvalidPortalAuthority
+        );
         ctx.accounts.global_account.portal_authority = new_portal_authority;
         Ok(())
     }

@@ -1,4 +1,5 @@
 use super::super::{OrderBookTest, CHAIN_ID};
+use anchor_lang::prelude::Pubkey;
 use anchor_litesvm::{Signer, TestHelpers};
 use std::error::Error;
 
@@ -181,6 +182,38 @@ fn test_initialize_wrong_global_account_pda_reverts() -> Result<(), Box<dyn Erro
     test.ctx
         .execute_instruction(ix, &[&admin])?
         .assert_anchor_error("ConstraintSeeds");
+
+    Ok(())
+}
+
+#[test]
+fn test_initialize_zero_portal_authority_reverts() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    let admin = test.get_user("admin");
+
+    // Attempt to initialize with default (zero) pubkey as portal_authority
+    let ix = test.create_initialize_ix(&admin.pubkey(), CHAIN_ID, &Pubkey::default())?;
+    test.ctx
+        .execute_instruction(ix, &[&admin])?
+        .assert_anchor_error("InvalidPortalAuthority");
+
+    Ok(())
+}
+
+#[test]
+fn test_set_portal_authority_zero_address_reverts() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+
+    // First initialize the order book
+    test.initialize()?;
+
+    let admin = test.get_user("admin");
+
+    // Attempt to set portal authority to zero address
+    let ix = test.create_set_portal_authority_ix(&admin.pubkey(), &Pubkey::default())?;
+    test.ctx
+        .execute_instruction(ix, &[&admin])?
+        .assert_anchor_error("InvalidPortalAuthority");
 
     Ok(())
 }

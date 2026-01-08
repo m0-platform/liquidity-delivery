@@ -72,6 +72,7 @@ contract OrderBook is
     /* ========== Construct and Initialize ========== */
 
     constructor(uint32 chainId_, address portal_) {
+        if (portal_ == address(0)) revert ZeroPortal();
         chainId = chainId_;
         portal = portal_;
     }
