@@ -7,8 +7,8 @@ use std::error::Error;
 // ReportOrderFill instruction tests
 // [X] given the portal_authority does not match the global account
 //   [X] it reverts with a NotAuthorized error
-// [ ] given the source chain ID does not match the order's dest_chain_id
-//   [ ] it reverts with an InvalidReportSource error
+// [X] given the source chain ID does not match the order's dest_chain_id
+//   [X] it reverts with an InvalidReportSource error
 // [X] given the order does not exist
 //   [X] it reverts with an AccountNotInitialized error
 // [X] given the order type is Foreign
@@ -19,14 +19,12 @@ use std::error::Error;
 //   [X] it reverts with an OrderNotFillable error
 // [X] given the fill_report amount_out_filled is zero
 //   [X] it reverts with an InvalidFillAmount error
-// [ ] given the token_in_mint does not match the order
-//   [ ] it reverts with an InvalidTokenMint error
-// [ ] given the origin_recipient does not match fill_report
-//   [ ] it reverts with an InvalidRecipient error
-// [-] given the fill would cause an overfill
-//   [-] NOTE: Implementation does NOT check for overfill - order is simply completed
-// [ ] given the order account PDA is incorrect
-//   [ ] it reverts with a ConstraintSeeds error
+// [X] given the token_in_mint does not match the order
+//   [X] it reverts with an InvalidTokenMint error
+// [X] given the origin_recipient does not match fill_report
+//   [X] it reverts with an InvalidRecipient error
+// [X] given the order account PDA is incorrect
+//   [X] it reverts with a ConstraintSeeds error
 // [X] given all checks pass and this is a partial fill
 //   [X] it updates amount_in_released cumulatively
 //   [X] it updates amount_out_filled cumulatively
@@ -44,8 +42,10 @@ use std::error::Error;
 //   [X] it changes status to Completed on final fill
 // [X] given extra tokens are donated to the order account
 //   [X] on full fill, it transfers all tokens (including donation)
-// [ ] given the order status is CancelRequested
-//   [ ] it still processes the fill (CancelRequested orders can be filled)
+// [X] given the order status is CancelRequested
+//   [X] it still processes the fill (CancelRequested orders can be filled)
+// [X] given the program is paused
+//   [X] it completes successfully
 
 fn default_fill_report(
     test: &OrderBookTest,
@@ -861,6 +861,55 @@ fn test_report_fill_with_donation_success() -> Result<(), Box<dyn Error>> {
         order_balance_before,
         "Solver should receive all tokens including donation"
     );
+
+    Ok(())
+}
+
+#[test]
+fn test_report_fill_paused_success() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
+
+    // Create a cross-chain order (required for report_fill)
+    let order_params = order_book::instructions::open::OrderParams {
+        dest_chain_id: DEST_CHAIN_ID, // cross-chain order
+        fill_deadline: test
+            .ctx
+            .svm
+            .get_sysvar::<anchor_lang::prelude::Clock>()
+            .unix_timestamp as u64
+            + 86400,
+        token_out: test.get_mint("token-out-spl-6").to_bytes(),
+        amount_in: 1_000_000,
+        amount_out: 1_000_000,
+        recipient: test.get_user("alice").pubkey().to_bytes(),
+        solver: test.get_user("solver").pubkey().to_bytes(),
+    };
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+    // Pause the program
+    test.pause()?;
+
+    // Try to report a fill
+    let solver = test.get_user("solver");
+    let portal_authority = test.get_user("portal_authority");
+    let fill_report = FillReport {
+        order_id,
+        amount_in_to_release: 500_000,
+        amount_out_filled: 500_000,
+        origin_recipient: solver.pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
+    let ix = test.create_report_fill_ix(
+        &solver.pubkey(),
+        &portal_authority.pubkey(),
+        order_params.dest_chain_id,
+        &fill_report,
+    )?;
+
+    test.ctx
+        .execute_instruction(ix, &[&solver, &portal_authority])?
+        .assert_success();
 
     Ok(())
 }

@@ -29,6 +29,8 @@ use std::error::Error;
 //   [X] it creates the order account with Cancelled status
 // [X] given the order exists and is Created
 //   [X] it sets order status to Cancelled
+// [X] given the program is paused
+//   [X] it reverts with a ProgramPaused error
 
 mod xchain_orders {
     use order_book::OrderParams;
@@ -389,6 +391,27 @@ mod xchain_orders {
         test.ctx
             .execute_instruction(ix, &[&signer])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidCreatedAtTimestamp));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cancel_foreign_order_paused_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Pause the program
+        test.pause()?;
+
+        // Try to cancel a foreign order while paused
+        let order_data = create_foreign_order_data(&test);
+        let signer = test.get_user("bob"); // recipient
+
+        let ix = test.create_cancel_foreign_order_ix(&signer.pubkey(), &order_data)?;
+
+        test.ctx
+            .execute_instruction(ix, &[&signer])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::ProgramPaused));
 
         Ok(())
     }

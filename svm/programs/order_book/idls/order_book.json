@@ -1487,15 +1487,17 @@
             "type": {
               "array": ["u8", 32]
             }
-          },
+          }
+        ]
+      }
+    },
+    {
+      "name": "CancelReported",
+      "type": {
+        "kind": "struct",
+        "fields": [
           {
-            "name": "order_sender",
-            "type": {
-              "array": ["u8", 32]
-            }
-          },
-          {
-            "name": "token_in",
+            "name": "order_id",
             "type": {
               "array": ["u8", 32]
             }

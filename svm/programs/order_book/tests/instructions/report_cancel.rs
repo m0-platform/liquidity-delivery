@@ -29,6 +29,8 @@ use std::error::Error;
 //   [X] it transfers remaining token_in to sender
 // [X] given a partial fill occurred
 //   [X] it refunds only the remaining tokens
+// [X] given the program is paused
+//   [X] it completes successfully
 
 fn default_order_params(test: &OrderBookTest) -> order_book::instructions::open::OrderParams {
     // Order that originates here but has a different destination
@@ -492,6 +494,41 @@ fn test_report_cancel_already_cancelled_reverts() -> Result<(), Box<dyn Error>> 
     test.ctx
         .execute_instruction(ix, &[&relayer, &portal_authority])?
         .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidOrderStatus));
+
+    Ok(())
+}
+
+#[test]
+fn test_report_cancel_paused_success() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
+
+    // Create a cross-chain order (required for report_cancel)
+    let order_params = default_order_params(&test);
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+    // Pause the program
+    test.pause()?;
+
+    // Try to report a cancel while paused
+    let relayer = test.get_user("bob");
+    let portal_authority = test.get_user("portal_authority");
+    let cancel_report = order_book::instructions::CancelReport { 
+        order_id,
+        order_sender: test.get_user("alice").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
+
+    let ix = test.create_report_cancel_ix(
+        &relayer.pubkey(),
+        &portal_authority.pubkey(),
+        order_params.dest_chain_id,
+        &cancel_report,
+    )?;
+
+    test.ctx
+        .execute_instruction(ix, &[&relayer, &portal_authority])?
+        .assert_success();
 
     Ok(())
 }

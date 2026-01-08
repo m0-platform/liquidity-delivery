@@ -1,8 +1,10 @@
 mod cancel_foreign_order;
 mod cancel_native_order;
+mod close_order_token_account;
 mod destination;
 mod fill;
 mod initialize;
 mod open;
+mod pause;
 mod report_cancel;
 mod report_fill;

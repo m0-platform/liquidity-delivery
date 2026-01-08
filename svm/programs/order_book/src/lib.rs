@@ -79,6 +79,18 @@ pub mod order_book {
         AcceptAdminRole::handler(ctx)
     }
 
+    pub fn pause(
+        ctx: Context<AdminInstruction>,
+    ) -> Result<()> {
+        AdminInstruction::pause(ctx)
+    }
+
+    pub fn unpause(
+        ctx: Context<AdminInstruction>,
+    ) -> Result<()> {
+        AdminInstruction::unpause(ctx)
+    }
+
     // User actions
 
     pub fn open_order(ctx: Context<OpenOrder>, params: OrderParams) -> Result<()> {
@@ -118,6 +130,13 @@ pub mod order_book {
         fill_params: FillParams,
     ) -> Result<()> {
         FillForeignOrder::handler(ctx, order_id, order_data, fill_params)
+    }
+
+    pub fn close_order_token_account(
+        ctx: Context<CloseOrderTokenAccount>,
+        order_id: [u8; 32],
+    ) -> Result<()> {
+        CloseOrderTokenAccount::handler(ctx, order_id)
     }
 
     // Crosschain messaging actions
