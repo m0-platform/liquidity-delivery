@@ -177,6 +177,7 @@ abstract contract OrderBookTestBase is Test {
         // Report the fill back to the origin chain
         vm.prank(address(messenger));
         orderBook.reportFill(
+            DEST_CHAIN_ID,
             IOrderBook.FillReport({
                 orderId: orderId_,
                 amountOutFilled: amountOutFilled_,
@@ -217,6 +218,7 @@ abstract contract OrderBookTestBase is Test {
     function _reportCancel(bytes32 orderId_, address orderSender_, address tokenIn_) internal {
         vm.prank(address(messenger));
         orderBook.reportCancel(
+            DEST_CHAIN_ID,
             IOrderBook.CancelReport({
                 orderId: orderId_,
                 orderSender: orderSender_.toBytes32(),

@@ -25,6 +25,8 @@ contract ReportFillTest is OrderBookTestBase {
     //   [X] it reverts with an InvalidReport error
     // [X] given the tokenIn does not match
     //   [X] it reverts with an InvalidReport error
+    // [x] given the source chain ID does not match the order's dest chain ID
+    //   [x] it reverts with an InvalidReportSource error
     // [X] given the order is active (Created status)
     //   [X] it updates the filled amount for the order
     //   [X] it transfers the pro-rata amount of the token in to the specified recipient
@@ -65,6 +67,7 @@ contract ReportFillTest is OrderBookTestBase {
         vm.prank(users["bob"]);
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.NotAuthorized.selector));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: params.amountOut,
@@ -82,6 +85,7 @@ contract ReportFillTest is OrderBookTestBase {
         vm.prank(address(messenger));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: fakeOrderId,
                 amountOutFilled: params.amountOut,
@@ -102,6 +106,7 @@ contract ReportFillTest is OrderBookTestBase {
         vm.prank(address(messenger));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: params.amountOut / 2,
@@ -119,6 +124,7 @@ contract ReportFillTest is OrderBookTestBase {
         vm.prank(address(messenger));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: params.amountOut + 1,
@@ -136,6 +142,7 @@ contract ReportFillTest is OrderBookTestBase {
         vm.prank(address(messenger));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: params.amountOut,
@@ -153,12 +160,31 @@ contract ReportFillTest is OrderBookTestBase {
         vm.prank(address(messenger));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: params.amountOut,
                 amountInToRelease: params.amountIn,
                 originRecipient: users["solver"].toBytes32(),
                 tokenIn: address(users["bob"]).toBytes32() // invalid tokenIn
+            })
+        );
+    }
+
+    function test_sourceChainIdMismatch_reverts() public {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+
+        // Try to report fill with wrong source chain ID
+        vm.prank(address(messenger));
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReportSource.selector));
+        orderBook.reportFill(
+            params.destChainId + 1, // incorrect source chain ID
+            IOrderBook.FillReport({
+                orderId: orderId,
+                amountOutFilled: params.amountOut,
+                amountInToRelease: params.amountIn,
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
             })
         );
     }
@@ -177,6 +203,7 @@ contract ReportFillTest is OrderBookTestBase {
         // Report fill via messenger
         vm.prank(address(messenger));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: fillAmount,
@@ -253,6 +280,7 @@ contract ReportFillTest is OrderBookTestBase {
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.OrderCompleted(orderId);
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: params.amountOut,

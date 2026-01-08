@@ -112,6 +112,7 @@ interface IOrderBook {
     error InvalidSolver();
     error InvalidReport();
     error InvalidTimestamp();
+    error InvalidReportSource();
     error NotAuthorized();
     error OrderExpired();
     error OrderAlreadyExists();
@@ -258,7 +259,7 @@ interface IOrderBook {
 
     /**
      * @notice Data reported from a destination chain back to the origin chain about a fill
-     * @dev This struct is sent by the messenger contract to report fills that occurred
+     * @dev This struct is sent by the portal contract to report fills that occurred
      *      on the destination chain back to the origin chain for processing
      * @param orderId The ID of the order that a fill is being reported for
      * @param amountInToRelease The amount of input token to release to the filler on the origin chain
@@ -277,7 +278,7 @@ interface IOrderBook {
 
     /**
      * @notice Data reported from a destination chain back to the origin chain about a cancelled order
-     * @dev This struct is sent by the messenger contract to report order cancellations and refunds
+     * @dev This struct is sent by the portal contract to report order cancellations and refunds
      *      that occurred on the destination chain back to the origin chain for processing
      * @param orderId The ID of the order that a cancellation is being reported for
      * @param orderSender The address on the origin chain that created the order
@@ -413,7 +414,7 @@ interface IOrderBook {
      * @dev Can be called by anyone after the fill deadline (permissionless refunds)
      * @param orderId_ - ID of the order to cancel
      * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
-     * @dev   The payable amount is forwarded to the underlying messenger contract to send crosschain messages.
+     * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
@@ -426,7 +427,7 @@ interface IOrderBook {
      * @param orderId_ ID of the order to cancel
      * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
-     * @dev   The payable amount is forwarded to the underlying messenger contract to send crosschain messages.
+     * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
@@ -444,7 +445,7 @@ interface IOrderBook {
      * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
      * @param bridgeAdapter_ Address of the bridge adapter to use for crosschain messages (must be supported by Portal V2)
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
-     * @dev   The payable amount is forwarded to the underlying messenger contract to send crosschain messages.
+     * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
@@ -461,7 +462,7 @@ interface IOrderBook {
      * @param orderId_ ID of the order to cancel
      * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
      * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelOrderDigest)
-     * @dev   The payable amount is forwarded to the underlying messenger contract to send crosschain messages.
+     * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
@@ -478,7 +479,7 @@ interface IOrderBook {
      * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
      * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelOrderDigest)
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
-     * @dev   The payable amount is forwarded to the underlying messenger contract to send crosschain messages.
+     * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
@@ -497,7 +498,7 @@ interface IOrderBook {
      * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelOrderDigest)
      * @param bridgeAdapter_ Address of the bridge adapter to use for crosschain messages (must be supported by Portal V2)
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
-     * @dev   The payable amount is forwarded to the underlying messenger contract to send crosschain messages.
+     * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
@@ -517,7 +518,7 @@ interface IOrderBook {
      * @param orderData_ OrderData payload with all order information required to identify an order to be filled
      * @param fillerParams_ Parameters supplied by the solver of the order
      * @dev   The orderData is packed and hashed to verify the order ID as a safeguard for solvers
-     * @dev   The payable amount is forwarded to the underlying messenger contract to send crosschain messages.
+     * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
@@ -534,7 +535,7 @@ interface IOrderBook {
      * @param fillerParams_ Parameters supplied by the solver of the order
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
      * @dev   The orderData is packed and hashed to verify the order ID as a safeguard for solvers
-     * @dev   The payable amount is forwarded to the underlying messenger contract to send crosschain messages.
+     * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
@@ -553,7 +554,7 @@ interface IOrderBook {
      * @param bridgeAdapter_ Address of the bridge adapter to use for crosschain messages (must be supported by Portal V2)
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
      * @dev   The orderData is packed and hashed to verify the order ID as a safeguard for solvers
-     * @dev   The payable amount is forwarded to the underlying messenger contract to send crosschain messages.
+     * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
@@ -567,24 +568,26 @@ interface IOrderBook {
 
     /**
      * @notice Report a fill that was made on another chain back to this chain as the origin chain
-     * @dev Must be called by the messenger contract
+     * @dev Must be called by the portal contract
+     * @param sourceChainId_ The chain ID that the fill report was sent from
      * @param report_ Fill data sent from the destination chain
      */
-    function reportFill(FillReport calldata report_) external;
+    function reportFill(uint32 sourceChainId_, FillReport calldata report_) external;
 
     /**
      * @notice Report a cross-chain cancellation of an order.
-     * @dev Must be called by the messenger contract
+     * @dev Must be called by the portal contract
+     * @param sourceChainId_ The chain ID that the cancel report was sent from
      * @param report_ Cancel data sent from the destination chain
      */
-    function reportCancel(CancelReport calldata report_) external;
+    function reportCancel(uint32 sourceChainId_, CancelReport calldata report_) external;
 
     /* ========== Admin Functions ========== */
 
     /**
      * @notice Set external chain support for orders
      * @dev Must be DEFAULT_ADMIN_ROLE to call
-     * @param destChainId_ The chain ID for the destination chain used by the messenger
+     * @param destChainId_ The chain ID for the destination chain used by the portal
      * @param isSupported_ whether support for the chain should be enabled (true activates, false deactivates)
      */
     function setDestinationSupported(uint32 destChainId_, bool isSupported_) external;

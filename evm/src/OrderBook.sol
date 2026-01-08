@@ -594,7 +594,7 @@ contract OrderBook is
     /* ========== Receiving Crosschain Reports ========== */
 
     /// @inheritdoc IOrderBook
-    function reportFill(FillReport calldata report_) external override {
+    function reportFill(uint32 sourceChainId_, FillReport calldata report_) external override {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         Order storage order = $.orders[report_.orderId];
 
@@ -602,6 +602,7 @@ contract OrderBook is
         if (msg.sender != portal) revert NotAuthorized();
         if (order.status != OrderStatus.Created) revert InvalidOrderStatus();
         if (report_.tokenIn != order.tokenIn.toBytes32()) revert InvalidReport();
+        if (sourceChainId_ != order.destChainId) revert InvalidReportSource();
 
         // Update the fill amounts for the order
         IOrderBook.FilledAmounts storage filledAmounts = $.filledAmounts[report_.orderId];
@@ -631,12 +632,13 @@ contract OrderBook is
     }
 
     /// @inheritdoc IOrderBook
-    function reportCancel(CancelReport calldata report_) external override {
+    function reportCancel(uint32 sourceChainId_, CancelReport calldata report_) external override {
         Order storage order = _getOrderBookStorageLocation().orders[report_.orderId];
 
         // Validate the cancel report and sender
         if (msg.sender != portal) revert NotAuthorized();
         if (order.status != OrderStatus.Created) revert InvalidOrderStatus();
+        if (sourceChainId_ != order.destChainId) revert InvalidReportSource();
 
         // Validate the reported order sender and token in match
         // This isn't strictly required because we use local data,

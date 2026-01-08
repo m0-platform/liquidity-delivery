@@ -60,6 +60,8 @@ pub enum OrderBookError {
     InvalidCreatedAtTimestamp,
     #[msg("Sender address does not match order sender")]
     InvalidSender,
+    #[msg("Invalid report source chain ID")]
+    InvalidReportSource,
     #[msg("Payer address does not match order payer")]
     InvalidPayer,
     #[msg("Token account has non-zero balance - cannot close")]

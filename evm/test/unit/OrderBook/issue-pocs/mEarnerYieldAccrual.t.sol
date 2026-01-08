@@ -109,6 +109,7 @@ contract MEarnerYieldAccrualTest is Test {
 
         vm.prank(address(messenger));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: AMOUNT_OUT,
@@ -154,6 +155,7 @@ contract MEarnerYieldAccrualTest is Test {
         uint256 aliceBalanceBefore = mToken.balanceOf(alice);
         vm.prank(address(messenger));
         orderBook.reportCancel(
+            DEST_CHAIN_ID,
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: alice.toBytes32(),
@@ -214,6 +216,7 @@ contract MEarnerYieldAccrualTest is Test {
         // 4. Now fill the order
         vm.prank(address(messenger));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: AMOUNT_OUT,

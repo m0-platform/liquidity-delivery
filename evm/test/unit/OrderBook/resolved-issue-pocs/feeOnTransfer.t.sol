@@ -96,6 +96,7 @@ contract FeeOnTransferTest is Test {
         // The OrderBook expects to transfer exactly AMOUNT_IN, but fee will reduce actual amount
         vm.prank(address(messenger));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: AMOUNT_OUT,
@@ -125,6 +126,7 @@ contract FeeOnTransferTest is Test {
         //    reportCancel triggers refund which uses safeTransfer
         vm.prank(address(messenger));
         orderBook.reportCancel(
+            DEST_CHAIN_ID,
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: alice.toBytes32(),

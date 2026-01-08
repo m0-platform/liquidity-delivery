@@ -299,7 +299,7 @@ impl<'info> CancelForeignOrder<'info> {
 
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(cancel_report: CancelReport)]
+#[instruction(source_chain_id: u32, cancel_report: CancelReport)]
 pub struct ReportOrderCancel<'info> {
     #[account(mut)]
     pub relayer: Signer<'info>,
@@ -317,6 +317,7 @@ pub struct ReportOrderCancel<'info> {
         mut,
         seeds = [ORDER_SEED_PREFIX, cancel_report.order_id.as_ref()],
         bump = order.bump,
+        constraint = order.data.dest_chain_id == source_chain_id @ OrderBookError::InvalidReportSource,
     )]
     pub order: Account<'info, Order::<NativeOrder>>,
 
@@ -376,7 +377,7 @@ impl ReportOrderCancel<'_> {
     }
 
     #[access_control(ctx.accounts.validate())]
-    pub fn handler(ctx: Context<Self>, cancel_report: CancelReport) -> Result<()> {
+    pub fn handler(ctx: Context<Self>, _source_chain_id: u32, cancel_report: CancelReport) -> Result<()> {
         let order = &mut ctx.accounts.order.data;
 
         // Set the order status to Cancelled

@@ -106,6 +106,7 @@ contract PausableTokenTest is Test {
         vm.prank(address(messenger));
         vm.expectRevert(abi.encodeWithSelector(MockPausableToken.EnforcedPause.selector));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: AMOUNT_OUT,
@@ -130,6 +131,7 @@ contract PausableTokenTest is Test {
         uint256 aliceBalanceBefore = pausableToken.balanceOf(alice);
         vm.prank(address(messenger));
         orderBook.reportCancel(
+            DEST_CHAIN_ID,
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: alice.toBytes32(),

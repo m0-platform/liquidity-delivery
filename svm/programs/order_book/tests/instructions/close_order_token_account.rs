@@ -276,7 +276,7 @@ fn test_close_after_report_cancel() -> Result<(), Box<dyn Error>> {
 
     // Report cancel via messenger (simulating cross-chain cancel report)
     let cancel_report = order_book::instructions::CancelReport { order_id };
-    test.report_cancel("bob", &cancel_report)?;
+    test.report_cancel("bob", order_params.dest_chain_id, &cancel_report)?;
 
     // Verify order is Cancelled
     let (_, order_data) = test.get_native_order_account(&order_id)?;
@@ -345,7 +345,7 @@ fn test_close_after_report_fill() -> Result<(), Box<dyn Error>> {
         origin_recipient: test.get_user("solver").pubkey().to_bytes(),
         token_in: test.get_mint("token-in-spl-6").to_bytes(),
     };
-    test.report_fill("bob", &fill_report)?;
+    test.report_fill("bob", order_params.dest_chain_id, &fill_report)?;
 
     // Verify order is Completed
     let (_, order_data) = test.get_native_order_account(&order_id)?;

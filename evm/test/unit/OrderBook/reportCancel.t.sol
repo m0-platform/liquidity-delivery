@@ -49,6 +49,7 @@ contract ReportCancelTest is OrderBookTestBase {
         vm.prank(users["bob"]);
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.NotAuthorized.selector));
         orderBook.reportCancel(
+            params.destChainId,
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: users["alice"].toBytes32(),
@@ -64,6 +65,7 @@ contract ReportCancelTest is OrderBookTestBase {
         vm.prank(address(messenger));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
         orderBook.reportCancel(
+            params.destChainId,
             IOrderBook.CancelReport({
                 orderId: fakeOrderId,
                 orderSender: users["alice"].toBytes32(),
@@ -82,6 +84,7 @@ contract ReportCancelTest is OrderBookTestBase {
         vm.prank(address(messenger));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
         orderBook.reportCancel(
+            params.destChainId,
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: users["alice"].toBytes32(),
@@ -100,6 +103,7 @@ contract ReportCancelTest is OrderBookTestBase {
         vm.prank(address(messenger));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidOrderStatus.selector));
         orderBook.reportCancel(
+            params.destChainId,
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: users["alice"].toBytes32(),
@@ -115,6 +119,7 @@ contract ReportCancelTest is OrderBookTestBase {
         vm.prank(address(messenger));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
         orderBook.reportCancel(
+            params.destChainId,
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: users["bob"].toBytes32(),
@@ -130,10 +135,27 @@ contract ReportCancelTest is OrderBookTestBase {
         vm.prank(address(messenger));
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
         orderBook.reportCancel(
+            params.destChainId,
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: users["alice"].toBytes32(),
                 tokenIn: params.tokenOut
+            })
+        );
+    }
+
+    function test_invalidSourceChainId_reverts() public {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+
+        // Report with wrong source chain ID, reverts
+        vm.prank(address(messenger));
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReportSource.selector));
+        orderBook.reportCancel(
+            params.destChainId + 1, // should be params.destChainId
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: users["alice"].toBytes32(),
+                tokenIn: params.tokenIn.toBytes32()
             })
         );
     }
@@ -152,6 +174,7 @@ contract ReportCancelTest is OrderBookTestBase {
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.RefundClaimed(orderId, users["alice"], order.amountIn);
         orderBook.reportCancel(
+            params.destChainId,
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: users["alice"].toBytes32(),
@@ -230,6 +253,7 @@ contract ReportCancelTest is OrderBookTestBase {
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.RefundClaimed(orderId, users["alice"], expectedRefund);
         orderBook.reportCancel(
+            params.destChainId,
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: users["alice"].toBytes32(),

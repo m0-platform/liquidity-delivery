@@ -100,6 +100,7 @@ contract RebaseDownTest is Test {
         vm.prank(address(messenger));
         vm.expectRevert(); // Will revert due to insufficient balance
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: AMOUNT_OUT,
@@ -130,6 +131,7 @@ contract RebaseDownTest is Test {
         vm.prank(address(messenger));
         vm.expectRevert(); // Will revert due to insufficient balance
         orderBook.reportCancel(
+            DEST_CHAIN_ID,
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: alice.toBytes32(),

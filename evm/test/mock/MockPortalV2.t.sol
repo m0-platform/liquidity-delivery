@@ -58,12 +58,12 @@ contract MockPortalV2 is IPortalV2Like {
         emit CancelReportSent(destinationChainId, report);
     }
 
-    function receiveFillReport(IOrderBook.FillReport calldata report) external {
-        IOrderBook(orderBook).reportFill(report);
+    function receiveFillReport(uint32 sourceChainId, IOrderBook.FillReport calldata report) external {
+        IOrderBook(orderBook).reportFill(sourceChainId, report);
     }
 
-    function receiveCancelReport(IOrderBook.CancelReport calldata report) external {
-        IOrderBook(orderBook).reportCancel(report);
+    function receiveCancelReport(uint32 sourceChainId, IOrderBook.CancelReport calldata report) external {
+        IOrderBook(orderBook).reportCancel(sourceChainId, report);
     }
 
     function isFillReported(bytes32 orderId) external view returns (bool) {

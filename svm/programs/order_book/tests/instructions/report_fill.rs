@@ -7,6 +7,8 @@ use std::error::Error;
 // ReportOrderFill instruction tests
 // [X] given the messenger_authority does not match the global account
 //   [X] it reverts with a NotAuthorized error
+// [X] given the source chain ID does not match the order's dest_chain_id
+//   [X] it reverts with an InvalidReportSource error
 // [X] given the order does not exist
 //   [X] it reverts with an AccountNotInitialized error
 // [X] given the order type is Foreign
@@ -99,12 +101,52 @@ fn test_report_fill_unauthorized_messenger_reverts() -> Result<(), Box<dyn Error
         .ctx
         .program()
         .accounts(accounts)
-        .args(order_book::instruction::ReportOrderFill { fill_report })
+        .args(order_book::instruction::ReportOrderFill { source_chain_id: DEST_CHAIN_ID, fill_report })
         .instruction()?;
 
     test.ctx
         .execute_instruction(ix, &[&test.get_user("admin"), &messenger_authority])?
         .assert_anchor_error(&format!("{:?}", OrderBookError::NotAuthorized));
+
+    Ok(())
+}
+
+#[test]
+fn test_report_fill_invalid_source_chain_reverts() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
+
+    // Create a native order (origin = CHAIN_ID, dest = DEST_CHAIN_ID)
+    let order_params = order_book::instructions::open::OrderParams {
+        dest_chain_id: DEST_CHAIN_ID, // foreign destination
+        fill_deadline: test
+            .ctx
+            .svm
+            .get_sysvar::<anchor_lang::prelude::Clock>()
+            .unix_timestamp as u64
+            + 86400,
+        token_out: test.get_mint("token-out-spl-6").to_bytes(),
+        amount_in: 1_000_000,
+        amount_out: 1_000_000,
+        recipient: test.get_user("alice").pubkey().to_bytes(),
+        solver: test.get_user("solver").pubkey().to_bytes(),
+    };
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+    // Create fill report
+    let fill_report =
+        default_fill_report(&test, order_id, test.get_user("solver").pubkey().to_bytes());
+
+    let ix = test.create_report_fill_ix(
+        &test.get_user("admin").pubkey(),
+        &test.get_user("messenger_authority").pubkey(),
+        order_params.dest_chain_id + 1, // Invalid source chain ID
+        &fill_report
+    )?;
+
+    test.ctx
+        .execute_instruction(ix, &[&test.get_user("admin"), &test.get_user("messenger_authority")])?
+        .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidReportSource));
 
     Ok(())
 }
@@ -123,6 +165,7 @@ fn test_report_fill_order_not_exist_reverts() -> Result<(), Box<dyn Error>> {
     let ix = test.create_report_fill_ix(
         &test.get_user("admin").pubkey(),
         &messenger_authority.pubkey(),
+        DEST_CHAIN_ID,
         &fill_report,
     );
 
@@ -179,6 +222,7 @@ fn test_report_fill_foreign_order_type_reverts() -> Result<(), Box<dyn Error>> {
     let ix = test.create_report_fill_ix(
         &test.get_user("admin").pubkey(),
         &messenger_authority.pubkey(),
+        CHAIN_ID,
         &fill_report,
     );
 
@@ -222,7 +266,7 @@ fn test_report_fill_order_completed_reverts() -> Result<(), Box<dyn Error>> {
         token_in: test.get_mint("token-in-spl-6").to_bytes(),
     };
 
-    test.report_fill("admin", &full_fill_report)?;
+    test.report_fill("admin", order_params.dest_chain_id, &full_fill_report)?;
 
     // Verify order is completed
     let (_, order_data) = test.get_native_order_account(&order_id)?;
@@ -240,6 +284,7 @@ fn test_report_fill_order_completed_reverts() -> Result<(), Box<dyn Error>> {
     let ix = test.create_report_fill_ix(
         &test.get_user("admin").pubkey(),
         &messenger_authority.pubkey(),
+        order_params.dest_chain_id,
         &fill_report,
     )?;
 
@@ -274,7 +319,7 @@ fn test_report_fill_order_cancelled_reverts() -> Result<(), Box<dyn Error>> {
 
     // Report cancel to put order in Cancelled status
     let cancel_report = order_book::instructions::CancelReport { order_id };
-    test.report_cancel("bob", &cancel_report)?;
+    test.report_cancel("bob", order_params.dest_chain_id, &cancel_report)?;
 
     // Verify order is cancelled
     let (_, order_data) = test.get_native_order_account(&order_id)?;
@@ -292,6 +337,7 @@ fn test_report_fill_order_cancelled_reverts() -> Result<(), Box<dyn Error>> {
     let ix = test.create_report_fill_ix(
         &test.get_user("admin").pubkey(),
         &messenger_authority.pubkey(),
+        order_params.dest_chain_id,
         &fill_report,
     )?;
 
@@ -337,6 +383,7 @@ fn test_report_fill_zero_amount_reverts() -> Result<(), Box<dyn Error>> {
     let ix = test.create_report_fill_ix(
         &test.get_user("admin").pubkey(),
         &messenger_authority.pubkey(),
+        order_params.dest_chain_id,
         &fill_report,
     )?;
 
@@ -347,203 +394,171 @@ fn test_report_fill_zero_amount_reverts() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// #[test]
-// fn test_report_fill_wrong_token_mint_reverts() -> Result<(), Box<dyn Error>> {
-//     let mut test = OrderBookTest::new()?;
-//     test.initialize()?;
+#[test]
+fn test_report_fill_wrong_token_mint_reverts() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
 
-//     // Create native order
-//     let order_params = order_book::instructions::open::OrderParams {
-//         dest_chain_id: DEST_CHAIN_ID,
-//         fill_deadline: test
-//             .ctx
-//             .svm
-//             .get_sysvar::<anchor_lang::prelude::Clock>()
-//             .unix_timestamp as u64
-//             + 86400,
-//         token_out: test.get_mint("token-out-spl-6").to_bytes(),
-//         amount_in: 1_000_000,
-//         amount_out: 1_000_000,
-//         recipient: test.get_user("alice").pubkey().to_bytes(),
-//         solver: test.get_user("solver").pubkey().to_bytes(),
-//     };
-//     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+    // Create native order
+    let order_params = order_book::instructions::open::OrderParams {
+        dest_chain_id: DEST_CHAIN_ID,
+        fill_deadline: test
+            .ctx
+            .svm
+            .get_sysvar::<anchor_lang::prelude::Clock>()
+            .unix_timestamp as u64
+            + 86400,
+        token_out: test.get_mint("token-out-spl-6").to_bytes(),
+        amount_in: 1_000_000,
+        amount_out: 1_000_000,
+        recipient: test.get_user("alice").pubkey().to_bytes(),
+        solver: test.get_user("solver").pubkey().to_bytes(),
+    };
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
-//     let fill_report = default_fill_report(order_id, test.get_user("solver").pubkey().to_bytes());
+    let fill_report = default_fill_report(&test, order_id, test.get_user("solver").pubkey().to_bytes());
 
-//     // Build accounts using helper, then modify to use wrong token mint
-//     let mut accounts =
-//         test.build_report_fill_accounts(&messenger_authority.pubkey(), &fill_report)?;
+    // Build accounts using helper, then modify to use wrong token mint
+    let mut accounts =
+        test.build_report_fill_accounts(&test.get_user("admin").pubkey(), &test.get_user("messenger_authority").pubkey(), &fill_report)?;
 
-//     // Override with wrong token mint
-//     let wrong_token_mint = test.get_mint("token-in-spl-9");
-//     let origin_recipient = anchor_litesvm::Pubkey::new_from_array(fill_report.origin_recipient);
-//     let order_account = test
-//         .ctx
-//         .svm
-//         .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
-//     accounts.token_in_mint = wrong_token_mint;
-//     accounts.recipient_token_in_ata =
-//         get_associated_token_address(&origin_recipient, &wrong_token_mint);
-//     accounts.order_token_in_ata = get_associated_token_address(&order_account, &wrong_token_mint);
+    // Override with wrong token mint
+    let wrong_token_mint = test.get_mint("token-in-spl-9");
+    let origin_recipient = anchor_litesvm::Pubkey::new_from_array(fill_report.origin_recipient);
+    let order_account = test
+        .ctx
+        .svm
+        .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
+    accounts.token_in_mint = wrong_token_mint;
+    accounts.recipient_token_in_ata =
+        get_associated_token_address(&origin_recipient, &wrong_token_mint);
+    accounts.order_token_in_ata = get_associated_token_address(&order_account, &wrong_token_mint);
 
-//     let ix = test.create_report_fill_ix_with_custom_accounts(accounts, &fill_report)?;
+    let ix = test.ctx.program()
+        .accounts(accounts)
+        .args(order_book::instruction::ReportOrderFill {
+            source_chain_id: order_params.dest_chain_id,
+            fill_report: fill_report.clone(),
+        })
+        .instruction()?;
 
-//     test.ctx
-//         .execute_instruction(ix, &[&test.get_user("admin")])?
-//         .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidTokenMint));
+    test.ctx
+        .execute_instruction(ix, &[&test.get_user("admin"), &test.get_user("messenger_authority")])?
+        .assert_anchor_error("AccountNotInitialized");
 
-//     Ok(())
-// }
+    Ok(())
+}
 
-// #[test]
-// fn test_report_fill_wrong_recipient_reverts() -> Result<(), Box<dyn Error>> {
-//     let mut test = OrderBookTest::new()?;
-//     test.initialize()?;
+#[test]
+fn test_report_fill_wrong_recipient_reverts() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
 
-//     // Create native order
-//     let order_params = order_book::instructions::open::OrderParams {
-//         dest_chain_id: DEST_CHAIN_ID,
-//         fill_deadline: test
-//             .ctx
-//             .svm
-//             .get_sysvar::<anchor_lang::prelude::Clock>()
-//             .unix_timestamp as u64
-//             + 86400,
-//         token_out: test.get_mint("token-out-spl-6").to_bytes(),
-//         amount_in: 1_000_000,
-//         amount_out: 1_000_000,
-//         recipient: test.get_user("alice").pubkey().to_bytes(),
-//         solver: test.get_user("solver").pubkey().to_bytes(),
-//     };
-//     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+    // Create native order
+    let order_params = order_book::instructions::open::OrderParams {
+        dest_chain_id: DEST_CHAIN_ID,
+        fill_deadline: test
+            .ctx
+            .svm
+            .get_sysvar::<anchor_lang::prelude::Clock>()
+            .unix_timestamp as u64
+            + 86400,
+        token_out: test.get_mint("token-out-spl-6").to_bytes(),
+        amount_in: 1_000_000,
+        amount_out: 1_000_000,
+        recipient: test.get_user("alice").pubkey().to_bytes(),
+        solver: test.get_user("solver").pubkey().to_bytes(),
+    };
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
-//     let fill_report = default_fill_report(order_id, test.get_user("solver").pubkey().to_bytes());
+    let fill_report = default_fill_report(&test, order_id, test.get_user("solver").pubkey().to_bytes());
 
-//     // Build accounts using helper, then modify to use wrong recipient
-//     let mut accounts = test.build_report_fill_accounts(
-//         &test.get_user("admin").pubkey(),
-//         &messenger_authority.pubkey(),
-//         &fill_report,
-//     )?;
+    // Build accounts using helper, then modify to use wrong recipient
+    let mut accounts = test.build_report_fill_accounts(
+        &test.get_user("admin").pubkey(),
+        &test.get_user("messenger_authority").pubkey(),
+        &fill_report,
+    )?;
 
-//     // Override with wrong recipient
-//     let (_, native_order_data) = test.get_native_order_account(&order_id)?;
-//     let token_in_mint = native_order_data.data.token_in;
-//     let wrong_recipient = test.get_user("bob").pubkey();
-//     accounts.origin_recipient = wrong_recipient;
-//     accounts.recipient_token_in_ata =
-//         get_associated_token_address(&wrong_recipient, &token_in_mint);
+    // Override with wrong recipient
+    let (_, native_order_data) = test.get_native_order_account(&order_id)?;
+    let token_in_mint = native_order_data.data.token_in;
+    let wrong_recipient = test.get_user("bob").pubkey();
+    accounts.origin_recipient = wrong_recipient;
+    accounts.recipient_token_in_ata =
+        get_associated_token_address(&wrong_recipient, &token_in_mint);
 
-//     let ix = test.create_report_fill_ix_with_custom_accounts(accounts, &fill_report)?;
+    let ix = test.ctx.program()
+        .accounts(accounts)
+        .args(order_book::instruction::ReportOrderFill {
+            source_chain_id: order_params.dest_chain_id,
+            fill_report: fill_report.clone(),
+        })
+        .instruction()?;
 
-//     test.ctx
-//         .execute_instruction(ix, &[&test.get_user("admin")])?
-//         .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidRecipient));
+    test.ctx
+        .execute_instruction(ix, &[&test.get_user("admin"), &test.get_user("messenger_authority")])?
+        .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidRecipient));
 
-//     Ok(())
-// }
+    Ok(())
+}
 
-// NOTE: The report_fill implementation does NOT check for overfill.
-// When amount_out_filled >= order.amount_out, the order is simply marked as Completed.
-// The Overfill error exists but is not used in this instruction.
-// This test is commented out because the expected behavior doesn't match the implementation.
-//
-// #[test]
-// fn test_report_fill_overfill_reverts() -> Result<(), Box<dyn Error>> {
-//     let mut test = OrderBookTest::new()?;
-//     test.initialize()?;
-//
-//     // Create native order
-//     let order_params = order_book::instructions::open::OrderParams {
-//         dest_chain_id: DEST_CHAIN_ID,
-//         fill_deadline: test
-//             .ctx
-//             .svm
-//             .get_sysvar::<anchor_lang::prelude::Clock>()
-//             .unix_timestamp as u64
-//             + 86400,
-//         token_out: test.get_mint("token-out-spl-6").to_bytes(),
-//         amount_in: 1_000_000,
-//         amount_out: 1_000_000,
-//         recipient: test.get_user("alice").pubkey().to_bytes(),
-//         solver: test.get_user("solver").pubkey().to_bytes(),
-//     };
-//     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
-//
-//     // Create fill report that would overfill
-//     let overfill_report = FillReport {
-//         order_id,
-//         amount_in_to_release: 1_500_000, // More than order amount
-//         amount_out_filled: 1_500_000,
-//         origin_recipient: test.get_user("solver").pubkey().to_bytes(),
-//         token_in: test.get_mint("token-in-spl-6").to_bytes(),
-//     };
-//
-//     let messenger_authority = test.get_user("messenger_authority");
-//     let ix = test.create_report_fill_ix(
-//         &test.get_user("admin").pubkey(),
-//         &messenger_authority.pubkey(),
-//         &overfill_report,
-//     )?;
-//
-//     test.ctx
-//         .execute_instruction(ix, &[&test.get_user("admin"), &messenger_authority])?
-//         .assert_anchor_error(&format!("{:?}", OrderBookError::Overfill));
-//
-//     Ok(())
-// }
+#[test]
+fn test_report_fill_wrong_order_pda_reverts() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
 
-// #[test]
-// fn test_report_fill_wrong_order_pda_reverts() -> Result<(), Box<dyn Error>> {
-//     let mut test = OrderBookTest::new()?;
-//     test.initialize()?;
+    // Create native order
+    let order_params = order_book::instructions::open::OrderParams {
+        dest_chain_id: DEST_CHAIN_ID,
+        fill_deadline: test
+            .ctx
+            .svm
+            .get_sysvar::<anchor_lang::prelude::Clock>()
+            .unix_timestamp as u64
+            + 86400,
+        token_out: test.get_mint("token-out-spl-6").to_bytes(),
+        amount_in: 1_000_000,
+        amount_out: 1_000_000,
+        recipient: test.get_user("alice").pubkey().to_bytes(),
+        solver: test.get_user("solver").pubkey().to_bytes(),
+    };
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
-//     // Create native order
-//     let order_params = order_book::instructions::open::OrderParams {
-//         dest_chain_id: DEST_CHAIN_ID,
-//         fill_deadline: test
-//             .ctx
-//             .svm
-//             .get_sysvar::<anchor_lang::prelude::Clock>()
-//             .unix_timestamp as u64
-//             + 86400,
-//         token_out: test.get_mint("token-out-spl-6").to_bytes(),
-//         amount_in: 1_000_000,
-//         amount_out: 1_000_000,
-//         recipient: test.get_user("alice").pubkey().to_bytes(),
-//         solver: test.get_user("solver").pubkey().to_bytes(),
-//     };
-//     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+    let fill_report = default_fill_report(&test, order_id, test.get_user("solver").pubkey().to_bytes());
 
-//     let fill_report = default_fill_report(order_id, test.get_user("solver").pubkey().to_bytes());
+    // Build accounts using helper, then modify to use wrong order PDA
+    let mut accounts = test.build_report_fill_accounts(
+        &test.get_user("admin").pubkey(),
+        &test.get_user("messenger_authority").pubkey(),
+        &fill_report,
+    )?;
 
-//     // Build accounts using helper, then modify to use wrong order PDA
-//     let mut accounts = test.build_report_fill_accounts(
-//         &test.get_user("admin").pubkey(),
-//         &messenger_authority.pubkey(),
-//         &fill_report,
-//     )?;
+    // Override with wrong order PDA
+    let wrong_order_id = [88u8; 32];
+    let wrong_order_account = test
+        .ctx
+        .svm
+        .get_pda(&[ORDER_SEED_PREFIX, &wrong_order_id], &order_book::ID);
+    let token_in_mint = test.get_mint("token-in-spl-6");
+    accounts.order = wrong_order_account;
+    accounts.order_token_in_ata =
+        get_associated_token_address(&wrong_order_account, &token_in_mint);
 
-//     // Override with wrong order PDA
-//     let wrong_order_id = [88u8; 32];
-//     let wrong_order_account = test
-//         .ctx
-//         .svm
-//         .get_pda(&[ORDER_SEED_PREFIX, &wrong_order_id], &order_book::ID);
-//     let token_in_mint = test.get_mint("token-in-spl-6");
-//     accounts.order = wrong_order_account;
-//     accounts.order_token_in_ata =
-//         get_associated_token_address(&wrong_order_account, &token_in_mint);
+    let ix = test.ctx.program()
+        .accounts(accounts)
+        .args(order_book::instruction::ReportOrderFill {
+            source_chain_id: order_params.dest_chain_id,
+            fill_report: fill_report.clone(),
+        })
+        .instruction()?;
 
-//     let ix = test.create_report_fill_ix_with_custom_accounts(accounts, &fill_report)?;
+    test.ctx
+        .execute_instruction(ix, &[&test.get_user("admin"), &test.get_user("messenger_authority")])?
+        .assert_anchor_error("AccountNotInitialized");
 
-//     test.ctx
-//         .execute_instruction(ix, &[&test.get_user("admin")])?
-//         .assert_anchor_error("ConstraintSeeds");
-
-//     Ok(())
-// }
+    Ok(())
+}
 
 // Success case tests
 
@@ -584,7 +599,7 @@ fn test_report_fill_partial_success() -> Result<(), Box<dyn Error>> {
     // Report partial fill (50%)
     let fill_report = default_fill_report(&test, order_id, test.get_user("solver").pubkey().to_bytes());
 
-    test.report_fill("admin", &fill_report)?;
+    test.report_fill("admin", order_params.dest_chain_id, &fill_report)?;
 
     // Verify balances
     let solver_balance_after = test.get_token_balance(&solver_token_in_ata)?;
@@ -663,7 +678,7 @@ fn test_report_fill_full_fill_success() -> Result<(), Box<dyn Error>> {
         token_in: test.get_mint("token-in-spl-6").to_bytes(),
     };
 
-    test.report_fill("admin", &full_fill_report)?;
+    test.report_fill("admin", order_params.dest_chain_id, &full_fill_report)?;
 
     // Verify balances - should transfer ALL tokens in order account
     let solver_balance_after = test.get_token_balance(&solver_token_in_ata)?;
@@ -731,7 +746,7 @@ fn test_report_fill_multiple_partial_fills() -> Result<(), Box<dyn Error>> {
             token_in: test.get_mint("token-in-spl-6").to_bytes(),
         };
 
-        test.report_fill("admin", &fill_report)?;
+        test.report_fill("admin", order_params.dest_chain_id, &fill_report)?;
         test.ctx.svm.expire_blockhash();
 
         // Verify state after each fill
@@ -835,7 +850,7 @@ fn test_report_fill_with_donation_success() -> Result<(), Box<dyn Error>> {
         token_in: test.get_mint("token-in-spl-6").to_bytes(),
     };
 
-    test.report_fill("admin", &full_fill_report)?;
+    test.report_fill("admin", order_params.dest_chain_id, &full_fill_report)?;
 
     // Verify solver receives ALL tokens (original + donation)
     let solver_balance_after = test.get_token_balance(&solver_token_in_ata)?;
@@ -847,52 +862,6 @@ fn test_report_fill_with_donation_success() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
-
-// #[test]
-// fn test_report_fill_cancel_requested_status_success() -> Result<(), Box<dyn Error>> {
-//     let mut test = OrderBookTest::new()?;
-//     test.initialize()?;
-
-//     // Create native order
-//     let order_params = order_book::instructions::open::OrderParams {
-//         dest_chain_id: DEST_CHAIN_ID,
-//         fill_deadline: test
-//             .ctx
-//             .svm
-//             .get_sysvar::<anchor_lang::prelude::Clock>()
-//             .unix_timestamp as u64
-//             + 86400,
-//         token_out: test.get_mint("token-out-spl-6").to_bytes(),
-//         amount_in: 1_000_000,
-//         amount_out: 1_000_000,
-//         recipient: test.get_user("alice").pubkey().to_bytes(),
-//         solver: test.get_user("solver").pubkey().to_bytes(),
-//     };
-//     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
-
-//     // Request cancel (this would normally be done via request_cancel instruction)
-//     // For testing, we'll just verify that CancelRequested status allows fills
-//     // Note: We can't easily set CancelRequested status in this test without implementing
-//     // the request_cancel instruction, so this test documents the expected behavior
-
-//     // Report partial fill
-//     let fill_report = default_fill_report(order_id, test.get_user("solver").pubkey().to_bytes());
-
-//     test.report_fill("admin", &fill_report)?;
-
-//     // Verify fill succeeded
-//     let (_, order_data) = test.get_native_order_account(&order_id)?;
-//     assert_eq!(
-//         order_data.data.amount_in_released, 500_000,
-//         "Fill should process normally"
-//     );
-//     assert_eq!(
-//         order_data.data.amount_out_filled, 500_000,
-//         "Fill should process normally"
-//     );
-
-//     Ok(())
-// }
 
 #[test]
 fn test_report_fill_paused_reverts() -> Result<(), Box<dyn Error>> {
@@ -932,6 +901,7 @@ fn test_report_fill_paused_reverts() -> Result<(), Box<dyn Error>> {
     let ix = test.create_report_fill_ix(
         &solver.pubkey(),
         &messenger_authority.pubkey(),
+        order_params.dest_chain_id,
         &fill_report,
     )?;
 

@@ -141,13 +141,14 @@ pub mod order_book {
 
     // Crosschain messaging actions
 
-    pub fn report_order_fill(ctx: Context<ReportOrderFill>, fill_report: FillReport) -> Result<()> {
-        ReportOrderFill::handler(ctx, fill_report)
+    pub fn report_order_fill(ctx: Context<ReportOrderFill>, source_chain_id: u32, fill_report: FillReport) -> Result<()> {
+        ReportOrderFill::handler(ctx, source_chain_id, fill_report)
+    }
+
+    pub fn report_order_cancel(ctx: Context<ReportOrderCancel>, source_chain_id: u32, cancel_report: CancelReport) -> Result<()> {
+        ReportOrderCancel::handler(ctx, source_chain_id, cancel_report)
     } 
 
-    pub fn report_order_cancel(ctx: Context<ReportOrderCancel>, cancel_report: CancelReport) -> Result<()> {
-        ReportOrderCancel::handler(ctx, cancel_report)
-    } 
 
     // Dummy IDL instruction
     // Included to ensure the order types are included in the IDL build
