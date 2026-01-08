@@ -316,7 +316,11 @@ fn test_report_fill_order_cancelled_reverts() -> Result<(), Box<dyn Error>> {
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
     // Report cancel to put order in Cancelled status
-    let cancel_report = order_book::instructions::CancelReport { order_id };
+    let cancel_report = order_book::instructions::CancelReport { 
+        order_id,
+        order_sender: test.get_user("alice").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
     test.report_cancel("bob", order_params.dest_chain_id, &cancel_report)?;
 
     // Verify order is cancelled

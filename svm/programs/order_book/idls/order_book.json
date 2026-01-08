@@ -1506,6 +1506,20 @@
       }
     },
     {
+      "name": "CancelReported",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "order_id",
+            "type": {
+              "array": ["u8", 32]
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "Destination",
       "type": {
         "kind": "struct",
