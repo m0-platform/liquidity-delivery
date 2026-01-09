@@ -4,6 +4,7 @@ pragma solidity 0.8.33;
 import { Test } from "../../../lib/forge-std/src/Test.sol";
 import { ERC1967Proxy } from "../../../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
+import { UIntMath } from "../../../lib/common/src/libs/UIntMath.sol";
 
 import { OrderBook, IOrderBook } from "../../../src/OrderBook.sol";
 import { MockPortalV2 } from "../../mock/MockPortalV2.t.sol";
@@ -11,12 +12,13 @@ import { MockERC20 } from "../../mock/MockERC20.t.sol";
 
 abstract contract OrderBookTestBase is Test {
     using TypeConverter for *;
+    using UIntMath for uint256;
 
     OrderBook internal orderBook;
     MockPortalV2 internal portal;
 
     uint16 internal constant VERSION = 1;
-    uint32 internal constant CHAIN_ID = 1;
+    uint32 internal CHAIN_ID = block.chainid.safe32();
     uint32 internal constant DEST_CHAIN_ID = 2;
     uint256 internal constant MINT_AMOUNT = 1000;
     uint128 internal constant AMOUNT_IN = 100;
@@ -86,7 +88,7 @@ abstract contract OrderBookTestBase is Test {
         portal = new MockPortalV2();
         admin = users["admin"];
         pauser = users["pauser"];
-        address implementation = address(new OrderBook(CHAIN_ID, address(portal)));
+        address implementation = address(new OrderBook(address(portal)));
         orderBook = OrderBook(
             address(
                 new ERC1967Proxy(implementation, abi.encodeWithSelector(OrderBook.initialize.selector, admin, pauser))
