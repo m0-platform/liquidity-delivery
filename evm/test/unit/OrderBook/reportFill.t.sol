@@ -33,7 +33,6 @@ contract ReportFillTest is OrderBookTestBase {
     //   [X] given the order is fully filled
     //     [X] it updates the order status to Completed
     //     [X] it emits an OrderCompleted event
-    // Note: cancelled order tests removed - reportFill only accepts Created status orders
 
     function setUp() public override {
         super.setUp();
@@ -184,6 +183,115 @@ contract ReportFillTest is OrderBookTestBase {
                 orderId: orderId,
                 amountOutFilled: params.amountOut,
                 amountInToRelease: params.amountIn,
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
+            })
+        );
+    }
+
+    function test_cancelledOrder_partialFill_success() public {
+        // Here we simulate a situation where an order is partially filled on the destination chain,
+        // and then cancelled on the destination chain (triggering a partial refund on origin).
+        // Because crosschain messages do not have to be delivered in order, we deliver
+        // the cancel report first, then the fill report to check that the fill report still works.
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+
+        // 1. Report cancel first that refunds half the order
+        uint128 expectedRefund = params.amountIn / 2;
+
+        uint256 aliceBalanceBefore = tokenIn.balanceOf(users["alice"]);
+
+        vm.prank(address(portal));
+        orderBook.reportCancel(
+            params.destChainId,
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: users["alice"].toBytes32(),
+                tokenIn: params.tokenIn.toBytes32(),
+                amountInToRefund: expectedRefund
+            })
+        );
+
+        // Verify the order status is Cancelled and alice got refunded half
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Cancelled), "order should be Cancelled");
+        uint256 aliceBalanceAfter = tokenIn.balanceOf(users["alice"]);
+        assertEq(
+            aliceBalanceAfter - aliceBalanceBefore,
+            expectedRefund,
+            "alice should receive partial refund on cancel"
+        );
+
+        // 2. Now report fill for the remaining half (which would have been filled before cancel on the destination)
+        uint128 fillAmountOut = params.amountOut / 2;
+        uint128 fillAmountIn = params.amountIn / 2;
+
+        uint256 solverBalanceBefore = tokenIn.balanceOf(users["solver"]);
+        uint256 orderBookBalanceBefore = tokenIn.balanceOf(address(orderBook));
+
+        vm.prank(address(portal));
+        orderBook.reportFill(
+            params.destChainId,
+            IOrderBook.FillReport({
+                orderId: orderId,
+                amountOutFilled: fillAmountOut,
+                amountInToRelease: fillAmountIn,
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
+            })
+        );
+
+        // Verify the solver received the filled amountIn
+        uint256 solverBalanceAfter = tokenIn.balanceOf(users["solver"]);
+        assertEq(solverBalanceAfter - solverBalanceBefore, fillAmountIn, "solver should receive filled amountIn");
+        // Verify the orderBook released the filled amountIn
+        uint256 orderBookBalanceAfter = tokenIn.balanceOf(address(orderBook));
+        assertEq(
+            orderBookBalanceBefore - orderBookBalanceAfter,
+            fillAmountIn,
+            "orderBook should release filled amountIn"
+        );
+
+        // Verify order status remains Cancelled
+        order = orderBook.getOrder(orderId);
+        assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Cancelled), "order should still be Cancelled");
+    }
+
+    function test_cancelledOrder_fillAmountInExceedsAvailable_revert() public {
+        // Here we simulate a situation where an order is cancelled first on the destination and receives a full refund.
+        // Then, an invalid fill report arrives that tries to release more amountIn than is available (should revert).
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+
+        // 1. Report cancel first that refunds the full order
+        uint128 expectedRefund = params.amountIn;
+
+        vm.prank(address(portal));
+        orderBook.reportCancel(
+            params.destChainId,
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: users["alice"].toBytes32(),
+                tokenIn: params.tokenIn.toBytes32(),
+                amountInToRefund: expectedRefund
+            })
+        );
+
+        // Verify the order status is Cancelled
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Cancelled), "order should be Cancelled");
+
+        // 2. Now report fill that tries to release more than available (should revert)
+        uint128 fillAmountOut = 1;
+        uint128 fillAmountIn = 1; // exceed available
+
+        vm.prank(address(portal));
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
+        orderBook.reportFill(
+            params.destChainId,
+            IOrderBook.FillReport({
+                orderId: orderId,
+                amountOutFilled: fillAmountOut,
+                amountInToRelease: fillAmountIn,
                 originRecipient: users["solver"].toBytes32(),
                 tokenIn: address(tokenIn).toBytes32()
             })

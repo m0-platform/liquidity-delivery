@@ -27,13 +27,19 @@ contract ReportCancelTest is OrderBookTestBase {
     //   [X] it reverts with an InvalidReport error
     // [X] given the order is active (Created status)
     //   [X] given no prior fills
-    //     [X] it transfers full amountIn to order sender
-    //     [X] it sets order status to Cancelled
-    //     [X] it emits RefundClaimed event
+    //     [X] given the refund amount exceeds available amount
+    //       [X] it reverts with an InvalidReport error
+    //     [X] given valid refund amount
+    //       [X] it transfers full amountIn to order sender
+    //       [X] it sets order status to Cancelled
+    //       [X] it emits RefundClaimed event
     //   [X] given partial fills
-    //     [X] it transfers remaining amountIn to order sender (amountIn - amountInReleased)
-    //     [X] it sets order status to Cancelled
-    //     [X] it emits RefundClaimed event
+    //     [X] given the refund amount exceeds available amount
+    //       [X] it reverts with an InvalidReport error
+    //     [X] given valid refund amount
+    //       [X] it transfers remaining amountIn to order sender (amountIn - amountInReleased)
+    //       [X] it sets order status to Cancelled
+    //       [X] it emits RefundClaimed event
 
     function setUp() public override {
         super.setUp();
@@ -53,7 +59,8 @@ contract ReportCancelTest is OrderBookTestBase {
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: users["alice"].toBytes32(),
-                tokenIn: params.tokenIn.toBytes32()
+                tokenIn: params.tokenIn.toBytes32(),
+                amountInToRefund: params.amountIn
             })
         );
     }
@@ -69,7 +76,8 @@ contract ReportCancelTest is OrderBookTestBase {
             IOrderBook.CancelReport({
                 orderId: fakeOrderId,
                 orderSender: users["alice"].toBytes32(),
-                tokenIn: params.tokenIn.toBytes32()
+                tokenIn: params.tokenIn.toBytes32(),
+                amountInToRefund: params.amountIn
             })
         );
     }
@@ -88,7 +96,8 @@ contract ReportCancelTest is OrderBookTestBase {
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: users["alice"].toBytes32(),
-                tokenIn: params.tokenIn.toBytes32()
+                tokenIn: params.tokenIn.toBytes32(),
+                amountInToRefund: params.amountIn
             })
         );
     }
@@ -97,7 +106,7 @@ contract ReportCancelTest is OrderBookTestBase {
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
 
         // Report cancel once
-        _reportCancel(orderId, users["alice"], params.tokenIn);
+        _reportCancel(orderId, users["alice"], params.tokenIn, params.amountIn);
 
         // Try to report cancel again
         vm.prank(address(portal));
@@ -107,7 +116,8 @@ contract ReportCancelTest is OrderBookTestBase {
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: users["alice"].toBytes32(),
-                tokenIn: params.tokenIn.toBytes32()
+                tokenIn: params.tokenIn.toBytes32(),
+                amountInToRefund: params.amountIn
             })
         );
     }
@@ -123,7 +133,8 @@ contract ReportCancelTest is OrderBookTestBase {
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: users["bob"].toBytes32(),
-                tokenIn: params.tokenIn.toBytes32()
+                tokenIn: params.tokenIn.toBytes32(),
+                amountInToRefund: params.amountIn
             })
         );
     }
@@ -139,7 +150,8 @@ contract ReportCancelTest is OrderBookTestBase {
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: users["alice"].toBytes32(),
-                tokenIn: params.tokenOut
+                tokenIn: params.tokenOut,
+                amountInToRefund: params.amountIn
             })
         );
     }
@@ -155,7 +167,25 @@ contract ReportCancelTest is OrderBookTestBase {
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: users["alice"].toBytes32(),
-                tokenIn: params.tokenIn.toBytes32()
+                tokenIn: params.tokenIn.toBytes32(),
+                amountInToRefund: params.amountIn
+            })
+        );
+    }
+
+    function test_activeOrderNoFills_refundExceedsAvailable_reverts() public {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+
+        // Report cancel with refund amount greater than available (amountIn)
+        vm.prank(address(portal));
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
+        orderBook.reportCancel(
+            params.destChainId,
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: users["alice"].toBytes32(),
+                tokenIn: params.tokenIn.toBytes32(),
+                amountInToRefund: params.amountIn + 1 // exceeds amountIn
             })
         );
     }
@@ -178,7 +208,8 @@ contract ReportCancelTest is OrderBookTestBase {
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: users["alice"].toBytes32(),
-                tokenIn: params.tokenIn.toBytes32()
+                tokenIn: params.tokenIn.toBytes32(),
+                amountInToRefund: order.amountIn
             })
         );
 
@@ -231,6 +262,29 @@ contract ReportCancelTest is OrderBookTestBase {
         _test_activeOrderNoFills_success();
     }
 
+    function test_activeOrderPartialFills_refundExceedsAvailable_reverts() public {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+
+        // Report partial fill (50%)
+        uint128 fillAmount = params.amountOut / 2;
+        uint128 amountInReleased = uint128((uint256(params.amountIn) * fillAmount) / params.amountOut);
+        _reportFill(users["solver"], orderId, fillAmount, amountInReleased);
+
+        // Attempt to report cancel with refund amount greater than available
+        uint128 amountInRemaining = params.amountIn - amountInReleased;
+        vm.prank(address(portal));
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
+        orderBook.reportCancel(
+            params.destChainId,
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: users["alice"].toBytes32(),
+                tokenIn: params.tokenIn.toBytes32(),
+                amountInToRefund: amountInRemaining + 1 // exceeds remaining amount
+            })
+        );
+    }
+
     function _test_activeOrderPartialFills_success() internal {
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 1, params);
 
@@ -257,7 +311,8 @@ contract ReportCancelTest is OrderBookTestBase {
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: users["alice"].toBytes32(),
-                tokenIn: params.tokenIn.toBytes32()
+                tokenIn: params.tokenIn.toBytes32(),
+                amountInToRefund: expectedRefund
             })
         );
 
@@ -327,7 +382,8 @@ contract ReportCancelTest is OrderBookTestBase {
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: users["alice"].toBytes32(),
-                tokenIn: params.tokenIn.toBytes32()
+                tokenIn: params.tokenIn.toBytes32(),
+                amountInToRefund: params.amountIn
             })
         );
     }

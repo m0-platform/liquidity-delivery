@@ -135,7 +135,8 @@ contract RebaseDownTest is Test {
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: alice.toBytes32(),
-                tokenIn: params.tokenIn.toBytes32()
+                tokenIn: params.tokenIn.toBytes32(),
+                amountInToRefund: params.amountIn
             })
         );
     }

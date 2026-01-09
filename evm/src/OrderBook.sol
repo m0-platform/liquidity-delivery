@@ -403,20 +403,29 @@ contract OrderBook is
         // Order destination chain must be this chain
         if (chainId != orderData_.destChainId) revert InvalidDestinationChain();
 
+        // Calculate amount to refund
+        IOrderBook.FilledAmounts storage filledAmounts = _getOrderBookStorageLocation().filledAmounts[orderId_];
+        uint128 amountInRemaining_ = orderData_.amountIn - filledAmounts.amountInReleased;
+        // filledAmounts.amountInRefunded doesn't need to be considered here because it must be zero prior to cancellation
+
+        // Update order status and refunded amount
+        order.status = OrderStatus.Cancelled;
+        filledAmounts.amountInRefunded += amountInRemaining_;
+
         if (orderData_.originChainId == chainId) {
             if (msg.value != 0) revert InvalidMsgValue();
 
             // Local orders can be immediately refunded
-            _claimRefund(orderId_, order);
-        } else {
-            // Update order status
-            order.status = OrderStatus.Cancelled;
+            IERC20(order.tokenIn).safeTransfer(order.sender, uint256(amountInRemaining_));
 
+            emit RefundClaimed(orderId_, order.sender, amountInRemaining_);
+        } else {
             // Cross-chain orders require sending a cancel report to the origin chain
             CancelReport memory report_ = CancelReport({
                 orderId: orderId_,
                 orderSender: orderData_.sender,
-                tokenIn: orderData_.tokenIn
+                tokenIn: orderData_.tokenIn,
+                amountInToRefund: amountInRemaining_
             });
 
             bridgeAdapter_ == address(0)
@@ -436,20 +445,6 @@ contract OrderBook is
         }
 
         emit OrderCancelled(orderId_);
-    }
-
-    function _claimRefund(bytes32 orderId_, Order storage order) internal {
-        // Calculate the refund amount
-        uint128 amountInRemaining_ = order.amountIn -
-            _getOrderBookStorageLocation().filledAmounts[orderId_].amountInReleased;
-
-        // Update order status
-        order.status = OrderStatus.Cancelled;
-
-        // Transfer the remaining amount back to the sender
-        IERC20(order.tokenIn).safeTransfer(order.sender, uint256(amountInRemaining_));
-
-        emit RefundClaimed(orderId_, order.sender, amountInRemaining_);
     }
 
     /* ========== Filling Orders ========== */
@@ -600,7 +595,12 @@ contract OrderBook is
 
         // Validate the fill report and sender
         if (msg.sender != portal) revert NotAuthorized();
-        if (order.status != OrderStatus.Created) revert InvalidOrderStatus();
+        // We allow reporting fills for both Created and Cancelled orders
+        // The latter allows for fills that were in-flight at the time of cancellation
+        // that may have arrived after the cancel report was processed due to the fact that
+        // crosschain messages do not have to processed in the order they were sent.
+        if (!(order.status == OrderStatus.Created || order.status == OrderStatus.Cancelled))
+            revert InvalidOrderStatus();
         if (report_.tokenIn != order.tokenIn.toBytes32()) revert InvalidReport();
         if (sourceChainId_ != order.destChainId) revert InvalidReportSource();
 
@@ -610,8 +610,13 @@ contract OrderBook is
         filledAmounts.amountInReleased += report_.amountInToRelease;
 
         // Validate that the filled amounts do not exceed the order amounts
-        if (filledAmounts.amountOutFilled > order.amountOut || filledAmounts.amountInReleased > order.amountIn)
-            revert InvalidReport();
+        // For tokenIn amounts, this includes both released and refunded amounts since
+        // both reduce the amount available to be filled. Refunded amounts may have been
+        // paid out previously via a cancel report.
+        if (
+            filledAmounts.amountOutFilled > order.amountOut ||
+            filledAmounts.amountInReleased + filledAmounts.amountInRefunded > order.amountIn
+        ) revert InvalidReport();
 
         // Mark order as completed if fully filled
         if (filledAmounts.amountOutFilled == order.amountOut) {
@@ -646,9 +651,19 @@ contract OrderBook is
         if (order.tokenIn != report_.tokenIn.toAddress() || order.sender != report_.orderSender.toAddress())
             revert InvalidReport();
 
-        emit CancelReported(report_.orderId);
+        // Update order status and refunded amount
+        order.status = OrderStatus.Cancelled;
+        FilledAmounts storage filledAmounts = _getOrderBookStorageLocation().filledAmounts[report_.orderId];
+        filledAmounts.amountInRefunded += report_.amountInToRefund;
 
-        _claimRefund(report_.orderId, order);
+        // Validate that the refunded amount does not cause over-refunding
+        if (filledAmounts.amountInRefunded + filledAmounts.amountInReleased > order.amountIn) revert InvalidReport();
+
+        // Transfer the refund amount to the original order sender
+        IERC20(order.tokenIn).safeTransfer(order.sender, uint256(report_.amountInToRefund));
+
+        emit CancelReported(report_.orderId);
+        emit RefundClaimed(report_.orderId, order.sender, report_.amountInToRefund);
     }
 
     /* ========== Admin Functions ========== */

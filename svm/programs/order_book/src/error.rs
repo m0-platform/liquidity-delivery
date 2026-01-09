@@ -68,4 +68,6 @@ pub enum OrderBookError {
     TokenAccountNotEmpty,
     #[msg("Program is paused")]
     ProgramPaused,
+    #[msg("Reported refund amount is greater than available")]
+    InvalidRefundAmount
 }

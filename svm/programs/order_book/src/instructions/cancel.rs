@@ -41,6 +41,7 @@ pub struct CancelReport {
     pub order_id: [u8; 32],
     pub order_sender: [u8; 32],
     pub token_in: [u8; 32],
+    pub amount_in_to_refund: u128
 }
 
 // Events
@@ -146,16 +147,23 @@ impl CancelNativeOrder<'_> {
     pub fn handler(ctx: Context<Self>, order_id: [u8; 32]) -> Result<()> {
         let order = &mut ctx.accounts.order.data;
 
+        // Don't have to subtract amount_in_refunded here because it is zero until cancelled
+        let amount_in_remaining: u64 = order.amount_in
+            .checked_sub(order.amount_in_released)
+            .ok_or(OrderBookError::MathUnderflow)?
+            .try_into()
+            .map_err(|_| OrderBookError::MathOverflow)?;
+
         // Set the order status to Cancelled
         order.status = OrderStatus::Cancelled;
+        order.amount_in_refunded += amount_in_remaining as u128;
 
-        // Transfer the remaining tokens in the order's token in ATA to the recipient
-        let amount = ctx.accounts.order_token_in_ata.amount;
-        if amount > 0 {
+        // Transfer the remaining tokens to the recipient
+        if amount_in_remaining > 0 {
             transfer_tokens_from_program(
                 &ctx.accounts.order_token_in_ata,
                 &ctx.accounts.sender_token_in_ata,
-                amount,
+                amount_in_remaining.try_into().map_err(|_| OrderBookError::MathOverflow)?,
                 &ctx.accounts.token_in_mint,
                 &ctx.accounts.order.to_account_info(),
                 &[&[
@@ -172,7 +180,7 @@ impl CancelNativeOrder<'_> {
         emit_cpi!(RefundClaimed {
             order_id,
             sender: ctx.accounts.sender.key(),
-            amount,
+            amount: amount_in_remaining,
         });
 
         emit_cpi!(OrderCancelled {
@@ -266,8 +274,13 @@ impl<'info> CancelForeignOrder<'info> {
     pub fn handler(ctx: Context<'_, '_, 'info, 'info, Self>, order_id: [u8; 32], order_data: OrderData) -> Result<()> {
         let order = &mut ctx.accounts.order.data;
 
-        // Set the order status to Cancelled
+        let amount_in_remaining = order_data.amount_in
+            .checked_sub(order.amount_in_released)
+            .ok_or(OrderBookError::MathUnderflow)?;
+
+        // Set the order status to Cancelled and increment the refunded amount
         order.status = OrderStatus::Cancelled;
+        order.amount_in_refunded += amount_in_remaining;
 
         // Send a cancel report message to the origin chain via the portal program
         send_cancel_report(
@@ -287,6 +300,7 @@ impl<'info> CancelForeignOrder<'info> {
             order_id, // order_id: [u8; 32],
             order_data.sender, // order_sender: [u8; 32],
             order_data.token_in, // token_in: [u8; 32],
+            amount_in_remaining, // amount_in_to_refund: u128
             order_data.origin_chain_id, // origin_chain_id: u32,
         )?;
 
@@ -396,16 +410,23 @@ impl ReportOrderCancel<'_> {
     pub fn handler(ctx: Context<Self>, _source_chain_id: u32, cancel_report: CancelReport) -> Result<()> {
         let order = &mut ctx.accounts.order.data;
 
-        // Set the order status to Cancelled
+        // Set the order status to Cancelled and increment the refunded amount with the reported amount
         order.status = OrderStatus::Cancelled;
-        
+        order.amount_in_refunded += cancel_report.amount_in_to_refund;
+
+        require!(
+            order.amount_in_released + order.amount_in_refunded <= order.amount_in,
+            OrderBookError::InvalidRefundAmount
+        );
+
+        let amount_in_to_refund: u64 = cancel_report.amount_in_to_refund.try_into().map_err(|_| OrderBookError::MathOverflow)?;
+
         // Transfer the remaining inputs tokens back to the order sender
-        let amount = ctx.accounts.order_token_in_ata.amount;
-        if amount > 0 {
+        if amount_in_to_refund > 0 {
             transfer_tokens_from_program(
                 &ctx.accounts.order_token_in_ata,
                 &ctx.accounts.sender_token_in_ata,
-                amount,
+                amount_in_to_refund,
                 &ctx.accounts.token_in_mint,
                 &ctx.accounts.order.to_account_info(),
                 &[&[
@@ -422,7 +443,7 @@ impl ReportOrderCancel<'_> {
         emit_cpi!(RefundClaimed {
             order_id: cancel_report.order_id,
             sender: ctx.accounts.order_sender.key(),
-            amount,
+            amount: amount_in_to_refund,
         });
 
         // Emit an event for the cancel report

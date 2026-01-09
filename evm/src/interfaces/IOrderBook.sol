@@ -283,12 +283,14 @@ interface IOrderBook {
      * @param orderId The ID of the order that a cancellation is being reported for
      * @param orderSender The address on the origin chain that created the order
      * @param tokenIn The address of the input token on the origin chain
+     * @param amountInRefund The amount of input token to refund to the order sender on the origin chain
      * The last two are included for non-EVM chains to provide a way to resolve the sender and token
      */
     struct CancelReport {
         bytes32 orderId;
         bytes32 orderSender;
         bytes32 tokenIn;
+        uint128 amountInToRefund;
     }
 
     /**
@@ -304,11 +306,13 @@ interface IOrderBook {
     }
 
     /**
-     * @notice Data structure to track filled amounts for an order on the destination chain
-     * @param amountOutFilled Amount of output token filled
-     * @param amountInReleased Amount of input token released
+     * @notice Data structure to track filled amounts for an order on the origin and destination chains
+     * @param amountInRefunded Amount of input token refunded to the order sender
+     * @param amountInReleased Amount of input token released to solver(s)
+     * @param amountOutFilled Amount of output token filled by solver(s)
      */
     struct FilledAmounts {
+        uint128 amountInRefunded;
         uint128 amountInReleased;
         uint128 amountOutFilled;
     }

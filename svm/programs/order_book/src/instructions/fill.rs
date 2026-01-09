@@ -390,6 +390,7 @@ impl<'info> FillForeignOrder<'info> {
                 status: OrderStatus::Created,
                 amount_in_released: 0,
                 amount_out_filled: 0,
+                amount_in_refunded: 0
             };
         }
 
@@ -607,14 +608,15 @@ impl ReportOrderFill<'_> {
 
         // Validate the order can be filled
         require!(
-            status == &OrderStatus::Created,
+            status == &OrderStatus::Created || status == &OrderStatus::Cancelled,
             OrderBookError::OrderNotFillable
         );
 
         // Validate the fill amount is not zero
-        if fill_report.amount_out_filled == 0 {
-            return err!(OrderBookError::InvalidFillAmount);
-        }
+        require!(
+            fill_report.amount_out_filled > 0,
+            OrderBookError::InvalidFillAmount
+        );
 
         Ok(())
     }
@@ -624,41 +626,39 @@ impl ReportOrderFill<'_> {
         let order = &mut ctx.accounts.order.data;
 
         // Update the filled amounts on the order
-        order.amount_in_released += fill_report.amount_in_to_release as u128;
-        order.amount_out_filled += fill_report.amount_out_filled as u128;
+        order.amount_in_released += fill_report.amount_in_to_release;
+        order.amount_out_filled += fill_report.amount_out_filled;
 
-        let full_fill = if order.amount_out_filled >= order.amount_out {
-            // The amount_in_to_release is limited to the amount in the order tokenIn ATA
-            // Therefore, we don't need to check for overfills here.
+        // Validate the filled amounts do not exceed the order amounts
+        // For tokenIn amounts, this includes both released and refunded amounts since
+        // both reduce the amount available to be filled. Refunded amounts may have been
+        // paid out previously via a cancel report.
+        // We do not allow overfills.
+        // Once an order is filled completely any excess token_in in the order_token_in_ata
+        // (e.g. from a donation) can be claimed and the token account closed
+        require!(
+            order.amount_in_released + order.amount_in_refunded <= order.amount_in,
+            OrderBookError::InvalidFillAmount
+        );
+        require!(
+            order.amount_out_filled <= order.amount_out,
+            OrderBookError::InvalidFillAmount
+        );
 
+        // Mark order as completed if fully filled
+        if order.amount_out_filled == order.amount_out {
             // Mark the order as completed if fully filled
             order.status = OrderStatus::Completed;
-            true
-        } else {
-            false
-        };
-
-        // Calculate the corresponding input amount to release to the solve
-        // If the order is completed by the fill, use the order token account balance
-        // Otherwise, use the reported amount
-        // If the reported amount is more than the order token account balance, it will error during the transfer.
-        // This shouldn't happen in normal operation and if it does, then the transfer error will stop the ix
-        // from completing.
-        let amount_in_to_release: u64 = if full_fill {
-            // Any tokens sent to this account after the order is created are donated to the solver
-            ctx.accounts.order_token_in_ata.amount
-        } else {
-            fill_report
-                .amount_in_to_release
-                .try_into()
-                .map_err(|_| OrderBookError::MathOverflow)?
+            emit_cpi!(OrderCompleted { 
+                order_id: fill_report.order_id
+            });
         };
 
         // Transfer the input tokens from the order to the designated recipient
         transfer_tokens_from_program(
             &ctx.accounts.order_token_in_ata,
             &ctx.accounts.recipient_token_in_ata,
-            amount_in_to_release,
+            fill_report.amount_in_to_release as u64,
             &ctx.accounts.token_in_mint,
             &ctx.accounts.order.to_account_info(),
             &[&[
@@ -672,7 +672,7 @@ impl ReportOrderFill<'_> {
         // Emit an event for the fill report
         emit_cpi!(FillReported {
             order_id: fill_report.order_id,
-            amount_in_to_release: amount_in_to_release as u128,
+            amount_in_to_release: fill_report.amount_in_to_release,
             amount_out_filled: fill_report.amount_out_filled,
             origin_recipient: fill_report.origin_recipient,
         });
