@@ -328,12 +328,12 @@
           }
         },
         {
-          "name": "origin_chain_id",
-          "type": "u32"
-        },
-        {
           "name": "amount_in_to_refund",
           "type": "u128"
+        },
+        {
+          "name": "origin_chain_id",
+          "type": "u32"
         }
       ]
     },

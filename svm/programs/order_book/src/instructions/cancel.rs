@@ -300,8 +300,8 @@ impl<'info> CancelForeignOrder<'info> {
             order_id, // order_id: [u8; 32],
             order_data.sender, // order_sender: [u8; 32],
             order_data.token_in, // token_in: [u8; 32],
-            order_data.origin_chain_id, // origin_chain_id: u32,
             amount_in_remaining, // amount_in_to_refund: u128
+            order_data.origin_chain_id, // origin_chain_id: u32,
         )?;
 
         emit_cpi!(OrderCancelled {
