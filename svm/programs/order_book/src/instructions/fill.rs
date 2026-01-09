@@ -91,7 +91,7 @@ pub struct FillNativeOrder<'info> {
 
     #[account(
         mint::token_program = token_out_program,
-        constraint = token_out_mint.key().to_bytes() == order_data.token_out @ OrderBookError::InvalidTokenOutMint,
+        address = Pubkey::new_from_array(order_data.token_out) @ OrderBookError::InvalidTokenOutMint,
     )]
     pub token_out_mint: InterfaceAccount<'info, Mint>,
 
@@ -132,7 +132,7 @@ pub struct FillNativeOrder<'info> {
 
     #[account(
         mint::token_program = token_in_program,
-        constraint = token_in_mint.key().to_bytes() == order_data.token_in @ OrderBookError::InvalidTokenMint,
+        address = Pubkey::new_from_array(order_data.token_in) @ OrderBookError::InvalidTokenMint,
     )]
     pub token_in_mint: InterfaceAccount<'info, Mint>,
 
