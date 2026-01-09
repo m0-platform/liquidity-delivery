@@ -6,7 +6,7 @@ use crate::{
         OrderStatus, OrderType, DESTINATION_SEED_PREFIX, GLOBAL_SEED, NONCE_SEED_PREFIX,
         ORDER_SEED_PREFIX,
     },
-    utils::transfer_tokens,
+    utils::transfer_exact_tokens,
 };
 use anchor_lang::prelude::*;
 use anchor_spl::{
@@ -198,9 +198,10 @@ impl OpenOrder<'_> {
             None => ctx.accounts.payer.to_account_info(),
         };
 
-        transfer_tokens(
+        // Check that amount_in is actually received
+        transfer_exact_tokens(
             &ctx.accounts.sender_token_in_account,
-            &ctx.accounts.order_token_in_ata,
+            &mut ctx.accounts.order_token_in_ata,
             params.amount_in,
             &ctx.accounts.token_in_mint,
             &auth,

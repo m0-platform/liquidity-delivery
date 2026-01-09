@@ -71,5 +71,7 @@ pub enum OrderBookError {
     #[msg("Portal authority cannot be default pubkey")]
     InvalidPortalAuthority,
     #[msg("Reported refund amount is greater than available")]
-    InvalidRefundAmount
+    InvalidRefundAmount,
+    #[msg("Transfer failed due to receiving less than specified")]
+    TransferExactFailed
 }
