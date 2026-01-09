@@ -385,14 +385,16 @@ impl<'info> FillForeignOrder<'info> {
     ) -> Result<()> {
         // If this is a new order, initialize it
         if ctx.accounts.order.data.status == OrderStatus::DoesNotExist {
-            ctx.accounts.order.order_type = OrderType::Foreign;
-            ctx.accounts.order.bump = ctx.bumps.order;
-            ctx.accounts.order.data = ForeignOrder {
-                status: OrderStatus::Created,
-                amount_in_released: 0,
-                amount_out_filled: 0,
-                amount_in_refunded: 0
-            };
+            ctx.accounts.order.set_inner(Order::<ForeignOrder> {
+                order_type: OrderType::Foreign,
+                bump: ctx.bumps.order,
+                data: ForeignOrder {
+                    status: OrderStatus::Created,
+                    amount_in_released: 0,
+                    amount_out_filled: 0,
+                    amount_in_refunded: 0
+                }
+            });
         } else {
             // Otherwise, validate the type of the order
             require!(
