@@ -76,7 +76,7 @@ pub struct FillReported {
 // Instruction Contexts and Handlers
 #[event_cpi]
 #[derive(Accounts)]
-#[instruction(order_id: [u8; 32], order_data: OrderData, fill_params: FillParams)]
+#[instruction(order_id: [u8; 32], order_data: Box<OrderData>, fill_params: FillParams)]
 pub struct FillNativeOrder<'info> {
     #[account(mut)]
     pub solver: Signer<'info>,
@@ -184,7 +184,7 @@ impl FillNativeOrder<'_> {
     pub fn handler(
         ctx: Context<Self>,
         order_id: [u8; 32],
-        order_data: OrderData,
+        order_data: Box<OrderData>,
         fill_params: FillParams,
     ) -> Result<()> {
         let order = &mut ctx.accounts.order.data;

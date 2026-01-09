@@ -117,7 +117,7 @@ pub mod order_book {
     pub fn fill_native_order(
         ctx: Context<FillNativeOrder>,
         order_id: [u8; 32],
-        order_data: OrderData,
+        order_data: Box<OrderData>,
         fill_params: FillParams,
     ) -> Result<()> {
         FillNativeOrder::handler(ctx, order_id, order_data, fill_params)
