@@ -428,13 +428,13 @@ contract OrderBook is
             });
 
             bridgeAdapter_ == address(0)
-                ? IPortalV2Like(portal).sendCancelReport(
+                ? IPortalV2Like(portal).sendCancelReport{ value: msg.value }(
                     orderData_.originChainId,
                     report_,
                     msg.sender.toBytes32(), // refundAddress
                     bridgeAdapterArgs_
                 )
-                : IPortalV2Like(portal).sendCancelReport(
+                : IPortalV2Like(portal).sendCancelReport{ value: msg.value }(
                     orderData_.originChainId,
                     report_,
                     msg.sender.toBytes32(), // refundAddress
