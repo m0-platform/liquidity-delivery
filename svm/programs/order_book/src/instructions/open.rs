@@ -169,6 +169,7 @@ impl OpenOrder<'_> {
                 solver: params.solver,
                 amount_in_released: 0,
                 amount_out_filled: 0,
+                amount_in_refunded: 0
             },
         });
 

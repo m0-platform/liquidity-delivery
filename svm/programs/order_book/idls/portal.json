@@ -119,8 +119,32 @@
       ]
     },
     {
-      "name": "pause",
-      "discriminator": [211, 22, 221, 251, 74, 121, 193, 47],
+      "name": "pause_incoming",
+      "discriminator": [159, 50, 214, 15, 183, 226, 174, 196],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": ["portal_global"]
+        },
+        {
+          "name": "portal_global",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 108, 111, 98, 97, 108]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "pause_outgoing",
+      "discriminator": [254, 51, 37, 160, 105, 61, 204, 223],
       "accounts": [
         {
           "name": "admin",
@@ -326,6 +350,10 @@
           "type": {
             "array": ["u8", 32]
           }
+        },
+        {
+          "name": "amount_in_to_refund",
+          "type": "u128"
         },
         {
           "name": "origin_chain_id",
@@ -755,8 +783,32 @@
       ]
     },
     {
-      "name": "unpause",
-      "discriminator": [169, 144, 4, 38, 10, 141, 188, 255],
+      "name": "unpause_incoming",
+      "discriminator": [40, 3, 144, 42, 253, 44, 153, 249],
+      "accounts": [
+        {
+          "name": "admin",
+          "signer": true,
+          "relations": ["portal_global"]
+        },
+        {
+          "name": "portal_global",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [103, 108, 111, 98, 97, 108]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "unpause_outgoing",
+      "discriminator": [255, 24, 174, 235, 25, 115, 35, 11],
       "accounts": [
         {
           "name": "admin",
@@ -872,6 +924,10 @@
             }
           },
           {
+            "name": "amount_in_to_refund",
+            "type": "u128"
+          },
+          {
             "name": "message_id",
             "type": {
               "array": ["u8", 32]
@@ -910,6 +966,10 @@
             "type": {
               "array": ["u8", 32]
             }
+          },
+          {
+            "name": "amount_in_to_refund",
+            "type": "u128"
           }
         ]
       }
@@ -1074,7 +1134,11 @@
             "type": "pubkey"
           },
           {
-            "name": "paused",
+            "name": "outgoing_paused",
+            "type": "bool"
+          },
+          {
+            "name": "incoming_paused",
             "type": "bool"
           },
           {

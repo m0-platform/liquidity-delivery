@@ -215,14 +215,20 @@ abstract contract OrderBookTestBase is Test {
         orderBook.cancelOrder(orderId_, _getOrderDataFromOrder(orderId_, order_), new bytes(0));
     }
 
-    function _reportCancel(bytes32 orderId_, address orderSender_, address tokenIn_) internal {
+    function _reportCancel(
+        bytes32 orderId_,
+        address orderSender_,
+        address tokenIn_,
+        uint128 amountInToRefund_
+    ) internal {
         vm.prank(address(portal));
         orderBook.reportCancel(
             DEST_CHAIN_ID,
             IOrderBook.CancelReport({
                 orderId: orderId_,
                 orderSender: orderSender_.toBytes32(),
-                tokenIn: tokenIn_.toBytes32()
+                tokenIn: tokenIn_.toBytes32(),
+                amountInToRefund: amountInToRefund_
             })
         );
     }

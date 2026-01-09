@@ -277,7 +277,7 @@ contract CancelOrderForTest is OrderBookTestBase {
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Cancelled));
     }
 
-    function test_givenCrosschainOrder_success() public {
+    function test_givenXchainOrder_success() public {
         // For this test, we simulate being on the DESTINATION chain canceling an order
         // that originated from a different chain (DEST_CHAIN_ID).
         // We construct orderData with originChainId = DEST_CHAIN_ID (not current chain)

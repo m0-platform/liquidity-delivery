@@ -70,4 +70,6 @@ pub enum OrderBookError {
     ProgramPaused,
     #[msg("Portal authority cannot be default pubkey")]
     InvalidPortalAuthority,
+    #[msg("Reported refund amount is greater than available")]
+    InvalidRefundAmount
 }

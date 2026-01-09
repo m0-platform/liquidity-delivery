@@ -127,6 +127,8 @@ contract PausableTokenTest is Test {
         // 6. Simulate cancel report arriving from destination chain
         //    With the new design, cancellation originates on destination and sends
         //    a CancelReport to origin which triggers the refund
+        //   However, this refund will be report as zero because the fill already happened on destination
+        //   and the amounts were recorded there.
 
         uint256 aliceBalanceBefore = pausableToken.balanceOf(alice);
         vm.prank(address(portal));
@@ -135,17 +137,15 @@ contract PausableTokenTest is Test {
             IOrderBook.CancelReport({
                 orderId: orderId,
                 orderSender: alice.toBytes32(),
-                tokenIn: params.tokenIn.toBytes32()
+                tokenIn: params.tokenIn.toBytes32(),
+                amountInToRefund: 0
             })
         );
         uint256 aliceBalanceAfter = pausableToken.balanceOf(alice);
 
         // Alice got her tokenIn back!
-        assertEq(aliceBalanceAfter - aliceBalanceBefore, AMOUNT_IN, "alice got full refund");
+        assertEq(aliceBalanceAfter - aliceBalanceBefore, 0, "alice didn't get a refund of tokenIn");
 
-        // RESULT: Alice received BOTH:
-        // - tokenOut on destination chain (from solver's fill)
-        // - tokenIn refund on origin chain (after unpause)
-        // This is a delayed double-spend - solver loses funds
+        // Reporting the refund amount in the cancel report avoids this double spend.
     }
 }

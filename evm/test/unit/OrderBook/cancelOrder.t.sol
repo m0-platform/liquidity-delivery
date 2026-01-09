@@ -37,16 +37,31 @@ contract CancelOrderTest is OrderBookTestBase {
     //   [X] it reverts with an InvalidDestinationChain error
     // [X] given the order can be cancelled by recipient
     //   [X] given the destination chain is different than the origin chain (i.e. cross-chain order)
-    //     [X] it updates the order status to Cancelled
-    //     [X] it sends a CancelReport to the origin chain via portal
-    //     [X] it emits an OrderCancelled event
+    //     [X] given no fills have occurred
+    //       [X] it updates the order status to Cancelled
+    //       [X] it sends a CancelReport to the origin chain via portal
+    //       [X] it emits an OrderCancelled event
+    //       [X] it increments the amountInRefunded by the full amountIn
+    //     [X] given partial fills have occurred
+    //       [X] it updates the order status to Cancelled
+    //       [X] it sends a CancelReport to the origin chain via portal
+    //       [X] it emits an OrderCancelled event
+    //       [X] it increments the amountInRefunded by the unfilled amountIn
     //   [X] given the destination chain is the origin chain (i.e. local order)
     //     [X] given the msg.value is not zero
     //       [X] it reverts with an InvalidMsgValue error
-    //     [X] it immediately refunds the order amount in to the order sender
-    //     [X] it sets the order status to Cancelled
-    //     [X] it emits an OrderCancelled event
-    //     [X] it emits a RefundClaimed event
+    //     [X] given no fills have occurred
+    //       [X] it immediately refunds the order amount in to the order sender
+    //       [X] it sets the order status to Cancelled
+    //       [X] it emits an OrderCancelled event
+    //       [X] it emits a RefundClaimed event
+    //       [X] it increments the amountInRefunded by the full amountIn
+    //     [X] given partial fills have occurred
+    //       [X] it refunds the unfilled amountIn to the order sender
+    //       [X] it sets the order status to Cancelled
+    //       [X] it emits an OrderCancelled event
+    //       [X] it emits a RefundClaimed event
+    //       [X] it increments the amountInRefunded by the unfilled amountIn
 
     IOrderBook.OrderData internal xchainOrderData;
     bytes32 internal xchainOrderId;
@@ -141,7 +156,7 @@ contract CancelOrderTest is OrderBookTestBase {
         orderBook.cancelOrder(orderId, orderData, new bytes(0));
     }
 
-    function test_givenCrosschainOrderHasBeenFilled_reverts() public {
+    function test_givenXchainOrderHasBeenFilled_reverts() public {
         // Fill the order
         vm.startPrank(users["solver"]);
         MockERC20(xchainOrderData.tokenOut.toAddress()).approve(address(orderBook), params.amountOut);
@@ -239,7 +254,7 @@ contract CancelOrderTest is OrderBookTestBase {
         orderBook.cancelOrder{ value: 1 }(orderId, orderData, new bytes(0));
     }
 
-    function test_givenXChainOrder_givenChainIsNotDestinationChain_reverts() public {
+    function test_givenXchainOrder_givenChainIsNotDestinationChain_reverts() public {
         // Create an order that originates from this chain but is destined for another chain
         params.destChainId = DEST_CHAIN_ID;
         bytes32 orderId = _placeOrder(users["alice"], params);
@@ -292,7 +307,7 @@ contract CancelOrderTest is OrderBookTestBase {
         );
     }
 
-    function test_givenXChainOrder_success() public {
+    function test_givenXchainOrder_success() public {
         // For this test, we simulate being on the DESTINATION chain canceling an order
         // that originated from a different chain (DEST_CHAIN_ID).
         // We construct orderData with originChainId = DEST_CHAIN_ID (not current chain)
@@ -313,6 +328,10 @@ contract CancelOrderTest is OrderBookTestBase {
             uint8(IOrderBook.OrderStatus.Cancelled),
             "order status should be Cancelled"
         );
+        IOrderBook.FilledAmounts memory filledAmounts = orderBook.getFilledAmounts(xchainOrderId);
+        assertEq(filledAmounts.amountInReleased, 0, "amountInReleased should be zero");
+        assertEq(filledAmounts.amountOutFilled, 0, "amountOutFilled should be zero");
+        assertEq(filledAmounts.amountInRefunded, params.amountIn, "amountInRefunded should be the initial amount in");
 
         // Verify cancel report was sent to portal
         assertTrue(portal.isCancelReported(xchainOrderId), "cancel report should have been sent");
@@ -344,9 +363,14 @@ contract CancelOrderTest is OrderBookTestBase {
             aliceStartingBalance + params.amountIn,
             "alice should be refunded the amountIn"
         );
+
+        IOrderBook.FilledAmounts memory filledAmounts = orderBook.getFilledAmounts(orderId);
+        assertEq(filledAmounts.amountInReleased, 0, "amountInReleased should be zero");
+        assertEq(filledAmounts.amountOutFilled, 0, "amountOutFilled should be zero");
+        assertEq(filledAmounts.amountInRefunded, params.amountIn, "amountInRefunded should be the initial amount in");
     }
 
-    function test_givenXChainOrder_senderCalls_reverts() public {
+    function test_givenXchainOrder_senderCalls_reverts() public {
         // For this test, we simulate being on the DESTINATION chain canceling an order
         // that originated from a different chain (DEST_CHAIN_ID).
         // We construct orderData with originChainId = DEST_CHAIN_ID (not current chain)
@@ -407,6 +431,123 @@ contract CancelOrderTest is OrderBookTestBase {
             tokenIn.balanceOf(users["alice"]),
             aliceStartingBalance + params.amountIn,
             "alice should be refunded the amountIn"
+        );
+    }
+
+    function test_givenLocalOrder_givenPartialFill_success() public {
+        // Open a local order for alice
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        IOrderBook.OrderData memory orderData = _getOrderDataFromOrder(orderId, order);
+
+        uint256 aliceStartingBalance = tokenIn.balanceOf(users["alice"]);
+        uint256 solverStartingBalance = tokenIn.balanceOf(users["solver"]);
+        uint256 solverOutStartingBalance = tokenOut.balanceOf(users["solver"]);
+
+        // Partially fill the order (50%)
+        uint128 partialFillAmountOut = params.amountOut / 2;
+        _fillOrder(users["solver"], orderId, partialFillAmountOut);
+
+        // Cancel the order and expect refund of remaining amountIn
+        uint128 expectedRefundAmountIn = params.amountIn / 2;
+        vm.prank(users["alice"]);
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.RefundClaimed(orderId, users["alice"], expectedRefundAmountIn);
+        vm.expectEmit(true, false, false, false);
+        emit IOrderBook.OrderCancelled(orderId);
+        orderBook.cancelOrder(orderId, orderData, new bytes(0));
+
+        IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
+        assertEq(
+            uint8(updatedOrder.status),
+            uint8(IOrderBook.OrderStatus.Cancelled),
+            "order status should be Cancelled"
+        );
+        assertEq(
+            tokenIn.balanceOf(users["alice"]),
+            aliceStartingBalance + expectedRefundAmountIn,
+            "alice should be refunded the amountIn"
+        );
+        assertEq(
+            tokenIn.balanceOf(users["solver"]),
+            solverStartingBalance + (params.amountIn - expectedRefundAmountIn),
+            "solver should keep the filled amountIn"
+        );
+        assertEq(
+            tokenOut.balanceOf(users["solver"]),
+            solverOutStartingBalance - partialFillAmountOut,
+            "solver should have sent the filled amountOut"
+        );
+
+        IOrderBook.FilledAmounts memory filledAmounts = orderBook.getFilledAmounts(orderId);
+        assertEq(
+            filledAmounts.amountInReleased,
+            params.amountIn - expectedRefundAmountIn,
+            "amountInReleased should be the released amount in"
+        );
+        assertEq(
+            filledAmounts.amountOutFilled,
+            partialFillAmountOut,
+            "amountOutFilled should be the filled amount out"
+        );
+        assertEq(
+            filledAmounts.amountInRefunded,
+            expectedRefundAmountIn,
+            "amountInRefunded should be the refunded amount in"
+        );
+    }
+
+    function test_givenXchainOrder_givenPartialFill_success() public {
+        // For this test, we simulate being on the DESTINATION chain canceling an order
+        // that originated from a different chain (DEST_CHAIN_ID).
+        // We construct orderData with originChainId = DEST_CHAIN_ID (not current chain)
+        // and the order doesn't exist on this chain yet (DoesNotExist status is allowed for xchain)
+
+        uint256 aliceStartingBalance = tokenIn.balanceOf(users["alice"]);
+        uint256 solverStartingBalance = tokenIn.balanceOf(users["solver"]);
+        uint256 solverOutStartingBalance = tokenOut.balanceOf(users["solver"]);
+
+        // Partially fill the order (50%)
+        uint128 partialFillAmountOut = params.amountOut / 2;
+        vm.startPrank(users["solver"]);
+        MockERC20(xchainOrderData.tokenOut.toAddress()).approve(address(orderBook), params.amountOut);
+        orderBook.fillOrder(
+            xchainOrderId,
+            xchainOrderData,
+            IOrderBook.FillParams({ amountOutToFill: partialFillAmountOut, originRecipient: xchainOrderData.solver })
+        );
+        vm.stopPrank();
+
+        // Cancel the order and expect refund of remaining amountIn
+        uint128 expectedRefundAmountIn = params.amountIn / 2;
+        vm.prank(users["alice"]);
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.RefundClaimed(xchainOrderId, users["alice"], expectedRefundAmountIn);
+        vm.expectEmit(true, false, false, false);
+        emit IOrderBook.OrderCancelled(xchainOrderId);
+        orderBook.cancelOrder(xchainOrderId, xchainOrderData, new bytes(0));
+
+        IOrderBook.Order memory updatedOrder = orderBook.getOrder(xchainOrderId);
+        assertEq(
+            uint8(updatedOrder.status),
+            uint8(IOrderBook.OrderStatus.Cancelled),
+            "order status should be Cancelled"
+        );
+        IOrderBook.FilledAmounts memory filledAmounts = orderBook.getFilledAmounts(xchainOrderId);
+        assertEq(
+            filledAmounts.amountInReleased,
+            params.amountIn / 2,
+            "amountInReleased should be the released amount in"
+        );
+        assertEq(
+            filledAmounts.amountOutFilled,
+            partialFillAmountOut,
+            "amountOutFilled should be the filled amount out"
+        );
+        assertEq(
+            filledAmounts.amountInRefunded,
+            expectedRefundAmountIn,
+            "amountInRefunded should be the refunded amount in"
         );
     }
 }

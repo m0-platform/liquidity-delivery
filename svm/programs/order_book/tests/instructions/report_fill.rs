@@ -15,8 +15,12 @@ use std::error::Error;
 //   [X] it reverts with an InvalidOrderType or deserialization error
 // [X] given the order status is Completed
 //   [X] it reverts with an OrderNotFillable error
-// [X] given the order status is Cancelled
-//   [X] it reverts with an OrderNotFillable error
+// [X] given the order status is Cancelled with full refund
+//   [X] it reverts with an InvalidFillAmount error (no tokens available)
+// [X] given the order status is Cancelled with partial refund
+//   [X] it processes the fill successfully if amount_in_released + amount_in_refunded <= amount_in
+// [X] given the order status is Cancelled and fill exceeds remaining
+//   [X] it reverts with an InvalidFillAmount error
 // [X] given the fill_report amount_out_filled is zero
 //   [X] it reverts with an InvalidFillAmount error
 // [X] given the token_in_mint does not match the order
@@ -41,7 +45,7 @@ use std::error::Error;
 //   [X] it tracks cumulative amounts
 //   [X] it changes status to Completed on final fill
 // [X] given extra tokens are donated to the order account
-//   [X] on full fill, it transfers all tokens (including donation)
+//   [X] on full fill, it transfers only the exact fill amount (donation remains in ATA)
 // [X] given the order status is CancelRequested
 //   [X] it still processes the fill (CancelRequested orders can be filled)
 // [X] given the program is paused
@@ -320,6 +324,7 @@ fn test_report_fill_order_cancelled_reverts() -> Result<(), Box<dyn Error>> {
         order_id,
         order_sender: test.get_user("alice").pubkey().to_bytes(),
         token_in: test.get_mint("token-in-spl-6").to_bytes(),
+        amount_in_to_refund: order_params.amount_in as u128
     };
     test.report_cancel("bob", order_params.dest_chain_id, &cancel_report)?;
 
@@ -343,9 +348,149 @@ fn test_report_fill_order_cancelled_reverts() -> Result<(), Box<dyn Error>> {
         &fill_report,
     )?;
 
+    // Fill should fail because all tokens were refunded (amount_in_refunded == amount_in)
+    // The validation `amount_in_released + amount_in_refunded <= amount_in` will fail
     test.ctx
         .execute_instruction(ix, &[&test.get_user("admin"), &portal_authority])?
-        .assert_anchor_error(&format!("{:?}", OrderBookError::OrderNotFillable));
+        .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidFillAmount));
+
+    Ok(())
+}
+
+#[test]
+fn test_report_fill_cancelled_order_partial_refund_success() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
+
+    // Create cross-chain native order
+    let order_params = order_book::instructions::open::OrderParams {
+        dest_chain_id: DEST_CHAIN_ID,
+        fill_deadline: test
+            .ctx
+            .svm
+            .get_sysvar::<anchor_lang::prelude::Clock>()
+            .unix_timestamp as u64
+            + 86400,
+        token_out: test.get_mint("token-out-spl-6").to_bytes(),
+        amount_in: 1_000_000,
+        amount_out: 1_000_000,
+        recipient: test.get_user("alice").pubkey().to_bytes(),
+        solver: test.get_user("solver").pubkey().to_bytes(),
+    };
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+    // Get initial solver balance
+    let solver_token_in_ata = test.get_ata("token-in-spl-6", "solver");
+    let solver_balance_before = test.get_token_balance(&solver_token_in_ata)?;
+
+    // Report cancel with 50% refund (simulating cancel arrived first from destination chain)
+    let cancel_report = order_book::instructions::CancelReport {
+        order_id,
+        order_sender: test.get_user("alice").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+        amount_in_to_refund: 500_000u128, // 50% refund
+    };
+    test.report_cancel("bob", order_params.dest_chain_id, &cancel_report)?;
+
+    // Verify order is cancelled with partial refund
+    let (_, order_data) = test.get_native_order_account(&order_id)?;
+    assert_eq!(
+        order_data.data.status,
+        order_book::state::OrderStatus::Cancelled
+    );
+    assert_eq!(order_data.data.amount_in_refunded, 500_000);
+
+    // Expire blockhash to avoid AlreadyProcessed error
+    test.ctx.svm.expire_blockhash();
+
+    // Report fill for remaining 50% - should succeed even though order is Cancelled
+    // This simulates a fill report that was sent before the cancel but arrived after
+    let fill_report = FillReport {
+        order_id,
+        amount_in_to_release: 500_000,
+        amount_out_filled: 500_000,
+        origin_recipient: test.get_user("solver").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
+    test.report_fill("admin", order_params.dest_chain_id, &fill_report)?;
+
+    // Verify final state
+    let (_, order_data) = test.get_native_order_account(&order_id)?;
+    assert_eq!(order_data.data.amount_in_released, 500_000);
+    assert_eq!(order_data.data.amount_in_refunded, 500_000);
+    // Order remains Cancelled (status doesn't change back from Cancelled)
+    assert_eq!(
+        order_data.data.status,
+        order_book::state::OrderStatus::Cancelled
+    );
+
+    // Verify solver received tokens
+    let solver_balance_after = test.get_token_balance(&solver_token_in_ata)?;
+    assert_eq!(solver_balance_after - solver_balance_before, 500_000);
+
+    Ok(())
+}
+
+#[test]
+fn test_report_fill_cancelled_order_exceeds_remaining_reverts() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
+
+    // Create cross-chain native order
+    let order_params = order_book::instructions::open::OrderParams {
+        dest_chain_id: DEST_CHAIN_ID,
+        fill_deadline: test
+            .ctx
+            .svm
+            .get_sysvar::<anchor_lang::prelude::Clock>()
+            .unix_timestamp as u64
+            + 86400,
+        token_out: test.get_mint("token-out-spl-6").to_bytes(),
+        amount_in: 1_000_000,
+        amount_out: 1_000_000,
+        recipient: test.get_user("alice").pubkey().to_bytes(),
+        solver: test.get_user("solver").pubkey().to_bytes(),
+    };
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+    // Report cancel with 50% refund
+    let cancel_report = order_book::instructions::CancelReport {
+        order_id,
+        order_sender: test.get_user("alice").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+        amount_in_to_refund: 500_000u128, // 50% refund
+    };
+    test.report_cancel("bob", order_params.dest_chain_id, &cancel_report)?;
+
+    // Verify order is cancelled
+    let (_, order_data) = test.get_native_order_account(&order_id)?;
+    assert_eq!(
+        order_data.data.status,
+        order_book::state::OrderStatus::Cancelled
+    );
+
+    // Expire blockhash to avoid AlreadyProcessed error
+    test.ctx.svm.expire_blockhash();
+
+    // Try to report fill for 60% - should fail because only 50% remains
+    let portal_authority = test.get_user("portal_authority");
+    let fill_report = FillReport {
+        order_id,
+        amount_in_to_release: 600_000, // 60% - exceeds remaining 50%
+        amount_out_filled: 600_000,
+        origin_recipient: test.get_user("solver").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
+    let ix = test.create_report_fill_ix(
+        &test.get_user("admin").pubkey(),
+        &portal_authority.pubkey(),
+        order_params.dest_chain_id,
+        &fill_report,
+    )?;
+
+    test.ctx
+        .execute_instruction(ix, &[&test.get_user("admin"), &portal_authority])?
+        .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidFillAmount));
 
     Ok(())
 }
@@ -854,12 +999,22 @@ fn test_report_fill_with_donation_success() -> Result<(), Box<dyn Error>> {
 
     test.report_fill("admin", order_params.dest_chain_id, &full_fill_report)?;
 
-    // Verify solver receives ALL tokens (original + donation)
+    // Verify solver receives only the exact fill amount, NOT the donation
+    // The new behavior uses exact calculated values to prevent issues with
+    // out-of-order fill/cancel reports
     let solver_balance_after = test.get_token_balance(&solver_token_in_ata)?;
     assert_eq!(
         solver_balance_after - solver_balance_before,
-        order_balance_before,
-        "Solver should receive all tokens including donation"
+        1_000_000, // Only the fill amount, not the donation
+        "Solver should receive only the exact fill amount"
+    );
+
+    // Verify donation remains in order ATA (can be swept via close_order_token_account)
+    let order_balance_after = test.get_token_balance(&order_token_in_ata)?;
+    assert_eq!(
+        order_balance_after,
+        donation_amount,
+        "Donation should remain in order ATA"
     );
 
     Ok(())
