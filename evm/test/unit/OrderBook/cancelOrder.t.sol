@@ -548,4 +548,67 @@ contract CancelOrderTest is OrderBookTestBase {
             "amountInRefunded should be the refunded amount in"
         );
     }
+
+    function test_givenXchainOrder_msgValueForwardedToPortal() public {
+        // Create a new cross-chain order to test msg.value forwarding
+        IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
+            version: 1,
+            originChainId: DEST_CHAIN_ID,
+            sender: users["alice"].toBytes32(),
+            nonce: 1, // Use different nonce than setUp
+            destChainId: CHAIN_ID,
+            createdAt: uint64(block.timestamp),
+            fillDeadline: params.fillDeadline,
+            amountIn: params.amountIn,
+            amountOut: params.amountOut,
+            tokenIn: address(tokenIn).toBytes32(),
+            tokenOut: params.tokenOut,
+            recipient: users["alice"].toBytes32(),
+            solver: params.solver
+        });
+        bytes32 orderId = orderBook.getOrderId(orderData);
+
+        uint256 msgValue = 0.1 ether;
+
+        // Cancel the order with msg.value
+        vm.prank(users["alice"]);
+        orderBook.cancelOrder{ value: msgValue }(orderId, orderData, new bytes(0));
+
+        // Verify the msg.value was forwarded to the portal
+        assertEq(portal.getCancelReportValue(orderId), msgValue, "msg.value should be forwarded to portal");
+    }
+
+    function test_givenXchainOrder_withBridgeAdapter_msgValueForwardedToPortal() public {
+        // Create a new cross-chain order to test msg.value forwarding with bridge adapter
+        IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
+            version: 1,
+            originChainId: DEST_CHAIN_ID,
+            sender: users["alice"].toBytes32(),
+            nonce: 2, // Use different nonce than other tests
+            destChainId: CHAIN_ID,
+            createdAt: uint64(block.timestamp),
+            fillDeadline: params.fillDeadline,
+            amountIn: params.amountIn,
+            amountOut: params.amountOut,
+            tokenIn: address(tokenIn).toBytes32(),
+            tokenOut: params.tokenOut,
+            recipient: users["alice"].toBytes32(),
+            solver: params.solver
+        });
+        bytes32 orderId = orderBook.getOrderId(orderData);
+
+        uint256 msgValue = 0.2 ether;
+        address bridgeAdapter = address(0x1234);
+
+        // Cancel the order with msg.value and bridge adapter
+        vm.prank(users["alice"]);
+        orderBook.cancelOrder{ value: msgValue }(orderId, orderData, bridgeAdapter, new bytes(0));
+
+        // Verify the msg.value was forwarded to the portal
+        assertEq(
+            portal.getCancelReportValue(orderId),
+            msgValue,
+            "msg.value should be forwarded to portal with bridge adapter"
+        );
+    }
 }

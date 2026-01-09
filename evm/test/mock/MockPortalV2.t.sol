@@ -11,6 +11,7 @@ contract MockPortalV2 is IPortalV2Like {
 
     mapping(bytes32 => IOrderBook.FillReport) public fillReports;
     mapping(bytes32 => bool) public cancelReports;
+    mapping(bytes32 => uint256) public cancelReportValues;
 
     function setOrderBook(address orderBook_) external {
         orderBook = orderBook_;
@@ -44,6 +45,7 @@ contract MockPortalV2 is IPortalV2Like {
         bytes calldata bridgeAdapterArgs
     ) external payable override returns (bytes32 messageId) {
         cancelReports[report.orderId] = true;
+        cancelReportValues[report.orderId] = msg.value;
         emit CancelReportSent(destinationChainId, report);
     }
 
@@ -55,6 +57,7 @@ contract MockPortalV2 is IPortalV2Like {
         bytes calldata bridgeAdapterArgs
     ) external payable override returns (bytes32 messageId) {
         cancelReports[report.orderId] = true;
+        cancelReportValues[report.orderId] = msg.value;
         emit CancelReportSent(destinationChainId, report);
     }
 
@@ -72,5 +75,9 @@ contract MockPortalV2 is IPortalV2Like {
 
     function isCancelReported(bytes32 orderId) external view returns (bool) {
         return cancelReports[orderId];
+    }
+
+    function getCancelReportValue(bytes32 orderId) external view returns (uint256) {
+        return cancelReportValues[orderId];
     }
 }
