@@ -15,6 +15,8 @@ mod local_orders {
     //   [X] it reverts with an InvalidDestChainId error
     // [X] given the token out on the order does not match the token out mint account
     //   [X] it reverts with an InvalidTokenOutMint error
+    // [X] given the token in on the order does not match the token in mint account
+    //   [X] it reverts with an InvalidTokenMint error
     // [X] given the order recipient does not match the recipient account
     //   [X] it reverts with an InvalidRecipient error
     // [X] given order type is not Native
@@ -209,6 +211,53 @@ mod local_orders {
         test.ctx
             .execute_instruction(ix, &[&solver])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidTokenOutMint));
+
+        Ok(())
+    }
+
+    #[test]
+    fn fill_native_order_token_in_account_mismatch_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+        let order_params = default_order_params(&test, "alice");
+        let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+        let solver = test.get_user("solver");
+        let fill_params = default_fill_params(&test);
+
+        // Get the order account to derive the order data
+        let (order_account, native_order) = test.get_native_order_account(&order_id)?;
+        let order_data = OrderData::new_from_native_order(native_order.data, CHAIN_ID);
+
+        // Get the accounts for the instruction and change the token_in mint to the wrong one
+        let mut accounts = test.build_fill_native_order_accounts(&solver.pubkey(), order_id)?;
+        let wrong_token_in = *test.mints.get("token-in-spl-9").unwrap();
+        accounts.token_in_mint = wrong_token_in;
+        // Also adjust the token accounts to match the wrong token in to avoid other false positive errors
+        accounts.solver_token_in_account =
+            get_associated_token_address(&solver.pubkey(), &wrong_token_in);
+        
+        // Create the order's ATA for the wrong token to avoid AccountNotInitialized error
+        let order_wrong_token_in_ata = test.create_associated_token_account(&wrong_token_in, &order_account)?;
+        accounts.order_token_in_ata = order_wrong_token_in_ata;
+        // Token Program is already the same
+
+        // Construct the ix with the modified accounts
+        let ix = test
+            .ctx
+            .program()
+            .accounts(accounts)
+            .args(order_book::instruction::FillNativeOrder {
+                order_id,
+                order_data,
+                fill_params,
+            })
+            .instruction()?;
+
+        // Execute the instruction
+        // Expect it to revert with an InvalidTokenMint error
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidTokenMint));
 
         Ok(())
     }
