@@ -132,6 +132,7 @@ pub struct FillNativeOrder<'info> {
 
     #[account(
         mint::token_program = token_in_program,
+        constraint = token_in_mint.key().to_bytes() == order_data.token_in @ OrderBookError::InvalidTokenMint,
     )]
     pub token_in_mint: InterfaceAccount<'info, Mint>,
 
