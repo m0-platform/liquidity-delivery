@@ -101,7 +101,7 @@ mod local_orders {
         let order_data = order_book::state::OrderData {
             version: order_book::VERSION,
             sender: sender.pubkey().to_bytes(),
-            nonce: 0,
+            nonce: 1,
             origin_chain_id: CHAIN_ID,
             dest_chain_id: order_params.dest_chain_id,
             created_at: test.current_time(),
@@ -318,7 +318,7 @@ mod local_orders {
         let order_data = OrderData {
             version: order_book::VERSION,
             sender: sender.pubkey().to_bytes(),
-            nonce: 0,
+            nonce: 1,
             origin_chain_id: DEST_CHAIN_ID,
             dest_chain_id: CHAIN_ID,
             created_at: test.current_time(),
@@ -371,7 +371,7 @@ mod local_orders {
         let order_data = OrderData {
             version: order_book::VERSION,
             sender: sender.pubkey().to_bytes(),
-            nonce: 0,
+            nonce: 1,
             origin_chain_id: DEST_CHAIN_ID,
             dest_chain_id: CHAIN_ID,
             created_at: test.current_time(),
@@ -1079,7 +1079,7 @@ mod xchain_orders {
         OrderData {
             version: order_book::VERSION,
             sender: test.get_user(sender).pubkey().to_bytes(),
-            nonce: 0,
+            nonce: 1,
             origin_chain_id: DEST_CHAIN_ID, // Foreign order originates on another chain
             dest_chain_id: CHAIN_ID,        // Settles on current chain
             created_at: test.current_time(),

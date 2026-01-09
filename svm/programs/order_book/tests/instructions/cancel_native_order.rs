@@ -196,7 +196,7 @@ mod local_orders {
         let order_data = OrderData {
             version: order_book::constants::VERSION,
             sender: test.get_user("alice").pubkey().to_bytes(), // sender on origin chain
-            nonce: 0,
+            nonce: 1,
             origin_chain_id: DEST_CHAIN_ID, // order originated on chain 2
             dest_chain_id: CHAIN_ID,        // this chain (1) is the destination
             created_at: test.current_time(),
@@ -260,7 +260,7 @@ mod local_orders {
         let order_data = OrderData {
             version: order_book::constants::VERSION,
             sender: test.get_user("alice").pubkey().to_bytes(), // sender on origin chain
-            nonce: 0,
+            nonce: 1,
             origin_chain_id: DEST_CHAIN_ID, // order originated on chain 2
             dest_chain_id: CHAIN_ID,        // this chain (1) is the destination
             created_at: test.current_time(),

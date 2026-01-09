@@ -76,7 +76,7 @@ pub struct OpenOrder<'info> {
         seeds = [ORDER_SEED_PREFIX, &compute_order_id(&OrderData {
                     version: VERSION as u16,
                     sender: sender_token_in_account.deref().owner.to_bytes(),
-                    nonce: sender_nonce_account.value,
+                    nonce: sender_nonce_account.value + 1,
                     origin_chain_id: global_account.chain_id,
                     dest_chain_id: params.dest_chain_id,
                     created_at: Clock::get()?.unix_timestamp as u64,
@@ -148,6 +148,9 @@ impl OpenOrder<'_> {
 
         let created_at = Clock::get()?.unix_timestamp as u64;
 
+        // Increment the sender's nonce account
+        ctx.accounts.sender_nonce_account.value += 1;
+
         // Populate the order data
         ctx.accounts.order.set_inner(Order {
             order_type: OrderType::Native,
@@ -188,9 +191,6 @@ impl OpenOrder<'_> {
             recipient: params.recipient,
             solver: params.solver,
         });
-
-        // Increment the sender's nonce account
-        ctx.accounts.sender_nonce_account.value += 1;
 
         // Transfer the amount in from the sender to the order's token account
         let auth = match &ctx.accounts.token_authority {

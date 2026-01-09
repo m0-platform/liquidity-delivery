@@ -312,7 +312,7 @@ mod local_orders {
         let (order_account, order) = test.get_native_order_account(&order_id)?;
 
         assert_eq!(order.data.sender, sender.pubkey());
-        assert_eq!(order.data.nonce, 0);
+        assert_eq!(order.data.nonce, 1);
         assert_eq!(order.data.dest_chain_id, order_params.dest_chain_id);
         assert_eq!(order.data.fill_deadline, order_params.fill_deadline);
         assert_eq!(order.data.token_out, order_params.token_out);
@@ -372,7 +372,7 @@ mod local_orders {
         // Verify the order account was created with correct data
         let (order_account, order) = test.get_native_order_account(&order_id)?;
         assert_eq!(order.data.sender, sender.pubkey());
-        assert_eq!(order.data.nonce, 0);
+        assert_eq!(order.data.nonce, 1);
         assert_eq!(order.data.dest_chain_id, order_params.dest_chain_id);
         assert_eq!(order.data.fill_deadline, order_params.fill_deadline);
         assert_eq!(order.data.token_out, order_params.token_out);
@@ -799,7 +799,7 @@ mod xchain_orders {
         let (order_account, order) = test.get_native_order_account(&order_id)?;
 
         assert_eq!(order.data.sender, sender.pubkey());
-        assert_eq!(order.data.nonce, 0);
+        assert_eq!(order.data.nonce, 1);
         assert_eq!(order.data.dest_chain_id, order_params.dest_chain_id);
         assert_eq!(order.data.fill_deadline, order_params.fill_deadline);
         assert_eq!(order.data.token_out, order_params.token_out);
@@ -891,7 +891,7 @@ mod xchain_orders {
         // Verify the order account was created with correct data
         let (order_account, order) = test.get_native_order_account(&order_id)?;
         assert_eq!(order.data.sender, sender.pubkey());
-        assert_eq!(order.data.nonce, 0);
+        assert_eq!(order.data.nonce, 1);
         assert_eq!(order.data.dest_chain_id, order_params.dest_chain_id);
         assert_eq!(order.data.fill_deadline, order_params.fill_deadline);
         assert_eq!(order.data.token_out, order_params.token_out);
