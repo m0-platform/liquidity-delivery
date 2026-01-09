@@ -7,6 +7,7 @@ import { AccessControlUpgradeable } from "../lib/common/lib/openzeppelin-contrac
 import { PausableUpgradeable } from "../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol";
 import { ERC712ExtendedUpgradeable } from "../lib/common/src/ERC712ExtendedUpgradeable.sol";
 import { TypeConverter } from "../lib/common/src/libs/TypeConverter.sol";
+import { UIntMath } from "../lib/common/src/libs/UIntMath.sol";
 import { SafeERC20 } from "./libs/SafeERC20.sol";
 
 import { IOrderBook } from "./interfaces/IOrderBook.sol";
@@ -45,6 +46,7 @@ contract OrderBook is
 {
     using TypeConverter for *;
     using SafeERC20 for IERC20;
+    using UIntMath for uint256;
 
     // ========== State Variables ========== //
 
@@ -61,9 +63,6 @@ contract OrderBook is
     /// @dev keccak256("CancelOrder(bytes32 orderId)")
     bytes32 public constant CANCEL_ORDER_TYPEHASH = 0xab1417524886d631bf88c47a7f88d9a906122217bc08d3c5a21c80abcf1a8077;
 
-    /// @notice the chain ID of this chain according to the messaging network used by this contract
-    uint32 public immutable chainId;
-
     /// @notice the portal contract used for cross-chain communication
     /// @dev sends crosschain messages to report fills on this chain to other chains
     ///      receive crosschain messages to report fills on other chains to this chain
@@ -71,9 +70,8 @@ contract OrderBook is
 
     /* ========== Construct and Initialize ========== */
 
-    constructor(uint32 chainId_, address portal_) {
+    constructor(address portal_) {
         if (portal_ == address(0)) revert ZeroPortal();
-        chainId = chainId_;
         portal = portal_;
     }
 
@@ -202,7 +200,7 @@ contract OrderBook is
         bytes32 orderId_ = getOrderId(
             OrderData({
                 version: VERSION, // origin contract version
-                originChainId: chainId,
+                originChainId: block.chainid.safe32(),
                 sender: sender_.toBytes32(),
                 nonce: nonce_,
                 destChainId: orderParams_.destChainId,
@@ -268,7 +266,7 @@ contract OrderBook is
         }
 
         // Verify origin chain and sender nonce
-        if (orderParams_.originChainId != chainId) revert InvalidOriginChain();
+        if (orderParams_.originChainId != block.chainid) revert InvalidOriginChain();
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         // Requiring a nonce in the order provides replay protection for the sender
         if (orderParams_.nonce != $.senderNonces[orderParams_.sender]) revert InvalidNonce();
@@ -333,7 +331,7 @@ contract OrderBook is
         if (
             block.timestamp <= orderData_.fillDeadline &&
             !(orderData_.recipient.toAddress() == msg.sender ||
-                (orderData_.originChainId == chainId && orderData_.sender.toAddress() == msg.sender))
+                (orderData_.originChainId == block.chainid && orderData_.sender.toAddress() == msg.sender))
         ) revert NotAuthorized();
 
         _cancel(orderId_, orderData_, bridgeAdapter_, bridgeAdapterArgs_);
@@ -402,7 +400,7 @@ contract OrderBook is
         _revertIfInvalidStatusToFillOrCancel(order, orderData_);
 
         // Order destination chain must be this chain
-        if (chainId != orderData_.destChainId) revert InvalidDestinationChain();
+        if (block.chainid != orderData_.destChainId) revert InvalidDestinationChain();
 
         // Calculate amount to refund
         IOrderBook.FilledAmounts storage filledAmounts = _getOrderBookStorageLocation().filledAmounts[orderId_];
@@ -413,7 +411,7 @@ contract OrderBook is
         order.status = OrderStatus.Cancelled;
         filledAmounts.amountInRefunded += amountInRemaining_;
 
-        if (orderData_.originChainId == chainId) {
+        if (orderData_.originChainId == block.chainid) {
             if (msg.value != 0) revert InvalidMsgValue();
 
             // Local orders can be immediately refunded
@@ -490,7 +488,7 @@ contract OrderBook is
         _revertIfOrderIdMismatch(orderId_, orderData_);
 
         // Validate fill data
-        if (chainId != orderData_.destChainId) revert InvalidDestinationChain();
+        if (block.chainid != orderData_.destChainId) revert InvalidDestinationChain();
         if (orderData_.fillDeadline < block.timestamp) revert OrderExpired();
         if (orderData_.version != VERSION) revert InvalidOrderVersion();
         if (orderData_.createdAt > block.timestamp) revert InvalidTimestamp();
@@ -530,7 +528,7 @@ contract OrderBook is
                 emit OrderCompleted(orderId_);
             } else {
                 // Set order status to created in case of uninitialized cross-chain order
-                if (orderData_.originChainId != chainId && order.status == OrderStatus.DoesNotExist) {
+                if (orderData_.originChainId != block.chainid && order.status == OrderStatus.DoesNotExist) {
                     order.status = OrderStatus.Created;
                 }
             }
@@ -544,7 +542,7 @@ contract OrderBook is
         );
 
         // If local order, release the corresponding amount of origin tokens to the filler
-        if (chainId == orderData_.originChainId) {
+        if (block.chainid == orderData_.originChainId) {
             // Validate msg.value is 0 for local fills
             if (msg.value != 0) revert InvalidMsgValue();
 
@@ -674,7 +672,7 @@ contract OrderBook is
         uint32 destChainId_,
         bool isSupported_
     ) external override onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (destChainId_ == chainId) revert InvalidDestinationChain();
+        if (destChainId_ == block.chainid) revert InvalidDestinationChain();
 
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         bool isSupported = $.supportedDestinations[destChainId_];
@@ -741,7 +739,7 @@ contract OrderBook is
 
     /// @inheritdoc IOrderBook
     function isDestinationSupported(uint32 destChainId_) public view override returns (bool) {
-        return destChainId_ == chainId || _getOrderBookStorageLocation().supportedDestinations[destChainId_];
+        return destChainId_ == block.chainid || _getOrderBookStorageLocation().supportedDestinations[destChainId_];
     }
 
     /* ========== EIP-712 Digest Functions ========== */
@@ -783,7 +781,7 @@ contract OrderBook is
         // If cross-chain order, status must be DoesNotExist (if not filled at all yet) or Created (if already partially filled)
         if (
             !(
-                orderData_.originChainId == chainId
+                orderData_.originChainId == block.chainid
                     ? order_.status == OrderStatus.Created
                     : (order_.status == OrderStatus.Created || order_.status == OrderStatus.DoesNotExist)
             )

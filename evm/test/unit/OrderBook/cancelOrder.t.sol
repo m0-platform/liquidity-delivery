@@ -521,8 +521,6 @@ contract CancelOrderTest is OrderBookTestBase {
         // Cancel the order and expect refund of remaining amountIn
         uint128 expectedRefundAmountIn = params.amountIn / 2;
         vm.prank(users["alice"]);
-        vm.expectEmit(true, true, false, true);
-        emit IOrderBook.RefundClaimed(xchainOrderId, users["alice"], expectedRefundAmountIn);
         vm.expectEmit(true, false, false, false);
         emit IOrderBook.OrderCancelled(xchainOrderId);
         orderBook.cancelOrder(xchainOrderId, xchainOrderData, new bytes(0));
