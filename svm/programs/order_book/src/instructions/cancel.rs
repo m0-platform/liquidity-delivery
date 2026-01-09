@@ -86,6 +86,7 @@ pub struct CancelNativeOrder<'info> {
         seeds = [ORDER_SEED_PREFIX, order_id.as_ref()],
         bump = order.bump,
         constraint = order.data.dest_chain_id == global_account.chain_id @ OrderBookError::InvalidDestChainId,
+        constraint = order.order_type == OrderType::Native @ OrderBookError::InvalidOrderType
     )]
     pub order: Account<'info, Order::<NativeOrder>>,
 
@@ -273,6 +274,26 @@ impl<'info> CancelForeignOrder<'info> {
 
     #[access_control(ctx.accounts.validate(order_id, &order_data))]
     pub fn handler(ctx: Context<'_, '_, 'info, 'info, Self>, order_id: [u8; 32], order_data: OrderData) -> Result<()> {
+        // If this is a new order, initialize it
+        if ctx.accounts.order.data.status == OrderStatus::DoesNotExist {
+            ctx.accounts.order.set_inner(Order::<ForeignOrder> {
+                order_type: OrderType::Foreign,
+                bump: ctx.bumps.order,
+                data: ForeignOrder {
+                    status: OrderStatus::Created,
+                    amount_in_released: 0,
+                    amount_out_filled: 0,
+                    amount_in_refunded: 0
+                }
+            });
+        } else {
+            // Otherwise, validate the type of the order
+            require!(
+                ctx.accounts.order.order_type == OrderType::Foreign,
+                OrderBookError::InvalidOrderType
+            );
+        }
+
         let order = &mut ctx.accounts.order.data;
 
         let amount_in_remaining = order_data.amount_in
