@@ -159,6 +159,7 @@ impl CancelNativeOrder<'_> {
         order.amount_in_refunded += amount_in_remaining as u128;
 
         // Transfer the remaining tokens to the recipient
+        // We do not check amount received here to avoid DoSing refunds
         if amount_in_remaining > 0 {
             transfer_tokens_from_program(
                 &ctx.accounts.order_token_in_ata,
@@ -422,6 +423,7 @@ impl ReportOrderCancel<'_> {
         let amount_in_to_refund: u64 = cancel_report.amount_in_to_refund.try_into().map_err(|_| OrderBookError::MathOverflow)?;
 
         // Transfer the remaining inputs tokens back to the order sender
+        // We do not check exact amount received here to avoid DoS refund / bridge message
         if amount_in_to_refund > 0 {
             transfer_tokens_from_program(
                 &ctx.accounts.order_token_in_ata,

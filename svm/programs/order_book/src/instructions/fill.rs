@@ -4,7 +4,7 @@ use crate::{
     state::{
         ForeignOrder, GLOBAL_SEED, NativeOrder, ORDER_SEED_PREFIX, Order, 
         OrderBookGlobal, OrderData, OrderStatus, OrderType, compute_order_id
-    }, utils::{transfer_tokens, transfer_tokens_from_program}
+    }, utils::{transfer_tokens_from_program, transfer_exact_tokens, transfer_exact_tokens_from_program}
 };
 use anchor_lang::prelude::*;
 use anchor_spl::{
@@ -239,9 +239,10 @@ impl FillNativeOrder<'_> {
         order.amount_out_filled += amount_out_to_fill as u128;
 
         // Transfer the output tokens from the solver to the recipient
-        transfer_tokens(
+        // Check that actual amount is received
+        transfer_exact_tokens(
             &ctx.accounts.solver_token_out_account,
-            &ctx.accounts.recipient_token_out_ata,
+            &mut ctx.accounts.recipient_token_out_ata,
             amount_out_to_fill,
             &ctx.accounts.token_out_mint,
             &ctx.accounts.solver,
@@ -249,9 +250,10 @@ impl FillNativeOrder<'_> {
         )?;
 
         // Transfer the input tokens from the order to the solver
-        transfer_tokens_from_program(
+        // Check that actual amount is received
+        transfer_exact_tokens_from_program(
             &ctx.accounts.order_token_in_ata,
-            &ctx.accounts.solver_token_in_account,
+            &mut ctx.accounts.solver_token_in_account,
             amount_in_to_release,
             &ctx.accounts.token_in_mint,
             &ctx.accounts.order.to_account_info(),
@@ -440,9 +442,10 @@ impl<'info> FillForeignOrder<'info> {
         order.amount_out_filled += amount_out_to_fill as u128;
 
         // Transfer the output tokens from the solver to the recipient
-        transfer_tokens(
+        // Check that actual amount is received
+        transfer_exact_tokens(
             &ctx.accounts.solver_token_out_account,
-            &ctx.accounts.recipient_token_out_ata,
+            &mut ctx.accounts.recipient_token_out_ata,
             amount_out_to_fill,
             &ctx.accounts.token_out_mint,
             &ctx.accounts.solver,
@@ -655,6 +658,7 @@ impl ReportOrderFill<'_> {
         };
 
         // Transfer the input tokens from the order to the designated recipient
+        // We do not check exact amount received here to avoid DoS on bridge message
         transfer_tokens_from_program(
             &ctx.accounts.order_token_in_ata,
             &ctx.accounts.recipient_token_in_ata,
