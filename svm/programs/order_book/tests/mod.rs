@@ -793,7 +793,7 @@ impl OrderBookTest {
             .accounts(accounts)
             .args(order_book::instruction::FillNativeOrder {
                 order_id,
-                order_data,
+                order_data: Box::new(order_data),
                 fill_params: fill_params.clone(),
             })
             .instruction()?;
