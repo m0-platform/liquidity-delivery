@@ -14,15 +14,20 @@ docs/
 
 # Dotenv file
 .env
+.env.local
+.env.*.local
 
 # YAML config with secrets
 solver/config.yaml
 
-# Mac OS files
+# OS files
 .DS_Store
+Thumbs.db
 
 # NPM modules
 node_modules
+.pnp
+.pnp.js
 
 # Soljson
 soljson-latest.js
@@ -35,3 +40,32 @@ gasreport.ansi
 **/*.rs.bk
 test-ledger
 target
+
+# Surfpool files
+.surfpool/
+
+# Frontend build output
+frontend/dist
+frontend/dist-ssr
+
+# Editor directories
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Vite
+*.local
