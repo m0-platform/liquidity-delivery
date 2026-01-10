@@ -148,9 +148,9 @@ impl Config {
             });
         }
 
-        if chains.is_empty() {
-            return Err(ConfigError::InvalidChainConfig(
-                "No chains configured".to_string(),
+        if chains.is_empty() && environment != Environment::Local {
+            return Err(ConfigError::InvalidConfig(
+                "No enabled chains configured".to_string(),
             ));
         }
 

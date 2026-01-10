@@ -1,0 +1,82 @@
+services:
+  # Mock liquidity API using WireMock
+  mock-api:
+    image: wiremock/wiremock:latest
+    container_name: liquidity-mock-api
+    volumes:
+      - ./docker/wiremock/mappings:/home/wiremock/mappings:ro
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/__admin/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - liquidity-network
+
+  # Quoter service - provides quotes via gRPC and HTTP API
+  quoter:
+    build:
+      context: .
+      dockerfile: quoter/Dockerfile
+    container_name: liquidity-quoter
+    environment:
+      - QUOTER_ENV=development
+      - QUOTE_TIMEOUT_MS=1000
+      - GRPC_HOST=0.0.0.0
+      - GRPC_PORT=50051
+      - API_PORT=3000
+    ports:
+      - "3002:3000"   # HTTP API (host:container)
+      - "50052:50051" # gRPC (host:container)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    networks:
+      - liquidity-network
+
+  # Solver service - processes orders across chains
+  solver:
+    build:
+      context: .
+      dockerfile: solver/Dockerfile
+    container_name: liquidity-solver
+    depends_on:
+      quoter:
+        condition: service_healthy
+      mock-api:
+        condition: service_healthy
+    volumes:
+      - ./docker/config/solver-local.yaml:/app/config.yaml:ro
+    networks:
+      - liquidity-network
+
+  # Frontend - Vue 3 application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: liquidity-frontend
+    environment:
+      - VITE_QUOTER_URL=http://quoter:3000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src:ro
+      - ./frontend/public:/app/public:ro
+      - ./frontend/index.html:/app/index.html:ro
+    depends_on:
+      quoter:
+        condition: service_healthy
+    networks:
+      - liquidity-network
+
+networks:
+  liquidity-network:
+    driver: bridge

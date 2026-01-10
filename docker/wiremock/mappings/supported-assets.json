@@ -1,0 +1,34 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "/supported-assets"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "Content-Type": "application/json"
+    },
+    "jsonBody": [
+      {
+        "chain": "Ethereum",
+        "address": "0x437cc33344a0B27A429f795ff6B469C72698B291",
+        "symbol": "wM",
+        "icon": "",
+        "name": "wM",
+        "decimals": 6,
+        "m0Extension": true,
+        "runtime": "evm"
+      },
+      {
+        "chain": "Base",
+        "address": "0x437cc33344a0B27A429f795ff6B469C72698B291",
+        "symbol": "wM",
+        "icon": "",
+        "name": "wM",
+        "decimals": 6,
+        "m0Extension": true,
+        "runtime": "evm"
+      }
+    ]
+  }
+}

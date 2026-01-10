@@ -44,15 +44,6 @@ const isConnected = computed(() => evmConnected.value || svmConnected.value)
     <footer class="border-t border-gray-800 px-6 py-4">
       <div class="max-w-7xl mx-auto text-center text-gray-500 text-sm">
         <p>Cross-chain liquidity powered by M0</p>
-        <p class="mt-1">
-          <a
-            href="http://localhost:3001"
-            target="_blank"
-            class="text-primary-400 hover:text-primary-300"
-          >
-            View Logs in Grafana
-          </a>
-        </p>
       </div>
     </footer>
   </div>

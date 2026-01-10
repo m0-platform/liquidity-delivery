@@ -1,0 +1,43 @@
+# Git
+.git
+.gitignore
+
+# Rust build artifacts
+target/
+**/*.rs.bk
+
+# Node modules (frontend has its own)
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Local configuration
+.env
+.env.*
+!.env.example
+
+# Test artifacts
+*.log
+coverage/
+.nyc_output/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# EVM development artifacts (keep compiled output)
+evm/cache/
+evm/lib/
+evm/broadcast/
+evm/script/
+
+# SVM development artifacts
+svm/target/
+
+# Docker
+docker-compose.override.yml

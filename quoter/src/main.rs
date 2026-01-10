@@ -42,11 +42,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let grpc_service = QuoteGrpcService::new(quote_timeout_ms, logger.clone());
-    let grpc_addr = format!(
-        "[::1]:{}",
-        env::var("GRPC_PORT").unwrap_or_else(|_| "50051".to_string())
-    )
-    .parse()?;
+    let grpc_host = env::var("GRPC_HOST").unwrap_or_else(|_| "[::1]".to_string());
+    let grpc_port = env::var("GRPC_PORT").unwrap_or_else(|_| "50051".to_string());
+    let grpc_addr = format!("{}:{}", grpc_host, grpc_port).parse()?;
 
     // Spawn gRPC server
     let grpc_service_clone = grpc_service.clone();
