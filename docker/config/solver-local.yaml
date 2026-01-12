@@ -6,7 +6,7 @@ network: local
 
 # Quoter connection - use Docker service name
 quoter_grpc_url: http://quoter:50051
-connect_to_quote_stream: false
+connect_to_quote_stream: true
 
 # Use mock liquidity API (WireMock container)
 liquidity_api_url: http://mock-api:8080

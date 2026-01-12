@@ -1,12 +1,20 @@
 mod api_server;
+mod config;
+mod contracts;
+mod evm_order_tracker;
 mod grpc_server;
 mod models;
+mod order_store;
 
 use std::env;
+use std::sync::Arc;
 
 use api_server::{create_router, ApiState};
+use config::QuoterConfig;
+use evm_order_tracker::EvmOrderTracker;
 use grpc_server::QuoteGrpcService;
-use slog::{info, Drain, Logger};
+use order_store::OrderStore;
+use slog::{error, info, Drain, Logger};
 use tonic::transport::Server;
 
 #[tokio::main]
@@ -41,6 +49,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ),
     );
 
+    // Load config for order tracking (optional - gracefully handle missing config)
+    let config_path = env::var("QUOTER_CONFIG").unwrap_or_else(|_| "config.yaml".to_string());
+    let config = QuoterConfig::from_file(&config_path).ok();
+
+    // Initialize order store
+    let order_store = Arc::new(OrderStore::new());
+
+    // Start EVM order tracker if config is available
+    let _order_tracker = if let Some(ref cfg) = config {
+        let tracker = EvmOrderTracker::new(
+            order_store.clone(),
+            cfg.enabled_chains(),
+            logger.clone(),
+        );
+
+        if let Err(e) = tracker.start().await {
+            error!(logger, "Failed to start order tracker"; "error" => %e);
+        } else {
+            info!(logger, "Order tracker started"; "chains" => cfg.enabled_chains().len());
+        }
+
+        Some(tracker)
+    } else {
+        info!(logger, "No config file found, order tracking disabled"; "config_path" => &config_path);
+        None
+    };
+
     let grpc_service = QuoteGrpcService::new(quote_timeout_ms, logger.clone());
     let grpc_host = env::var("GRPC_HOST").unwrap_or_else(|_| "[::1]".to_string());
     let grpc_port = env::var("GRPC_PORT").unwrap_or_else(|_| "50051".to_string());
@@ -56,8 +91,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Spawn HTTP API server
+    let chains = config
+        .as_ref()
+        .map(|c| c.enabled_chains())
+        .unwrap_or_default();
+    let assets = config
+        .as_ref()
+        .map(|c| c.assets.clone())
+        .unwrap_or_default();
     let api_state = ApiState {
         grpc_service: grpc_service.clone(),
+        order_store: order_store.clone(),
+        chains,
+        assets,
         logger: logger.clone(),
     };
 

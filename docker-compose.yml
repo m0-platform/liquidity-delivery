@@ -71,12 +71,18 @@ services:
       context: .
       dockerfile: quoter/Dockerfile
     container_name: liquidity-quoter
+    depends_on:
+      deployer:
+        condition: service_completed_successfully
     environment:
       - QUOTER_ENV=development
       - QUOTE_TIMEOUT_MS=1000
       - GRPC_HOST=0.0.0.0
       - GRPC_PORT=50051
       - API_PORT=3000
+      - QUOTER_CONFIG=/app/config.yaml
+    volumes:
+      - ./docker/config/quoter-local.yaml:/app/config.yaml:ro
     ports:
       - "3002:3000"   # HTTP API (host:container)
       - "50052:50051" # gRPC (host:container)
@@ -115,7 +121,7 @@ services:
       target: development
     container_name: liquidity-frontend
     environment:
-      - VITE_QUOTER_URL=http://quoter:3000
+      - VITE_QUOTER_URL=http://localhost:3002
     ports:
       - "5173:5173"
     volumes:

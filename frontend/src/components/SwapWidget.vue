@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useQuoter } from '../composables/useQuoter'
+import { useAssets } from '../composables/useAssets'
 
 const props = defineProps<{
   network: 'local' | 'devnet' | 'mainnet'
@@ -8,6 +9,7 @@ const props = defineProps<{
 }>()
 
 const { getQuote, loading, error, quote } = useQuoter()
+const { assets } = useAssets()
 
 // Form state
 const fromChain = ref('ethereum')
@@ -39,7 +41,21 @@ const chains = computed(() => {
   }
 })
 
-const tokens = ['USDC', 'USDT', 'M']
+// Get tokens from API assets, fallback to static list if API hasn't loaded
+const tokens = computed(() => {
+  if (assets.value.length > 0) {
+    return assets.value.map(asset => ({
+      ticker: asset.ticker,
+      name: asset.name,
+      icon: asset.icon,
+    }))
+  }
+  return [
+    { ticker: 'USDC', name: 'USD Coin', icon: '' },
+    { ticker: 'USDT', name: 'Tether USD', icon: '' },
+    { ticker: 'M', name: 'M Token', icon: '' },
+  ]
+})
 
 // Swap direction
 function swapDirection() {
@@ -100,8 +116,8 @@ watch([fromChain, toChain, fromToken, toToken, amount], () => {
             v-model="fromToken"
             class="bg-gray-700 rounded-lg px-3 py-2 text-sm"
           >
-            <option v-for="token in tokens" :key="token" :value="token">
-              {{ token }}
+            <option v-for="token in tokens" :key="token.ticker" :value="token.ticker">
+              {{ token.ticker }}
             </option>
           </select>
 
@@ -146,8 +162,8 @@ watch([fromChain, toChain, fromToken, toToken, amount], () => {
             v-model="toToken"
             class="bg-gray-700 rounded-lg px-3 py-2 text-sm"
           >
-            <option v-for="token in tokens" :key="token" :value="token">
-              {{ token }}
+            <option v-for="token in tokens" :key="token.ticker" :value="token.ticker">
+              {{ token.ticker }}
             </option>
           </select>
 

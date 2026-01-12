@@ -25,8 +25,8 @@ RUN chmod +x ./deploy-local.sh
 # Set working directory to evm for forge commands
 WORKDIR /app/evm
 
-# Install dependencies
-RUN forge install --no-commit || true
+# Build contracts to verify dependencies are available
+RUN forge build
 
 WORKDIR /app
 

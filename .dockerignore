@@ -32,7 +32,6 @@ docs/
 
 # EVM development artifacts (keep compiled output)
 evm/cache/
-evm/lib/
 evm/broadcast/
 
 # SVM development artifacts
