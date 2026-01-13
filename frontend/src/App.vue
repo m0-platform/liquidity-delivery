@@ -160,14 +160,9 @@ function backToOrders() {
 
     <!-- Footer -->
     <footer class="relative z-10 border-t border-white/5 bg-slate-950/30 backdrop-blur-sm px-6 py-5">
-      <div class="max-w-7xl mx-auto flex items-center justify-between">
-        <p class="text-accent-400 text-sm">
-          This is a development tool and should not be used in production
-        </p>
-        <div class="flex items-center gap-4">
-          <a href="https://github.com/m0-foundation/liquidity-delivery" class="text-surface-500 hover:text-surface-300 text-sm transition-colors">GitHub</a>
-        </div>
-      </div>
+      <p class="text-accent-400 text-sm w-full text-center">
+        This is a development tool and should not be used in production
+      </p>
     </footer>
   </div>
 </template>

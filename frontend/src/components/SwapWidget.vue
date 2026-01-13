@@ -124,8 +124,6 @@ async function requestQuote() {
   const srcAsset = getAsset(fromToken.value)
   const dstAsset = getAsset(toToken.value)
 
-  console.log(srcAsset, dstAsset)
-
   if (!srcChain || !dstChain || !amount.value || !srcAsset || !dstAsset) return
 
   // Convert float amount to integer using decimal shift
@@ -186,13 +184,33 @@ function getWalletAddressForChain(chainId: string): string | null {
   return props.evmAddress
 }
 
+// Check if token address format is valid for the chain type
+function isAddressValidForChain(address: string, chainId: string): boolean {
+  if (!address) return false
+
+  const isEvmAddress = address.startsWith('0x')
+  const isSolanaChain = chainId === 'solana'
+
+  // EVM addresses start with 0x, Solana addresses are base58 (no 0x prefix)
+  if (isSolanaChain && isEvmAddress) {
+    return false // EVM address on Solana chain - invalid
+  }
+  if (!isSolanaChain && !isEvmAddress) {
+    return false // Solana address on EVM chain - invalid
+  }
+  return true
+}
+
 // Fetch balance for the "from" side
 async function fetchFromBalance() {
   const chain = chains.value.find(c => c.id === fromChain.value)
   const asset = getAsset(fromToken.value)
   const walletAddress = getWalletAddressForChain(fromChain.value)
 
-  if (!chain || !asset || !walletAddress || !asset.address) {
+  // Check if address format is compatible with chain
+  const addressValid = asset?.address ? isAddressValidForChain(asset.address, fromChain.value) : false
+
+  if (!chain || !asset || !walletAddress || !asset.address || !addressValid) {
     fromBalance.value = null
     return
   }
@@ -221,7 +239,10 @@ async function fetchToBalance() {
   const asset = getAsset(toToken.value)
   const walletAddress = getWalletAddressForChain(toChain.value)
 
-  if (!chain || !asset || !walletAddress || !asset.address) {
+  // Check if address format is compatible with chain
+  const addressValid = asset?.address ? isAddressValidForChain(asset.address, toChain.value) : false
+
+  if (!chain || !asset || !walletAddress || !asset.address || !addressValid) {
     toBalance.value = null
     return
   }
@@ -245,8 +266,9 @@ async function fetchToBalance() {
 }
 
 // Watch for changes that should trigger balance refresh
+// Note: assets is included so balances are fetched once token addresses load from API
 watch(
-  [fromChain, fromToken, () => props.evmAddress, () => props.svmAddress, () => props.connected],
+  [fromChain, fromToken, () => props.evmAddress, () => props.svmAddress, () => props.connected, assets],
   () => {
     if (props.connected) {
       fetchFromBalance()
@@ -258,7 +280,7 @@ watch(
 )
 
 watch(
-  [toChain, toToken, () => props.evmAddress, () => props.svmAddress, () => props.connected],
+  [toChain, toToken, () => props.evmAddress, () => props.svmAddress, () => props.connected, assets],
   () => {
     if (props.connected) {
       fetchToBalance()

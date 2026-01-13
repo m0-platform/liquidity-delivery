@@ -1,17 +1,15 @@
 # Local development configuration for the solver
-# This config runs without blockchain connections for initial testing
 
 environment: local
 network: local
 
-# Quoter connection - use Docker service name
+# Quoter connection
 quoter_grpc_url: http://quoter:50051
 connect_to_quote_stream: true
 
 # Use mock liquidity API (WireMock container)
 liquidity_api_url: http://mock-api:8080
 
-# Rate limiting
 rpc_rate_limit:
   max_requests_per_second: 10
   burst_size: 20
@@ -22,19 +20,15 @@ max_clip_reprocess_delay_sec: 60
 solver_fee_bps: 1
 auto_rebalance: false
 
-# Development keys
 evm_private_key: "afdfd9c3d2095ef696594f6cedcae59e72dcd697e2a7521b1578140422a4f890"
 svm_private_key: "2MqZwxzsfaEvQvnj4CgvUo2aknYXxJW2bBn5ewbftnbjU9DAtWX1XzCHy7Wd8dBSq5bmRwj6Ya5XTAnEe8sy2qS9"
 
-# Whitelist deployed tokens (deterministic addresses from Anvil deployment)
 supported_assets:
   third_party_whitelist:
     - "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
     - "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
   first_party_blacklist: []
 
-# Local Anvil chains
-# OrderBook address: 0x5FbDB2315678afecb367f032d93F642f64180aa3 (same on both chains)
 chains:
   - chain_id: 1
     chain: Ethereum
@@ -47,4 +41,10 @@ chains:
     rpc_url: http://anvil-chain-b:8545
     ws_url: ws://anvil-chain-b:8545
     order_book_address: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+    enabled: true
+  - chain_id: 1399811149
+    chain: Solana
+    rpc_url: http://surfpool:8899
+    ws_url: ws://surfpool:8900
+    order_book_address: "MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK"
     enabled: true

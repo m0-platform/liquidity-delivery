@@ -11,6 +11,9 @@ runbooks:
   - name: configure
     description: Configure programs
     location: svm/runbooks/configure
+  - name: local-setup
+    description: Combined deployment, initialization, and configuration for local Docker
+    location: svm/runbooks/local-setup
 environments:
   localnet:
       network_id: localnet

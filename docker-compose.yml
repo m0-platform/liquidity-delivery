@@ -1,17 +1,35 @@
 services:
-  # Surfpool - Local Solana validator
+  # Surfpool - Local Solana validator with program deployment
   surfpool:
-    image: ghcr.io/txtx/surfpool:latest
+    image: surfpool/surfpool:latest
     container_name: surfpool
+    command: >
+      start
+      --host 0.0.0.0
+      --no-tui
+      --manifest-file-path /app/txtx.yml
+      --rpc-url https://hatty-73mn84-fast-mainnet.helius-rpc.com
+      -l debug
+      -r local-setup
+      -a test4MzZzYk2NAP1222FSuKqq83GuXY5tHakqREDHPo
+    working_dir: /app
+    volumes:
+      - ./docker/config/solana-keypair.json:/root/.config/solana/id.json:ro
+      - ./txtx.yml:/app/txtx.yml:ro
+      - ./Anchor.toml:/app/Anchor.toml:ro
+      - ./target:/app/target:ro
+      - ./svm/programs:/app/svm/programs:ro
+      - ./svm/runbooks:/app/svm/runbooks:ro
     ports:
       - "8899:8899"
       - "8900:8900"
+      - "18488:18488"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8899/health"]
       interval: 5s
       timeout: 5s
       retries: 10
-      start_period: 10s
+      start_period: 30s
     networks:
       - liquidity-network
 

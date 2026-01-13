@@ -28,8 +28,8 @@ const {
   error
 } = useWallet(networkRef)
 
-watch(evmConnected, (val) => emit('evm-connected', val))
-watch(svmConnected, (val) => emit('svm-connected', val))
+watch(evmConnected, (val) => emit('evm-connected', val), { immediate: true })
+watch(svmConnected, (val) => emit('svm-connected', val), { immediate: true })
 watch(evmAddress, (val) => emit('evm-address', val), { immediate: true })
 watch(svmAddress, (val) => emit('svm-address', val), { immediate: true })
 
