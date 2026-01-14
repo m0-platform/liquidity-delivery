@@ -1,0 +1,17 @@
+{
+  "portal": "0xD925C84b55E4e44a53749fF5F2a5A13F63D128fd",
+  "chains": {
+    "sepolia": {
+      "chainId": 11155111,
+      "name": "Sepolia",
+      "rpcAlias": "sepolia",
+      "explorerAlias": "sepolia"
+    },
+    "arbitrum_sepolia": {
+      "chainId": 421614,
+      "name": "Arbitrum Sepolia",
+      "rpcAlias": "arbitrum_sepolia",
+      "explorerAlias": "arbitrum_sepolia"
+    }
+  }
+}

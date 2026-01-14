@@ -40,6 +40,33 @@ pnpm run solhint
 pnpm run solhint-fix
 ```
 
+### EVM Deployment (in `evm/` directory)
+
+Deployment uses 1Password CLI for secret management. All commands require `ENV=dev` (testnet) or `ENV=prod` (mainnet).
+
+```bash
+# Deploy to a single chain
+make deploy ENV=dev CHAIN=sepolia
+
+# Deploy to all configured chains
+make deploy-all ENV=dev
+
+# Configure cross-chain routes (bidirectional)
+make configure-routes ENV=dev
+
+# Verify on-chain route configuration
+make verify-routes ENV=dev
+
+# Upgrade implementation
+make upgrade ENV=dev CHAIN=sepolia
+
+# Show deployment status
+make status
+make help
+```
+
+See `evm/CLAUDE.md` for detailed deployment documentation.
+
 ### SVM (in `svm/` directory)
 
 ```bash
