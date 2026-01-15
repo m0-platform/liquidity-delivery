@@ -7,6 +7,7 @@ import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 
 import { OrderBook } from "../../src/OrderBook.sol";
 import { MockERC20 } from "../../test/mock/MockERC20.t.sol";
+import { MockMessenger } from "../../test/mock/MockMessenger.t.sol";
 
 /**
  * @title DeployLocal
@@ -23,9 +24,10 @@ contract DeployLocal is Script {
     // Anvil's default funded account (account 0)
     uint256 constant ANVIL_PRIVATE_KEY = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
 
-    // Fixed salts for deterministic token addresses via CREATE2
+    // Fixed salts for deterministic addresses via CREATE2
     bytes32 constant USDC_SALT = keccak256("LIQUIDITY_DELIVERY_USDC_V1");
     bytes32 constant USDT_SALT = keccak256("LIQUIDITY_DELIVERY_USDT_V1");
+    bytes32 constant MESSENGER_SALT = keccak256("LIQUIDITY_DELIVERY_MESSENGER_V1");
 
     function run() external {
         uint32 chainId = uint32(vm.envUint("CHAIN_ID"));
@@ -41,11 +43,18 @@ contract DeployLocal is Script {
         // Deployer address (Anvil account 0)
         address deployer = vm.addr(ANVIL_PRIVATE_KEY);
 
-        // Deploy OrderBook (no messenger for local testing)
-        OrderBook orderBook = new OrderBook(chainId, address(0));
+        // Deploy MockMessenger with CREATE2 for deterministic address
+        MockMessenger messenger = new MockMessenger{salt: MESSENGER_SALT}();
+        console.log("MockMessenger deployed at:", address(messenger));
+
+        // Deploy OrderBook with messenger address
+        OrderBook orderBook = new OrderBook(chainId, address(messenger));
 
         // Initialize with deployer as admin first so we can configure
         orderBook.initialize(deployer);
+
+        // Configure MockMessenger to point to OrderBook
+        messenger.setOrderBook(address(orderBook));
 
         // Configure all destination chains (before transferring admin)
         for (uint256 i = 0; i < destChainIds.length; i++) {
@@ -128,12 +137,13 @@ contract DeployLocal is Script {
         return result;
     }
 
-    /// @notice Compute deterministic token addresses without deploying
+    /// @notice Compute deterministic contract addresses without deploying
     /// @dev Useful for pre-computing addresses for config files
     /// Run with: forge script DeployLocal --sig "computeAddresses()"
     function computeAddresses() external view {
         address deployer = vm.addr(ANVIL_PRIVATE_KEY);
 
+        bytes memory messengerBytecode = type(MockMessenger).creationCode;
         bytes memory usdcBytecode = abi.encodePacked(
             type(MockERC20).creationCode,
             abi.encode("USD Coin", "USDC", uint8(6))
@@ -143,10 +153,12 @@ contract DeployLocal is Script {
             abi.encode("Tether USD", "USDT", uint8(6))
         );
 
+        address messengerAddress = Create2.computeAddress(MESSENGER_SALT, keccak256(messengerBytecode), deployer);
         address usdcAddress = Create2.computeAddress(USDC_SALT, keccak256(usdcBytecode), deployer);
         address usdtAddress = Create2.computeAddress(USDT_SALT, keccak256(usdtBytecode), deployer);
 
         console.log("Deployer:", deployer);
+        console.log("MockMessenger will be deployed at:", messengerAddress);
         console.log("USDC will be deployed at:", usdcAddress);
         console.log("USDT will be deployed at:", usdtAddress);
     }
