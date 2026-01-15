@@ -19,6 +19,7 @@ chains:
     ws_url: ws://surfpool:8900
     order_book_address: "MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK"
     starting_block: 0
+    chain_type: svm
 
 assets:
   - ticker: "USDC"
@@ -45,6 +46,6 @@ assets:
   - ticker: "wM"
     name: "wM by M0"
     icon: "https://green-obedient-albatross-155.mypinata.cloud/ipfs/bafkreickomstkfveoq5kmyvapoj6qfa3eja7sn2qoukziuqlsov4texx54"
-    address: "mzeroXDoBpRVhnEXBra27qzAMdxgpWVY3DzQW7xMVJp"
+    address: "usdsfJbX78ktZUnoRC7dwvvQz7xH3WdkpGne76gdUia"
     chain_ids: [1399811149]
     decimals: 6

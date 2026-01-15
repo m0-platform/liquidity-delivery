@@ -72,10 +72,8 @@ impl SvmTransactionBuilder {
         let client = RpcClient::new(self.rpc_url.clone());
 
         // Derive nonce PDA
-        let (nonce_pda, _) = Pubkey::find_program_address(
-            &[NONCE_SEED_PREFIX, sender.as_ref()],
-            &self.program_id,
-        );
+        let (nonce_pda, _) =
+            Pubkey::find_program_address(&[NONCE_SEED_PREFIX, sender.as_ref()], &self.program_id);
 
         // Try to fetch the nonce account
         match client.get_account(&nonce_pda).await {
@@ -101,7 +99,9 @@ impl SvmTransactionBuilder {
     }
 
     /// Fetch recent blockhash for transaction
-    async fn get_recent_blockhash(&self) -> Result<solana_sdk::hash::Hash, TransactionBuilderError> {
+    async fn get_recent_blockhash(
+        &self,
+    ) -> Result<solana_sdk::hash::Hash, TransactionBuilderError> {
         let client = RpcClient::new(self.rpc_url.clone());
         let blockhash = client
             .get_latest_blockhash()
@@ -150,13 +150,10 @@ impl SvmTransactionBuilder {
         let order_id = order_data.compute_order_id();
 
         // Derive all PDAs
-        let (global_account, _) =
-            Pubkey::find_program_address(&[GLOBAL_SEED], &self.program_id);
+        let (global_account, _) = Pubkey::find_program_address(&[GLOBAL_SEED], &self.program_id);
 
-        let (nonce_pda, _) = Pubkey::find_program_address(
-            &[NONCE_SEED_PREFIX, sender.as_ref()],
-            &self.program_id,
-        );
+        let (nonce_pda, _) =
+            Pubkey::find_program_address(&[NONCE_SEED_PREFIX, sender.as_ref()], &self.program_id);
 
         let (order_pda, _) =
             Pubkey::find_program_address(&[ORDER_SEED_PREFIX, &order_id], &self.program_id);
@@ -177,8 +174,11 @@ impl SvmTransactionBuilder {
             get_associated_token_address_with_program_id(&sender, &token_in_mint, &spl_token::ID);
 
         // Derive order's token account (ATA)
-        let order_token_in_ata =
-            get_associated_token_address_with_program_id(&order_pda, &token_in_mint, &spl_token::ID);
+        let order_token_in_ata = get_associated_token_address_with_program_id(
+            &order_pda,
+            &token_in_mint,
+            &spl_token::ID,
+        );
 
         // Event authority PDA
         let (event_authority, _) =
@@ -203,13 +203,7 @@ impl SvmTransactionBuilder {
             .map_err(|e| TransactionBuilderError::SerializationError(e.to_string()))?;
 
         // Build account metas
-        // Order matches the IDL: payer, token_authority (optional), global_account,
-        // destination_account (optional), token_in_mint, sender_token_in_account,
-        // sender_nonce_account, order, order_token_in_ata, token_in_program,
-        // associated_token_program, system_program, event_authority, program
-        let mut accounts = vec![
-            AccountMeta::new(sender, true), // payer (signer, writable)
-        ];
+        let mut accounts = vec![AccountMeta::new(sender, true)];
 
         // token_authority - optional, we'll skip it (None case means payer is authority)
         // In Anchor, None optional accounts are represented by program_id placeholder

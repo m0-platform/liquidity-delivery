@@ -213,6 +213,7 @@ function onOrderCreated(orderId: string) {
           <OrderDetail
             v-if="selectedOrderId"
             :order-id="selectedOrderId"
+            :network="network"
             @back="backToOrders"
           />
           <OrdersPage

@@ -5,6 +5,7 @@ mod evm_order_tracker;
 mod grpc_server;
 mod models;
 mod order_store;
+mod svm_order_tracker;
 mod transaction_builder;
 
 use std::env;
@@ -16,6 +17,7 @@ use evm_order_tracker::EvmOrderTracker;
 use grpc_server::QuoteGrpcService;
 use order_store::OrderStore;
 use slog::{error, info, Drain, Logger};
+use svm_order_tracker::SvmOrderTracker;
 use tonic::transport::Server;
 
 #[tokio::main]
@@ -58,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let order_store = Arc::new(OrderStore::new());
 
     // Start EVM order tracker if config is available
-    let _order_tracker = if let Some(ref cfg) = config {
+    let _evm_order_tracker = if let Some(ref cfg) = config {
         let tracker = EvmOrderTracker::new(
             order_store.clone(),
             cfg.enabled_chains(),
@@ -66,14 +68,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
 
         if let Err(e) = tracker.start().await {
-            error!(logger, "Failed to start order tracker"; "error" => %e);
+            error!(logger, "Failed to start EVM order tracker"; "error" => %e);
         } else {
-            info!(logger, "Order tracker started"; "chains" => cfg.enabled_chains().len());
+            info!(logger, "EVM order tracker started"; "chains" => cfg.enabled_chains().len());
         }
 
         Some(tracker)
     } else {
-        info!(logger, "No config file found, order tracking disabled"; "config_path" => &config_path);
+        info!(logger, "No config file found, EVM order tracking disabled"; "config_path" => &config_path);
+        None
+    };
+
+    // Start SVM order tracker if config is available
+    let _svm_order_tracker = if let Some(ref cfg) = config {
+        let tracker = SvmOrderTracker::new(
+            order_store.clone(),
+            cfg.enabled_chains(),
+            logger.clone(),
+        );
+
+        if let Err(e) = tracker.start().await {
+            error!(logger, "Failed to start SVM order tracker"; "error" => %e);
+        } else {
+            info!(logger, "SVM order tracker started");
+        }
+
+        Some(tracker)
+    } else {
         None
     };
 

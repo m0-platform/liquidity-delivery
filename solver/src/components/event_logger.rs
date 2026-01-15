@@ -31,7 +31,11 @@ impl EventHandler for EventLogger {
                     self.logger,
                     "OrderCreated";
                     "order_id" => %e.order_id,
-                    "timestamp" => e.timestamp,
+                    "from_asset" => hex::encode(e.order.token_in),
+                    "to_asset" => hex::encode(e.order.token_out),
+                    "amount" => %e.order.amount_out,
+                    "from_chain" => %e.order.origin_chain_id,
+                    "to_chain" => %e.order.dest_chain_id,
                 );
             }
             SolverEvent::Start => {

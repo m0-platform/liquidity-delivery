@@ -362,6 +362,8 @@ async function handleSwap() {
       console.log('Approval tx:', result.approvalTxHash)
     }
 
+    await new Promise(resolve => setTimeout(resolve, 1000))
+
     // Emit order created event to navigate to order details
     emit('order-created', result.orderId)
   } catch (err) {

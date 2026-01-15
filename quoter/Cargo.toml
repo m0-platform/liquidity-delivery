@@ -29,6 +29,7 @@ thiserror = "1.0"
 # Solana transaction building
 solana-sdk = "2.2"
 solana-client = "2.2"
+solana-transaction-status = "2.2"
 spl-token = "8.0"
 spl-associated-token-account = "7.0"
 borsh = "1.5"

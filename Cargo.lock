@@ -5205,6 +5205,7 @@ dependencies = [
  "slog-term",
  "solana-client",
  "solana-sdk",
+ "solana-transaction-status",
  "spl-associated-token-account 7.0.0",
  "spl-token 8.0.0",
  "thiserror 1.0.69",
@@ -8716,9 +8717,9 @@ dependencies = [
 
 [[package]]
 name = "solana-reserved-account-keys"
-version = "2.2.2"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4b22ea19ca2a3f28af7cd047c914abf833486bf7a7c4a10fc652fff09b385b1"
+checksum = "2b293f4246626c0e0a991531f08848a713ada965612e99dc510963f04d12cae7"
 dependencies = [
  "lazy_static",
  "solana-feature-set",
@@ -10026,6 +10027,47 @@ dependencies = [
  "solana-perf",
  "solana-short-vec 2.2.1",
  "solana-signature 2.2.1",
+]
+
+[[package]]
+name = "solana-transaction-status"
+version = "2.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e05fc20dd8feb089562b113a80115dab32b22fc64d63ca45c14d7b71e5e98d67"
+dependencies = [
+ "Inflector",
+ "base64 0.22.1",
+ "bincode",
+ "borsh 1.5.7",
+ "bs58",
+ "lazy_static",
+ "log",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "solana-account-decoder",
+ "solana-clock 2.2.1",
+ "solana-hash 2.2.1",
+ "solana-instruction 2.2.1",
+ "solana-loader-v2-interface",
+ "solana-message 2.2.1",
+ "solana-program",
+ "solana-pubkey 2.2.1",
+ "solana-reserved-account-keys",
+ "solana-reward-info",
+ "solana-sdk-ids 2.2.1",
+ "solana-signature 2.2.1",
+ "solana-system-interface 1.0.0",
+ "solana-transaction 2.2.1",
+ "solana-transaction-error 2.2.1",
+ "solana-transaction-status-client-types",
+ "spl-associated-token-account 6.0.0",
+ "spl-memo",
+ "spl-token 7.0.0",
+ "spl-token-2022 7.0.0",
+ "spl-token-group-interface 0.5.0",
+ "spl-token-metadata-interface 0.6.0",
+ "thiserror 2.0.17",
 ]
 
 [[package]]

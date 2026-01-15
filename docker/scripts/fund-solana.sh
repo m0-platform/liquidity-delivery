@@ -6,7 +6,7 @@ USER_1="24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p"
 USER_2="test4MzZzYk2NAP1222FSuKqq83GuXY5tHakqREDHPo"
 
 USDC_MINT="EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-WM_MINT="mzeroXDoBpRVhnEXBra27qzAMdxgpWVY3DzQW7xMVJp"
+SVM_EXT="usdsfJbX78ktZUnoRC7dwvvQz7xH3WdkpGne76gdUia"
 AMOUNT=1000000000
 
 # Surfpool RPC endpoint
@@ -92,14 +92,14 @@ wait_for_surfpool
 echo "Funding accounts with USDC..."
 fund_token_account "$USER_1" "$USDC_MINT" "$AMOUNT" "User 1"
 fund_token_account "$USER_2" "$USDC_MINT" "$AMOUNT" "User 2"
-fund_token_account "$USER_1" "$WM_MINT" "$AMOUNT" "User 1"
-fund_token_account "$USER_2" "$WM_MINT" "$AMOUNT" "User 2"
+fund_token_account "$USER_1" "$SVM_EXT" "$AMOUNT" "User 1"
+fund_token_account "$USER_2" "$SVM_EXT" "$AMOUNT" "User 2"
 
 echo "Verifying balances..."
 verify_balance "$USER_1" "$USDC_MINT" "User 1"
 verify_balance "$USER_2" "$USDC_MINT" "User 2"
-verify_balance "$USER_1" "$WM_MINT" "User 1"
-verify_balance "$USER_2" "$WM_MINT" "User 2"
+verify_balance "$USER_1" "$SVM_EXT" "User 1"
+verify_balance "$USER_2" "$SVM_EXT" "User 2"
 
 echo "Accounts funded:"
 echo "  User 1: $USER_1"

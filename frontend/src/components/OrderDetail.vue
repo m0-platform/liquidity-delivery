@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useOrders } from '../composables/useOrders'
+import { useFilledAmounts } from '../composables/useFilledAmounts'
 
 const props = defineProps<{
   orderId: string
+  network: 'local' | 'devnet' | 'mainnet'
 }>()
 
 const emit = defineEmits<{
@@ -11,6 +13,39 @@ const emit = defineEmits<{
 }>()
 
 const { selectedOrder, detailLoading, detailError, fetchOrderDetails, clearSelectedOrder } = useOrders()
+const { filledAmounts, fetchFilledAmounts, clearFilledAmounts, loading: filledLoading } = useFilledAmounts()
+
+// Polling state
+const POLL_INTERVAL = 10000 // 10 seconds
+let pollTimer: ReturnType<typeof setInterval> | null = null
+const isPolling = ref(false)
+
+// Check if order is fully filled
+const isFullyFilled = computed(() => {
+  if (!selectedOrder.value || !filledAmounts.value) return false
+  const totalAmountOut = BigInt(selectedOrder.value.amount_out)
+  const filledAmountOut = BigInt(filledAmounts.value.amountOutFilled)
+  return filledAmountOut >= totalAmountOut
+})
+
+// Calculate fill percentage
+const fillPercentage = computed(() => {
+  if (!selectedOrder.value || !filledAmounts.value) return 0
+  const totalAmountOut = BigInt(selectedOrder.value.amount_out)
+  if (totalAmountOut === 0n) return 0
+  const filledAmountOut = BigInt(filledAmounts.value.amountOutFilled)
+  // Calculate percentage (multiply by 100 first to avoid precision loss)
+  const percentage = Number((filledAmountOut * 100n) / totalAmountOut)
+  return Math.min(percentage, 100)
+})
+
+// Check if we should show the fill progress (only for EVM destination chains)
+const shouldShowFillProgress = computed(() => {
+  if (!selectedOrder.value) return false
+  // Solana chain IDs
+  const solanaChainIds = [1399811149, 1399811150]
+  return !solanaChainIds.includes(selectedOrder.value.dest_chain_id)
+})
 
 function formatAmount(amount: string): string {
   const num = parseInt(amount) / 10**6
@@ -71,7 +106,9 @@ function getChainColor(chainId: number): string {
 }
 
 function goBack() {
+  stopPolling()
   clearSelectedOrder()
+  clearFilledAmounts()
   emit('back')
 }
 
@@ -81,9 +118,71 @@ async function loadOrderDetails() {
   }
 }
 
+// Fetch filled amounts from the destination chain
+async function loadFilledAmounts() {
+  if (!selectedOrder.value || !shouldShowFillProgress.value) return
+
+  await fetchFilledAmounts(
+    selectedOrder.value.order_id,
+    selectedOrder.value.dest_chain_id,
+    props.network
+  )
+}
+
+// Start polling for filled amounts
+function startPolling() {
+  if (pollTimer || isFullyFilled.value) return
+
+  isPolling.value = true
+  // Fetch immediately
+  loadFilledAmounts()
+
+  // Then poll every POLL_INTERVAL
+  pollTimer = setInterval(() => {
+    if (isFullyFilled.value) {
+      stopPolling()
+      return
+    }
+    loadFilledAmounts()
+  }, POLL_INTERVAL)
+}
+
+// Stop polling
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+  isPolling.value = false
+}
+
+// Start polling when order is loaded and not completed
+watch(selectedOrder, (order) => {
+  if (order && shouldShowFillProgress.value && order.status !== 'completed') {
+    startPolling()
+  } else {
+    stopPolling()
+  }
+}, { immediate: true })
+
+// Stop polling when fully filled
+watch(isFullyFilled, (filled) => {
+  if (filled) {
+    stopPolling()
+  }
+})
+
 onMounted(loadOrderDetails)
 
-watch(() => props.orderId, loadOrderDetails)
+watch(() => props.orderId, () => {
+  stopPolling()
+  clearFilledAmounts()
+  loadOrderDetails()
+})
+
+onUnmounted(() => {
+  stopPolling()
+})
 </script>
 
 <template>
@@ -132,6 +231,60 @@ watch(() => props.orderId, loadOrderDetails)
           <span :class="['w-2 h-2 rounded-full animate-pulse', getStatusColor(selectedOrder.status).dot]"></span>
           {{ selectedOrder.status }}
         </span>
+      </div>
+
+      <!-- Fill Progress Bar -->
+      <div v-if="shouldShowFillProgress" class="p-4 bg-slate-925/60 rounded-xl border border-white/5">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-surface-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="text-sm text-surface-400">Fill Progress</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span v-if="filledLoading && !filledAmounts" class="text-xs text-surface-500">Loading...</span>
+            <span v-else-if="isPolling && !isFullyFilled" class="flex items-center gap-1 text-xs text-surface-500">
+              <span class="w-1.5 h-1.5 bg-accent-500 rounded-full animate-pulse"></span>
+              Polling
+            </span>
+            <span
+              class="text-sm font-medium"
+              :class="isFullyFilled ? 'text-emerald-400' : 'text-accent-400'"
+            >
+              {{ fillPercentage.toFixed(1) }}%
+            </span>
+          </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="relative h-3 bg-slate-800 rounded-full overflow-hidden">
+          <div
+            class="absolute inset-y-0 left-0 rounded-full transition-all duration-500 ease-out"
+            :class="isFullyFilled ? 'bg-emerald-500' : 'bg-gradient-to-r from-accent-600 to-accent-400'"
+            :style="{ width: `${fillPercentage}%` }"
+          ></div>
+          <!-- Animated shine effect when not fully filled -->
+          <div
+            v-if="!isFullyFilled && fillPercentage > 0"
+            class="absolute inset-y-0 left-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-shimmer"
+            :style="{ width: `${fillPercentage}%` }"
+          ></div>
+        </div>
+
+        <!-- Fill Details -->
+        <div class="mt-3 flex justify-between text-xs">
+          <div class="text-surface-500">
+            <span class="text-surface-300">{{ formatAmount(filledAmounts?.amountOutFilled || '0') }}</span>
+            <span> / {{ formatAmount(selectedOrder.amount_out) }} filled</span>
+          </div>
+          <div v-if="isFullyFilled" class="text-emerald-400 flex items-center gap-1">
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Complete
+          </div>
+        </div>
       </div>
 
       <!-- Order ID -->

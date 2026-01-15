@@ -1,12 +1,29 @@
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import { Buffer } from 'buffer'
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    {
+      name: 'buffer-polyfill',
+      transformIndexHtml() {
+        return [
+          {
+            tag: 'script',
+            attrs: { type: 'module' },
+            children: `import { Buffer } from 'buffer'; window.Buffer = Buffer;`,
+            injectTo: 'head-prepend'
+          }
+        ]
+      }
+    }
+  ],
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url))
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      buffer: 'buffer'
     }
   },
   server: {
@@ -24,6 +41,7 @@ export default defineConfig({
     global: 'globalThis',
   },
   optimizeDeps: {
+    include: ['buffer'],
     esbuildOptions: {
       define: {
         global: 'globalThis'

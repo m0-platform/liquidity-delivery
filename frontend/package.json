@@ -15,6 +15,7 @@
     "@solana/web3.js": "^1.95.0",
     "@solflare-wallet/sdk": "^1.4.2",
     "@tanstack/vue-query": "^5.92.5",
+    "buffer": "^6.0.3",
     "ethers": "^6.13.0",
     "viem": "^2.44.1",
     "vue": "^3.5.0",
