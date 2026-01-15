@@ -13,13 +13,4 @@ pub enum TransactionBuilderError {
 
     #[error("Failed to parse account data")]
     AccountParseError,
-
-    #[error("Unsupported chain type: {0}")]
-    UnsupportedChain(String),
-
-    #[error("Configuration error: {0}")]
-    ConfigError(String),
-
-    #[error("Missing required field: {0}")]
-    MissingField(String),
 }

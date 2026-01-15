@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { useOrders } from '../composables/useOrders'
+import { useOrders, type TrackedOrder } from '../composables/useOrders'
 import { useFilledAmounts } from '../composables/useFilledAmounts'
 
 const props = defineProps<{
@@ -12,8 +12,13 @@ const emit = defineEmits<{
   (e: 'back'): void
 }>()
 
-const { selectedOrder, detailLoading, detailError, fetchOrderDetails, clearSelectedOrder } = useOrders()
+const { orders, loading: ordersLoading, error: ordersError, fetchOrders, getOrder } = useOrders()
 const { filledAmounts, fetchFilledAmounts, clearFilledAmounts, loading: filledLoading } = useFilledAmounts()
+
+// Selected order from the list
+const selectedOrder = ref<TrackedOrder | undefined>(undefined)
+const detailLoading = ref(false)
+const detailError = ref<string | null>(null)
 
 // Polling state
 const POLL_INTERVAL = 10000 // 10 seconds
@@ -22,29 +27,26 @@ const isPolling = ref(false)
 
 // Check if order is fully filled
 const isFullyFilled = computed(() => {
-  if (!selectedOrder.value || !filledAmounts.value) return false
+  if (!selectedOrder.value) return false
   const totalAmountOut = BigInt(selectedOrder.value.amount_out)
-  const filledAmountOut = BigInt(filledAmounts.value.amountOutFilled)
+  const filledAmountOut = BigInt(selectedOrder.value.filled_amount)
   return filledAmountOut >= totalAmountOut
 })
 
 // Calculate fill percentage
 const fillPercentage = computed(() => {
-  if (!selectedOrder.value || !filledAmounts.value) return 0
+  if (!selectedOrder.value) return 0
   const totalAmountOut = BigInt(selectedOrder.value.amount_out)
   if (totalAmountOut === 0n) return 0
-  const filledAmountOut = BigInt(filledAmounts.value.amountOutFilled)
+  const filledAmountOut = BigInt(selectedOrder.value.filled_amount)
   // Calculate percentage (multiply by 100 first to avoid precision loss)
   const percentage = Number((filledAmountOut * 100n) / totalAmountOut)
   return Math.min(percentage, 100)
 })
 
-// Check if we should show the fill progress (only for EVM destination chains)
+// Check if we should show the fill progress
 const shouldShowFillProgress = computed(() => {
-  if (!selectedOrder.value) return false
-  // Solana chain IDs
-  const solanaChainIds = [1399811149, 1399811150]
-  return !solanaChainIds.includes(selectedOrder.value.dest_chain_id)
+  return selectedOrder.value !== undefined
 })
 
 function formatAmount(amount: string): string {
@@ -79,7 +81,6 @@ function getChainName(chainId: number): string {
     42161: 'Arbitrum One',
     11155111: 'Sepolia Testnet',
     84532: 'Base Sepolia',
-    31337: 'Anvil (Local)',
     1399811149: 'Solana',
     1399811150: 'Solana Devnet',
   }
@@ -98,7 +99,6 @@ function getChainColor(chainId: number): string {
     42161: '#28a0f0',
     11155111: '#627eea',
     84532: '#0052ff',
-    31337: '#10b981',
     1399811149: '#9945ff',
     1399811150: '#9945ff',
   }
@@ -107,43 +107,61 @@ function getChainColor(chainId: number): string {
 
 function goBack() {
   stopPolling()
-  clearSelectedOrder()
+  selectedOrder.value = undefined
   clearFilledAmounts()
   emit('back')
 }
 
 async function loadOrderDetails() {
-  if (props.orderId) {
-    await fetchOrderDetails(props.orderId)
+  if (!props.orderId) return
+
+  detailLoading.value = true
+  detailError.value = null
+
+  try {
+    // Fetch all orders if not already loaded
+    if (orders.value.length === 0) {
+      await fetchOrders()
+    }
+
+    // Find the order by ID
+    const order = getOrder(props.orderId)
+    if (order) {
+      selectedOrder.value = order
+    } else {
+      detailError.value = 'Order not found'
+    }
+  } catch (err) {
+    detailError.value = err instanceof Error ? err.message : 'Failed to load order'
+  } finally {
+    detailLoading.value = false
   }
 }
 
-// Fetch filled amounts from the destination chain
-async function loadFilledAmounts() {
-  if (!selectedOrder.value || !shouldShowFillProgress.value) return
+// Refresh order data from solver
+async function refreshOrder() {
+  if (!props.orderId) return
 
-  await fetchFilledAmounts(
-    selectedOrder.value.order_id,
-    selectedOrder.value.dest_chain_id,
-    props.network
-  )
+  await fetchOrders()
+  const order = getOrder(props.orderId)
+  if (order) {
+    selectedOrder.value = order
+  }
 }
 
-// Start polling for filled amounts
+// Start polling for order updates
 function startPolling() {
   if (pollTimer || isFullyFilled.value) return
 
   isPolling.value = true
-  // Fetch immediately
-  loadFilledAmounts()
 
-  // Then poll every POLL_INTERVAL
+  // Poll every POLL_INTERVAL
   pollTimer = setInterval(() => {
     if (isFullyFilled.value) {
       stopPolling()
       return
     }
-    loadFilledAmounts()
+    refreshOrder()
   }, POLL_INTERVAL)
 }
 
@@ -158,7 +176,7 @@ function stopPolling() {
 
 // Start polling when order is loaded and not completed
 watch(selectedOrder, (order) => {
-  if (order && shouldShowFillProgress.value && order.status !== 'completed') {
+  if (order && order.status !== 'completed' && order.status !== 'cancelled' && order.status !== 'rejected') {
     startPolling()
   } else {
     stopPolling()
@@ -176,7 +194,6 @@ onMounted(loadOrderDetails)
 
 watch(() => props.orderId, () => {
   stopPolling()
-  clearFilledAmounts()
   loadOrderDetails()
 })
 
@@ -243,8 +260,7 @@ onUnmounted(() => {
             <span class="text-sm text-surface-400">Fill Progress</span>
           </div>
           <div class="flex items-center gap-2">
-            <span v-if="filledLoading && !filledAmounts" class="text-xs text-surface-500">Loading...</span>
-            <span v-else-if="isPolling && !isFullyFilled" class="flex items-center gap-1 text-xs text-surface-500">
+            <span v-if="isPolling && !isFullyFilled" class="flex items-center gap-1 text-xs text-surface-500">
               <span class="w-1.5 h-1.5 bg-accent-500 rounded-full animate-pulse"></span>
               Polling
             </span>
@@ -275,7 +291,7 @@ onUnmounted(() => {
         <!-- Fill Details -->
         <div class="mt-3 flex justify-between text-xs">
           <div class="text-surface-500">
-            <span class="text-surface-300">{{ formatAmount(filledAmounts?.amountOutFilled || '0') }}</span>
+            <span class="text-surface-300">{{ formatAmount(selectedOrder.filled_amount) }}</span>
             <span> / {{ formatAmount(selectedOrder.amount_out) }} filled</span>
           </div>
           <div v-if="isFullyFilled" class="text-emerald-400 flex items-center gap-1">
@@ -405,8 +421,8 @@ onUnmounted(() => {
             <div class="text-sm text-surface-200">{{ formatTimestamp(selectedOrder.fill_deadline) }}</div>
           </div>
           <div>
-            <div class="text-xs text-surface-500 mb-1">Cancel Requested</div>
-            <div class="text-sm text-surface-200">{{ formatTimestamp(selectedOrder.cancel_requested_at) }}</div>
+            <div class="text-xs text-surface-500 mb-1">Filled Amount</div>
+            <div class="text-sm text-surface-200">{{ formatAmount(selectedOrder.filled_amount) }}</div>
           </div>
         </div>
       </div>

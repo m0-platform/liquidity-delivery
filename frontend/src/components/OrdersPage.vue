@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useOrders, type TrackedOrder } from '../composables/useOrders'
 
 const props = defineProps<{
@@ -10,16 +10,21 @@ const emit = defineEmits<{
   (e: 'select-order', orderId: string): void
 }>()
 
-const { orders, loading, error, fetchOrders } = useOrders()
+const { orders, loading, error, fetchOrders, getOrdersBySender } = useOrders()
 
 const showMyOrdersOnly = ref(false)
 
 async function loadOrders() {
-  const sender = showMyOrdersOnly.value && props.walletAddress
-    ? props.walletAddress
-    : undefined
-  await fetchOrders(sender)
+  await fetchOrders()
 }
+
+// Computed filtered orders for display
+const displayOrders = computed(() => {
+  if (showMyOrdersOnly.value && props.walletAddress) {
+    return getOrdersBySender(props.walletAddress)
+  }
+  return orders.value
+})
 
 function selectOrder(order: TrackedOrder) {
   emit('select-order', order.order_id)
@@ -36,6 +41,19 @@ function formatAmount(amount: string): string {
   return num.toLocaleString(undefined, { maximumFractionDigits: 6 })
 }
 
+function getFillPercentage(order: TrackedOrder): number {
+  const filled = parseInt(order.filled_amount) || 0
+  const total = parseInt(order.amount_out) || 0
+  if (total === 0) return 0
+  return Math.min(100, (filled / total) * 100)
+}
+
+function getFillStatusColor(percentage: number): string {
+  if (percentage >= 100) return '#22c55e' // green
+  if (percentage > 0) return '#f59e0b' // amber
+  return '#64748b' // slate
+}
+
 function getChainName(chainId: number): string {
   if (chainId === undefined || chainId === null || chainId === 0) {
     return 'Unknown'
@@ -46,7 +64,6 @@ function getChainName(chainId: number): string {
     42161: 'Arbitrum',
     11155111: 'Sepolia',
     84532: 'Base Sepolia',
-    31337: 'Anvil',
     1399811149: 'Solana',
     1399811150: 'Solana Devnet',
   }
@@ -60,17 +77,14 @@ function getChainColor(chainId: number): string {
     42161: '#28a0f0',
     11155111: '#627eea',
     84532: '#0052ff',
-    31337: '#10b981',
     1399811149: '#9945ff',
     1399811150: '#9945ff',
   }
   return colors[chainId] || '#64748b'
 }
 
-// Load orders on mount and when filter changes
+// Load orders on mount
 onMounted(loadOrders)
-
-watch([showMyOrdersOnly, () => props.walletAddress], loadOrders)
 </script>
 
 <template>
@@ -135,7 +149,7 @@ watch([showMyOrdersOnly, () => props.walletAddress], loadOrders)
     </div>
 
     <!-- Empty State -->
-    <div v-else-if="orders.length === 0" class="py-12">
+    <div v-else-if="displayOrders.length === 0" class="py-12">
       <div class="flex flex-col items-center gap-4">
         <div class="w-16 h-16 rounded-2xl bg-slate-800/50 flex items-center justify-center">
           <svg class="w-8 h-8 text-surface-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -160,7 +174,7 @@ watch([showMyOrdersOnly, () => props.walletAddress], loadOrders)
         leave-to-class="opacity-0 translate-y-2"
       >
         <div
-          v-for="(order, index) in orders"
+          v-for="(order, index) in displayOrders"
           :key="order.order_id"
           @click="selectOrder(order)"
           class="group bg-slate-925/60 rounded-xl p-4 cursor-pointer border border-white/5 hover:border-accent-500/30 hover:bg-slate-900/80 transition-all duration-200 overflow-hidden"
@@ -207,6 +221,36 @@ watch([showMyOrdersOnly, () => props.walletAddress], loadOrders)
             </div>
           </div>
 
+          <!-- Fill Progress -->
+          <div class="mt-3 pt-3 border-t border-white/5">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs text-surface-500">Fill Progress</span>
+              <span
+                class="text-xs font-medium"
+                :style="{ color: getFillStatusColor(getFillPercentage(order)) }"
+              >
+                {{ getFillPercentage(order).toFixed(1) }}%
+              </span>
+            </div>
+            <div class="h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
+              <div
+                class="h-full rounded-full transition-all duration-500 ease-out"
+                :style="{
+                  width: `${getFillPercentage(order)}%`,
+                  backgroundColor: getFillStatusColor(getFillPercentage(order))
+                }"
+              ></div>
+            </div>
+            <div class="flex items-center justify-between mt-1.5">
+              <span class="text-[10px] text-surface-500">
+                {{ formatAmount(order.filled_amount) }} filled
+              </span>
+              <span class="text-[10px] text-surface-500">
+                {{ formatAmount(order.amount_out) }} total
+              </span>
+            </div>
+          </div>
+
           <!-- Sender -->
           <div class="mt-3 pt-3 border-t border-white/5 flex items-center justify-between">
             <span class="text-xs text-surface-500">From</span>
@@ -217,9 +261,9 @@ watch([showMyOrdersOnly, () => props.walletAddress], loadOrders)
     </div>
 
     <!-- Order Count -->
-    <div v-if="orders.length > 0" class="mt-6 pt-4 border-t border-white/5 text-center">
+    <div v-if="displayOrders.length > 0" class="mt-6 pt-4 border-t border-white/5 text-center">
       <span class="text-sm text-surface-500">
-        {{ orders.length }} order{{ orders.length === 1 ? '' : 's' }}
+        {{ displayOrders.length }} order{{ displayOrders.length === 1 ? '' : 's' }}
       </span>
     </div>
   </div>

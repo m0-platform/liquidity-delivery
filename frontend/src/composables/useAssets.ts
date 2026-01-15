@@ -12,44 +12,53 @@ export interface Asset {
   runtime: 'evm' | 'svm'
 }
 
+// Response type from the mock API
+interface MockAssetResponse {
+  chain: string
+  chainId: number
+  address: string
+  symbol: string
+  icon: string
+  name: string
+  decimals: number
+  m0Extension: boolean
+  runtime: 'evm' | 'svm'
+}
+
 export function useAssets() {
   const assets = ref<Asset[]>([])
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  const quoterUrl = import.meta.env.VITE_QUOTER_URL || 'http://localhost:3000'
+  const mockApiUrl = import.meta.env.VITE_MOCK_API_URL || 'http://localhost:8080'
 
   async function fetchAssets(): Promise<Asset[]> {
     loading.value = true
     error.value = null
 
     try {
-      const response = await fetch(`${quoterUrl}/assets`)
+      const response = await fetch(`${mockApiUrl}/supported-assets`)
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
       }
 
-      const data = await response.json()
-      // Flatten assets: API returns chain_ids array, we need one entry per chainId
-      const flattenedAssets: Asset[] = []
-      for (const item of data) {
-        const chainIds = item.chain_ids as number[]
-        for (const chainId of chainIds) {
-          flattenedAssets.push({
-            ticker: item.ticker as string,
-            symbol: item.ticker as string,
-            name: item.name as string,
-            icon: item.icon as string,
-            address: item.address as string,
-            decimals: item.decimals as number,
-            chainId,
-            chain: getChainName(chainId),
-            runtime: isSolanaChainId(chainId) ? 'svm' : 'evm',
-          })
-        }
-      }
-      assets.value = flattenedAssets
+      const data: MockAssetResponse[] = await response.json()
+
+      // Map mock API response to frontend Asset interface
+      // No flattening needed - mock API already returns flattened data
+      assets.value = data.map((item) => ({
+        ticker: item.symbol, // Use symbol as ticker
+        symbol: item.symbol,
+        name: item.name,
+        icon: item.icon,
+        address: item.address,
+        decimals: item.decimals,
+        chainId: item.chainId,
+        chain: item.chain, // Already provided by mock API
+        runtime: item.runtime, // Already provided by mock API
+      }))
+
       return assets.value
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to fetch assets'
@@ -59,34 +68,16 @@ export function useAssets() {
     }
   }
 
-  function isSolanaChainId(chainId: number): boolean {
-    // Solana mainnet, devnet, and local chain IDs
-    return chainId === 1399811149 || chainId === 1399811150
-  }
-
-  function getChainName(chainId: number): string {
-    const chainNames: Record<number, string> = {
-      1: 'ethereum',
-      8453: 'base',
-      42161: 'arbitrum',
-      11155111: 'sepolia',
-      84532: 'base-sepolia',
-      1399811149: 'solana',
-      1399811150: 'solana-devnet',
-    }
-    return chainNames[chainId] || 'unknown'
-  }
-
   function getAssetsForChain(chainId: number): Asset[] {
-    return assets.value.filter(asset => asset.chainId === chainId)
+    return assets.value.filter((asset) => asset.chainId === chainId)
   }
 
   function getAssetForChain(ticker: string, chainId: number): Asset | undefined {
-    return assets.value.find(asset => asset.ticker === ticker && asset.chainId === chainId)
+    return assets.value.find((asset) => asset.ticker === ticker && asset.chainId === chainId)
   }
 
   function getUniqueTickers(): string[] {
-    const tickers = new Set(assets.value.map(asset => asset.ticker))
+    const tickers = new Set(assets.value.map((asset) => asset.ticker))
     return Array.from(tickers)
   }
 

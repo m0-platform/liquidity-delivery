@@ -24,6 +24,25 @@ impl EventBus {
     pub fn subscribe(&self) -> broadcast::Receiver<SolverEvent> {
         self.sender.subscribe()
     }
+
+    pub fn start_heartbeat(&self) {
+        let sender = self.sender.clone();
+
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(5));
+
+            loop {
+                interval.tick().await;
+
+                let timestamp = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_millis();
+
+                let _ = sender.send(SolverEvent::Heartbeat(timestamp));
+            }
+        });
+    }
 }
 
 impl Clone for EventBus {

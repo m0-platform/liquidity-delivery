@@ -6,12 +6,15 @@
   "response": {
     "status": 200,
     "headers": {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type"
     },
     "jsonBody": [
       {
         "chain": "Ethereum",
-        "chainId": 31337,
+        "chainId": 1,
         "address": "0x63d5B14C052fFd52596246a49b43Ce3bE114C994",
         "symbol": "USDC",
         "icon": "https://cryptologos.cc/logos/usd-coin-usdc-logo.svg",
@@ -22,7 +25,7 @@
       },
       {
         "chain": "Ethereum",
-        "chainId": 31337,
+        "chainId": 1,
         "address": "0xF6d8b261781Db63dD04Ec127A3F336310589170b",
         "symbol": "wM",
         "icon": "https://green-obedient-albatross-155.mypinata.cloud/ipfs/bafkreickomstkfveoq5kmyvapoj6qfa3eja7sn2qoukziuqlsov4texx54",
@@ -33,7 +36,7 @@
       },
       {
         "chain": "Base",
-        "chainId": 31338,
+        "chainId": 8453,
         "address": "0x63d5B14C052fFd52596246a49b43Ce3bE114C994",
         "symbol": "USDC",
         "icon": "https://cryptologos.cc/logos/usd-coin-usdc-logo.svg",
@@ -44,7 +47,7 @@
       },
       {
         "chain": "Base",
-        "chainId": 31338,
+        "chainId": 8453,
         "address": "0xF6d8b261781Db63dD04Ec127A3F336310589170b",
         "symbol": "wM",
         "icon": "https://green-obedient-albatross-155.mypinata.cloud/ipfs/bafkreickomstkfveoq5kmyvapoj6qfa3eja7sn2qoukziuqlsov4texx54",
@@ -68,7 +71,7 @@
         "chain": "Solana",
         "chainId": 1399811149,
         "address": "usdsfJbX78ktZUnoRC7dwvvQz7xH3WdkpGne76gdUia",
-        "symbol": "extUSD",
+        "symbol": "wM",
         "icon": "https://green-obedient-albatross-155.mypinata.cloud/ipfs/bafkreickomstkfveoq5kmyvapoj6qfa3eja7sn2qoukziuqlsov4texx54",
         "name": "M0 Extension",
         "decimals": 6,

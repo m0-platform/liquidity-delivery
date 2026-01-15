@@ -1,3 +1,4 @@
+pub mod api_server;
 pub mod event_logger;
 pub mod evm_event_listener;
 pub mod inventory_manager;
@@ -5,6 +6,10 @@ pub mod order_processor;
 pub mod order_timer;
 pub mod svm_event_listener;
 
+use std::sync::Arc;
+
+pub use api_server::ApiServer;
+#[allow(unused_imports)]
 pub use event_logger::EventLogger;
 pub use evm_event_listener::EvmEventListener;
 pub use inventory_manager::InventoryManager;

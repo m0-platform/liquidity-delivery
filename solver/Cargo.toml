@@ -33,6 +33,17 @@ anchor-client = { version = "0.31.1", features = ["async"] }
 spl-token = "8.0.0"
 spl-associated-token-account = "7.0.0"
 governor = "0.6"
+nanoid = "0.4"
+tonic = "0.12"
+prost = "0.13"
+tokio-stream = "0.1"
+solana-client = "2.2.4"
+solana-transaction-status-client-types = "2.2.4"
+axum = "0.7"
+tower-http = { version = "0.6", features = ["cors"] }
+
+[build-dependencies]
+tonic-build = "0.12"
 
 [dev-dependencies]
 mockito = "1.7.0"

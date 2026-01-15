@@ -57,10 +57,46 @@ pub struct Config {
     pub chains: Vec<ChainConfig>,
     pub liquidity_api_url: String,
     pub signers: Signers,
-    pub rate_limit: RateLimitConfig,
+    pub rpc_rate_limit: RateLimitConfig,
+    pub solver_fee_bps: u32,
+    pub auto_rebalance: bool,
+    pub max_order_clip_size: u64,
+    pub max_clip_reprocess_delay_sec: u64,
+    pub supported_assets: SupportedAssets,
+    pub quoter_grpc_url: String,
+    pub connect_to_quote_stream: bool,
+    pub http_port: Option<u16>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug, Deserialize)]
+struct ConfigFile {
+    environment: String,
+    network: String,
+    chains: Vec<ChainConfigFile>,
+    liquidity_api_url: String,
+    evm_private_key: String,
+    svm_private_key: String,
+    rpc_rate_limit: Option<RateLimitConfig>,
+    solver_fee_bps: Option<u32>,
+    auto_rebalance: Option<bool>,
+    max_order_clip_size: Option<u64>,
+    max_clip_reprocess_delay_sec: Option<u64>,
+    supported_assets: Option<SupportedAssets>,
+    quoter_grpc_url: String,
+    connect_to_quote_stream: bool,
+    http_port: Option<u16>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ChainConfigFile {
+    chain_id: u32,
+    enabled: bool,
+    rpc_url: String,
+    ws_url: String,
+    order_book_address: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct RateLimitConfig {
     /// Maximum sustained requests per second across all chains
     pub max_requests_per_second: u32,
@@ -76,7 +112,15 @@ impl Default for Config {
             chains: Vec::new(),
             liquidity_api_url: String::from("https://api-mainnet-b325.up.railway.app"),
             signers: Signers::default(),
-            rate_limit: RateLimitConfig::default(),
+            rpc_rate_limit: RateLimitConfig::default(),
+            solver_fee_bps: 0,
+            max_order_clip_size: 250_000,
+            max_clip_reprocess_delay_sec: 60,
+            supported_assets: SupportedAssets::default(),
+            auto_rebalance: true,
+            quoter_grpc_url: String::from("http://127.0.0.1:50051"),
+            connect_to_quote_stream: true,
+            http_port: None,
         }
     }
 }
@@ -158,13 +202,37 @@ impl Config {
             environment,
             network,
             chains,
-            liquidity_api_url,
-            signers: Signers::from_env()?,
-            rate_limit: RateLimitConfig {
-                max_requests_per_second,
-                burst_size,
-            },
-        })
+            liquidity_api_url: config_file.liquidity_api_url,
+            quoter_grpc_url: config_file.quoter_grpc_url,
+            signers: Signers::new(evm_private_key, svm_private_key),
+            connect_to_quote_stream: config_file.connect_to_quote_stream,
+            ..Default::default()
+        };
+
+        // Override defaults with provided values
+        if let Some(rpc_rate_limit) = config_file.rpc_rate_limit {
+            config.rpc_rate_limit = rpc_rate_limit;
+        }
+        if let Some(max_clip_reprocess_delay_sec) = config_file.max_clip_reprocess_delay_sec {
+            config.max_clip_reprocess_delay_sec = max_clip_reprocess_delay_sec;
+        }
+        if let Some(solver_fee_bps) = config_file.solver_fee_bps {
+            config.solver_fee_bps = solver_fee_bps;
+        }
+        if let Some(max_order_clip_size) = config_file.max_order_clip_size {
+            config.max_order_clip_size = max_order_clip_size;
+        }
+        if let Some(auto_rebalance) = config_file.auto_rebalance {
+            config.auto_rebalance = auto_rebalance;
+        }
+        if let Some(supported_assets) = config_file.supported_assets {
+            config.supported_assets = supported_assets;
+        }
+        if let Some(http_port) = config_file.http_port {
+            config.http_port = Some(http_port);
+        }
+
+        Ok(config)
     }
 }
 

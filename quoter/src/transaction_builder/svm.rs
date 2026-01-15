@@ -15,10 +15,7 @@ use super::error::TransactionBuilderError;
 use super::order_id::OrderData;
 use super::{OpenOrderInput, TransactionResult};
 
-/// Default SVM OrderBook Program ID
 const DEFAULT_ORDER_BOOK_PROGRAM_ID: &str = "MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK";
-
-/// Anchor instruction discriminator for open_order
 const OPEN_ORDER_DISCRIMINATOR: [u8; 8] = [206, 88, 88, 143, 38, 136, 50, 224];
 
 /// Seed prefixes matching the SVM program
@@ -27,11 +24,8 @@ const NONCE_SEED_PREFIX: &[u8] = b"nonce";
 const DESTINATION_SEED_PREFIX: &[u8] = b"destination";
 const ORDER_SEED_PREFIX: &[u8] = b"order";
 const EVENT_AUTHORITY_SEED: &[u8] = b"__event_authority";
-
-/// Current contract version - must match the SVM program
 const VERSION: u16 = 1;
 
-/// OrderParams structure matching the SVM program
 #[derive(BorshSerialize)]
 pub struct OrderParams {
     pub dest_chain_id: u32,
@@ -71,15 +65,12 @@ impl SvmTransactionBuilder {
     pub async fn get_sender_nonce(&self, sender: &Pubkey) -> Result<u64, TransactionBuilderError> {
         let client = RpcClient::new(self.rpc_url.clone());
 
-        // Derive nonce PDA
         let (nonce_pda, _) =
             Pubkey::find_program_address(&[NONCE_SEED_PREFIX, sender.as_ref()], &self.program_id);
 
         // Try to fetch the nonce account
         match client.get_account(&nonce_pda).await {
             Ok(account) => {
-                // Parse Nonce account data
-                // Structure: discriminator (8 bytes) + bump (1 byte) + value (8 bytes)
                 if account.data.len() >= 17 {
                     let nonce = u64::from_le_bytes(
                         account.data[9..17]
@@ -98,7 +89,6 @@ impl SvmTransactionBuilder {
         }
     }
 
-    /// Fetch recent blockhash for transaction
     async fn get_recent_blockhash(
         &self,
     ) -> Result<solana_sdk::hash::Hash, TransactionBuilderError> {
@@ -110,29 +100,20 @@ impl SvmTransactionBuilder {
         Ok(blockhash)
     }
 
-    /// Build the open_order instruction and unsigned transaction
     pub async fn build_open_order_transaction(
         &self,
         input: &OpenOrderInput,
     ) -> Result<TransactionResult, TransactionBuilderError> {
-        // Parse sender as Solana pubkey
         let sender = Pubkey::from_str(&input.sender_address)
             .map_err(|e| TransactionBuilderError::InvalidAddress(e.to_string()))?;
 
-        // Parse token_in mint
         let token_in_mint = Pubkey::from_str(&input.token_in)
             .map_err(|e| TransactionBuilderError::InvalidAddress(e.to_string()))?;
 
-        // Fetch sender nonce
         let nonce = self.get_sender_nonce(&sender).await?;
-
-        // Get recent blockhash
         let blockhash = self.get_recent_blockhash().await?;
-
-        // Parse token_out
         let token_out = parse_bytes32_svm(&input.token_out)?;
 
-        // Compute order ID to derive order PDA
         let order_data = OrderData {
             version: VERSION,
             sender: sender.to_bytes(),
@@ -158,6 +139,9 @@ impl SvmTransactionBuilder {
         let (order_pda, _) =
             Pubkey::find_program_address(&[ORDER_SEED_PREFIX, &order_id], &self.program_id);
 
+        let (event_authority, _) =
+            Pubkey::find_program_address(&[EVENT_AUTHORITY_SEED], &self.program_id);
+
         // Destination PDA (optional - only if dest_chain_id != origin chain)
         let destination_account = if input.dest_chain_id != self.chain_id {
             let (dest_pda, _) = Pubkey::find_program_address(
@@ -169,22 +153,15 @@ impl SvmTransactionBuilder {
             None
         };
 
-        // Derive sender's token account (ATA)
         let sender_token_in_account =
             get_associated_token_address_with_program_id(&sender, &token_in_mint, &spl_token::ID);
 
-        // Derive order's token account (ATA)
         let order_token_in_ata = get_associated_token_address_with_program_id(
             &order_pda,
             &token_in_mint,
             &spl_token::ID,
         );
 
-        // Event authority PDA
-        let (event_authority, _) =
-            Pubkey::find_program_address(&[EVENT_AUTHORITY_SEED], &self.program_id);
-
-        // Build OrderParams
         let order_params = OrderParams {
             dest_chain_id: input.dest_chain_id,
             fill_deadline: input.fill_deadline,
@@ -206,7 +183,6 @@ impl SvmTransactionBuilder {
         let mut accounts = vec![AccountMeta::new(sender, true)];
 
         // token_authority - optional, we'll skip it (None case means payer is authority)
-        // In Anchor, None optional accounts are represented by program_id placeholder
         accounts.push(AccountMeta::new_readonly(self.program_id, false));
 
         // global_account
@@ -234,7 +210,6 @@ impl SvmTransactionBuilder {
             AccountMeta::new_readonly(self.program_id, false),
         ]);
 
-        // Build instruction
         let instruction = Instruction {
             program_id: self.program_id,
             accounts,

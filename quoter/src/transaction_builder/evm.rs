@@ -9,7 +9,6 @@ use super::order_id::OrderData;
 use super::{EvmTransactionResult, OpenOrderInput};
 use crate::models::EvmTransaction;
 
-// Define the IOrderBook interface with functions needed for transaction building
 sol! {
     #[sol(rpc)]
     interface IOrderBook {
@@ -29,7 +28,6 @@ sol! {
     }
 }
 
-// ERC20 interface for allowance check and approve
 sol! {
     #[sol(rpc)]
     interface IERC20 {
@@ -109,7 +107,6 @@ impl EvmTransactionBuilder {
         Ok(result)
     }
 
-    /// Build ERC20 approve calldata
     pub fn build_approve_calldata(
         token: &str,
         spender: &str,
@@ -131,13 +128,11 @@ impl EvmTransactionBuilder {
         })
     }
 
-    /// Build openOrder calldata (unsigned - frontend will wrap in transaction and sign)
-    /// Also checks allowance and returns approval transaction if needed
+    /// Build openOrder calldata
     pub async fn build_open_order_calldata(
         &self,
         input: &OpenOrderInput,
     ) -> Result<EvmTransactionResult, TransactionBuilderError> {
-        // Fetch sender nonce
         let nonce = self.get_sender_nonce(&input.sender_address).await?;
 
         // Parse addresses
@@ -169,7 +164,6 @@ impl EvmTransactionBuilder {
             None
         };
 
-        // Build OrderParams
         let order_params = IOrderBook::OrderParams {
             destChainId: input.dest_chain_id,
             fillDeadline: input.fill_deadline as u32,
@@ -181,7 +175,6 @@ impl EvmTransactionBuilder {
             solver: FixedBytes::from(input.solver),
         };
 
-        // Encode calldata
         let calldata = IOrderBook::openOrderCall {
             orderParams_: order_params,
         }

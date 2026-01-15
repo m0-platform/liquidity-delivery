@@ -3,6 +3,9 @@
 environment: local
 network: local
 
+# HTTP API port
+http_port: 3001
+
 # Quoter connection
 quoter_grpc_url: http://quoter:50051
 connect_to_quote_stream: true

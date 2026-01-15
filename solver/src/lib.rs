@@ -18,7 +18,7 @@ use tokio::{
 };
 
 use crate::{
-    components::{OrderProcessor, SvmEventListener},
+    components::{ApiServer, ComponentParams, EvmWriter, OrderProcessor, QuoterClient, SvmEventListener},
     error::SolverError,
     events::{EventHandler, SolverEvent},
 };
@@ -54,33 +54,15 @@ pub async fn run_solver(
     provider_manager.initialize(&config.chains).await?;
 
     // Initialize components
-    let evm_listener = Arc::new(EvmEventListener::new(
-        event_bus.clone(),
-        config.chains.clone(),
-        logger.new(slog::o!("component" => "EvmEventListener")),
-        config.network,
-    ));
-    let svm_listener = Arc::new(SvmEventListener::new(
-        event_bus.clone(),
-        config.chains.clone(),
-        config.network,
-        logger.new(slog::o!("component" => "SvmEventListener")),
-    ));
-    let order_processor = Arc::new(OrderProcessor::new(
-        config.liquidity_api_url.clone(),
-        logger.new(slog::o!("component" => "OrderProcessor")),
-    ));
-    let inventory_manager = Arc::new(InventoryManager::new(
-        config,
-        provider_manager.clone(),
-        logger.new(slog::o!("component" => "InventoryManager")),
-    ));
-    let event_logger = Arc::new(components::EventLogger::new(
-        logger.new(slog::o!("component" => "EventLogger")),
-    ));
-    let order_timer = Arc::new(components::OrderTimer::new(
-        logger.new(slog::o!("component" => "OrderTimer")),
-    ));
+    let evm_listener = Arc::new(EvmEventListener::new(&params));
+    let evm_writer = Arc::new(EvmWriter::new(&params));
+    let svm_listener = Arc::new(SvmEventListener::new(&params));
+    let order_processor = Arc::new(OrderProcessor::new(&params));
+    let inventory_manager = Arc::new(InventoryManager::new(&params));
+    let event_logger = Arc::new(components::EventLogger::new(&params));
+    let order_timer = Arc::new(components::OrderTimer::new(&params));
+    let quoter_client = Arc::new(QuoterClient::new(&params));
+    let api_server = Arc::new(ApiServer::new(&params));
 
     // Initialize all components
     evm_listener.initialize().await?;
@@ -89,14 +71,19 @@ pub async fn run_solver(
     inventory_manager.initialize().await?;
     event_logger.initialize().await?;
     order_timer.initialize().await?;
+    quoter_client.initialize().await?;
+    api_server.initialize().await?;
 
     // Spawn handlers for all components
-    register_component(&evm_listener, &event_bus, &shutdown_tx);
-    register_component(&svm_listener, &event_bus, &shutdown_tx);
-    register_component(&order_processor, &event_bus, &shutdown_tx);
-    register_component(&inventory_manager, &event_bus, &shutdown_tx);
-    register_component(&event_logger, &event_bus, &shutdown_tx);
-    register_component(&order_timer, &event_bus, &shutdown_tx);
+    register_component(&evm_listener, &event_bus, &shutdown_tx, &logger);
+    register_component(&evm_writer, &event_bus, &shutdown_tx, &logger);
+    register_component(&svm_listener, &event_bus, &shutdown_tx, &logger);
+    register_component(&order_processor, &event_bus, &shutdown_tx, &logger);
+    register_component(&inventory_manager, &event_bus, &shutdown_tx, &logger);
+    register_component(&event_logger, &event_bus, &shutdown_tx, &logger);
+    register_component(&order_timer, &event_bus, &shutdown_tx, &logger);
+    register_component(&quoter_client, &event_bus, &shutdown_tx, &logger);
+    register_component(&api_server, &event_bus, &shutdown_tx, &logger);
 
     // Give spawned tasks time to subscribe before publishing Start event
     sleep(Duration::from_millis(100)).await;

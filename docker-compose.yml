@@ -160,6 +160,8 @@ services:
         condition: service_completed_successfully
     volumes:
       - ./docker/config/solver-local.yaml:/app/config.yaml:ro
+    ports:
+      - "3001:3001"
     networks:
       - liquidity-network
 
@@ -172,6 +174,8 @@ services:
     container_name: liquidity-frontend
     environment:
       - VITE_QUOTER_URL=http://localhost:3002
+      - VITE_ANVIL_RPC=http://localhost:8545
+      - VITE_BASE_LOCAL_RPC=http://localhost:8546
     ports:
       - "5173:5173"
     volumes:

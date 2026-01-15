@@ -10530,6 +10530,7 @@ dependencies = [
  "anchor-client",
  "anchor-spl",
  "async-trait",
+ "axum",
  "chrono",
  "ctor",
  "futures-util",
@@ -10561,6 +10562,7 @@ dependencies = [
  "tokio-stream",
  "tonic",
  "tonic-build",
+ "tower-http",
 ]
 
 [[package]]

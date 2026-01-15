@@ -10,6 +10,8 @@ declare global {
 
 interface ImportMetaEnv {
   readonly VITE_QUOTER_URL: string
+  readonly VITE_SOLVER_URL: string
+  readonly VITE_MOCK_API_URL: string
   readonly VITE_NETWORK: 'local' | 'devnet' | 'mainnet'
   readonly VITE_ANVIL_RPC: string
   readonly VITE_SURFPOOL_RPC: string

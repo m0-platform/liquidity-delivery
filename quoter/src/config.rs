@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::fs;
 use thiserror::Error;
 
@@ -14,18 +14,6 @@ pub enum ChainType {
 #[derive(Debug, Clone, Deserialize)]
 pub struct QuoterConfig {
     pub chains: Vec<ChainConfig>,
-    #[serde(default)]
-    pub assets: Vec<Asset>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Asset {
-    pub ticker: String,
-    pub name: String,
-    pub icon: String,
-    pub address: String,
-    pub chain_ids: Vec<u32>,
-    pub decimals: u8,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -33,12 +21,7 @@ pub struct ChainConfig {
     pub chain_id: u32,
     pub enabled: bool,
     pub rpc_url: String,
-    pub ws_url: String,
     pub order_book_address: String,
-    /// Block number to start fetching historical events from (defaults to 0)
-    #[serde(default)]
-    pub starting_block: u64,
-    /// Chain type for determining transaction format (defaults to EVM)
     #[serde(default)]
     pub chain_type: ChainType,
 }
