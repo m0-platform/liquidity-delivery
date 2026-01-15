@@ -13,7 +13,7 @@ const emit = defineEmits<{
 const { selectedOrder, detailLoading, detailError, fetchOrderDetails, clearSelectedOrder } = useOrders()
 
 function formatAmount(amount: string): string {
-  const num = parseFloat(amount)
+  const num = parseInt(amount) / 10**6
   if (isNaN(num)) return amount
   return num.toLocaleString(undefined, { maximumFractionDigits: 6 })
 }
@@ -35,6 +35,9 @@ function formatTimestamp(timestamp: number): string {
 }
 
 function getChainName(chainId: number): string {
+  if (chainId === undefined || chainId === null || chainId === 0) {
+    return 'Unknown Chain'
+  }
   const chains: Record<number, string> = {
     1: 'Ethereum Mainnet',
     8453: 'Base',
@@ -46,6 +49,11 @@ function getChainName(chainId: number): string {
     1399811150: 'Solana Devnet',
   }
   return chains[chainId] || `Chain ${chainId}`
+}
+
+function truncateAddress(address: string): string {
+  if (!address || address.length < 16) return address
+  return `${address.slice(0, 4)}…${address.slice(-12)}`
 }
 
 function getChainColor(chainId: number): string {
@@ -138,31 +146,35 @@ watch(() => props.orderId, loadOrderDetails)
       </div>
 
       <!-- Amount Details -->
-      <div class="p-4 bg-slate-925/60 rounded-xl border border-white/5">
-        <div class="flex items-center justify-between mb-6">
+      <div class="p-4 bg-slate-925/60 rounded-xl border border-white/5 overflow-hidden">
+        <div class="flex items-center justify-between mb-6 gap-4">
           <!-- Input -->
-          <div>
+          <div class="flex-1 min-w-0">
             <div class="text-xs text-surface-500 mb-1">Input</div>
-            <div class="text-2xl font-semibold text-white">
+            <div class="text-2xl font-semibold text-white truncate">
               {{ formatAmount(selectedOrder.amount_in) }}
             </div>
-            <span class="text-surface-400 text-sm">{{ selectedOrder.token_in }}</span>
+            <span class="text-surface-400 text-sm font-mono truncate block" :title="selectedOrder.token_in">
+              {{ truncateAddress(selectedOrder.token_in) }}
+            </span>
           </div>
 
           <!-- Arrow -->
-          <div class="flex flex-col items-center gap-1">
+          <div class="flex flex-col items-center gap-1 flex-shrink-0">
             <svg class="w-8 h-8 text-accent-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 5l7 7m0 0l-7 7m7-7H3" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </div>
 
           <!-- Output -->
-          <div class="text-right">
+          <div class="text-right flex-1 min-w-0">
             <div class="text-xs text-surface-500 mb-1">Output</div>
-            <div class="text-2xl font-semibold text-white">
+            <div class="text-2xl font-semibold text-white truncate">
               {{ formatAmount(selectedOrder.amount_out) }}
             </div>
-            <span class="text-surface-400 text-sm">{{ selectedOrder.token_out }}</span>
+            <span class="text-surface-400 text-sm font-mono truncate block" :title="selectedOrder.token_out">
+              {{ truncateAddress(selectedOrder.token_out) }}
+            </span>
           </div>
         </div>
 

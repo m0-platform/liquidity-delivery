@@ -26,7 +26,7 @@ services:
       - "8900:8900"
       - "18488:18488"
     healthcheck:
-      test: ["CMD", "curl", "-sf", "-X", "POST", "-H", "Content-Type: application/json", "-d", "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getHealth\"}", "http://localhost:8899"]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8899'"]
       interval: 5s
       timeout: 5s
       retries: 10

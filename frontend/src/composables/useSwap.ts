@@ -1,13 +1,15 @@
 import { ref } from 'vue'
-import { sendTransaction, getAccount } from '@wagmi/core'
+import { sendTransaction, getAccount, waitForTransactionReceipt } from '@wagmi/core'
 import { Connection, Transaction, VersionedTransaction } from '@solana/web3.js'
 import { wagmiConfig, solflare } from '../wallets'
 import type { Wallet } from 'ethers'
 import type { Keypair } from '@solana/web3.js'
+import type { EvmTransaction } from './useQuoter'
 
 export interface SwapResult {
   orderId: string
   txHash: string
+  approvalTxHash?: string
 }
 
 export type ChainType = 'evm' | 'svm'
@@ -17,41 +19,69 @@ export function useSwap() {
   const error = ref<string | null>(null)
 
   /**
-   * Execute an EVM swap by sending the transaction
+   * Send a single EVM transaction and optionally wait for confirmation
+   */
+  async function sendEvmTransaction(
+    tx: EvmTransaction,
+    localSigner?: Wallet | null,
+    waitForConfirmation = false
+  ): Promise<string> {
+    if (localSigner) {
+      // Local mode - sign and send directly with ethers
+      const result = await localSigner.sendTransaction({
+        to: tx.to,
+        data: tx.data,
+        value: tx.value,
+      })
+      if (waitForConfirmation) {
+        await result.wait()
+      }
+      return result.hash
+    } else {
+      // External wallet mode - use wagmi
+      const account = getAccount(wagmiConfig)
+      if (!account.address) {
+        throw new Error('EVM wallet not connected')
+      }
+
+      const txHash = await sendTransaction(wagmiConfig, {
+        to: tx.to as `0x${string}`,
+        data: tx.data as `0x${string}`,
+        value: BigInt(tx.value),
+      })
+
+      if (waitForConfirmation) {
+        await waitForTransactionReceipt(wagmiConfig, { hash: txHash })
+      }
+
+      return txHash
+    }
+  }
+
+  /**
+   * Execute an EVM swap by sending approval (if needed) and the main transaction
    */
   async function executeEvmSwap(
-    calldata: string,
-    contractAddress: string,
+    evmTransaction: EvmTransaction,
     orderId: string,
+    approvalTransaction?: EvmTransaction,
     localSigner?: Wallet | null
   ): Promise<SwapResult> {
     loading.value = true
     error.value = null
 
     try {
-      let txHash: string
+      let approvalTxHash: string | undefined
 
-      if (localSigner) {
-        // Local mode - sign and send directly with ethers
-        const tx = await localSigner.sendTransaction({
-          to: contractAddress,
-          data: calldata,
-        })
-        txHash = tx.hash
-      } else {
-        // External wallet mode - use wagmi
-        const account = getAccount(wagmiConfig)
-        if (!account.address) {
-          throw new Error('EVM wallet not connected')
-        }
-
-        txHash = await sendTransaction(wagmiConfig, {
-          to: contractAddress as `0x${string}`,
-          data: calldata as `0x${string}`,
-        })
+      // Send approval transaction first if needed and wait for it to be mined
+      if (approvalTransaction) {
+        approvalTxHash = await sendEvmTransaction(approvalTransaction, localSigner, true)
       }
 
-      return { orderId, txHash }
+      // Send the main open order transaction
+      const txHash = await sendEvmTransaction(evmTransaction, localSigner)
+
+      return { orderId, txHash, approvalTxHash }
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to execute EVM swap'
       throw err
@@ -133,10 +163,10 @@ export function useSwap() {
   async function executeSwap(
     chainType: ChainType,
     options: {
-      evmTransaction?: string
+      evmTransaction?: EvmTransaction
+      approvalTransaction?: EvmTransaction
       svmTransaction?: string
       orderId: string
-      contractAddress?: string
       svmRpcUrl?: string
       localEvmSigner?: Wallet | null
       localSvmKeypair?: Keypair | null
@@ -144,9 +174,9 @@ export function useSwap() {
   ): Promise<SwapResult> {
     const {
       evmTransaction,
+      approvalTransaction,
       svmTransaction,
       orderId,
-      contractAddress,
       svmRpcUrl = import.meta.env.VITE_SOLANA_RPC || 'http://localhost:8899',
       localEvmSigner,
       localSvmKeypair
@@ -156,10 +186,7 @@ export function useSwap() {
       if (!evmTransaction) {
         throw new Error('No EVM transaction data available')
       }
-      if (!contractAddress) {
-        throw new Error('No contract address provided')
-      }
-      return executeEvmSwap(evmTransaction, contractAddress, orderId, localEvmSigner)
+      return executeEvmSwap(evmTransaction, orderId, approvalTransaction, localEvmSigner)
     } else {
       if (!svmTransaction) {
         throw new Error('No SVM transaction data available')

@@ -3,14 +3,14 @@ chains:
     enabled: true
     rpc_url: http://anvil-chain-a:8545
     ws_url: ws://anvil-chain-a:8545
-    order_book_address: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+    order_book_address: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
     starting_block: 0
 
   - chain_id: 8453
     enabled: true
     rpc_url: http://anvil-chain-b:8545
     ws_url: ws://anvil-chain-b:8545
-    order_book_address: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+    order_book_address: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
     starting_block: 0
 
   - chain_id: 1399811149
@@ -24,14 +24,14 @@ assets:
   - ticker: "USDC"
     name: "USD Coin"
     icon: "https://cryptologos.cc/logos/usd-coin-usdc-logo.svg"
-    address: "0xa513E6E4b8f2a923D98304ec87F64353C4D5C853"
+    address: "0x63d5B14C052fFd52596246a49b43Ce3bE114C994"
     chain_ids: [1, 8453]
     decimals: 6
 
   - ticker: "wM"
     name: "wM by M0"
     icon: "https://green-obedient-albatross-155.mypinata.cloud/ipfs/bafkreickomstkfveoq5kmyvapoj6qfa3eja7sn2qoukziuqlsov4texx54"
-    address: "0x2279B7A0a67DB372996a5FaB50D91eAA73d2eBe6"
+    address: "0xF6d8b261781Db63dD04Ec127A3F336310589170b"
     chain_ids: [1, 8453]
     decimals: 6
 

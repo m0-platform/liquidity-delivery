@@ -1,4 +1,4 @@
-import { ref, computed, watch, toValue, type MaybeRef, onUnmounted } from 'vue'
+import { ref, shallowRef, computed, watch, toValue, type MaybeRef, onUnmounted } from 'vue'
 import { Wallet, JsonRpcProvider } from 'ethers'
 import { Keypair } from '@solana/web3.js'
 import { getAccount, watchAccount, disconnect as wagmiDisconnect, connect as wagmiConnect, getConnectors } from '@wagmi/core'
@@ -23,8 +23,9 @@ export function useWallet(networkRef: MaybeRef<NetworkType>) {
   const walletType = ref<'local' | 'external'>('external')
 
   // Local mode wallet instances (for signing)
-  const localEvmWallet = ref<Wallet | null>(null)
-  const localSvmKeypair = ref<Keypair | null>(null)
+  // Use shallowRef to preserve class instances with private properties
+  const localEvmWallet = shallowRef<Wallet | null>(null)
+  const localSvmKeypair = shallowRef<Keypair | null>(null)
 
   // Computed that reactively gets the current network
   const currentNetwork = computed(() => toValue(networkRef))
@@ -284,6 +285,9 @@ export function useWallet(networkRef: MaybeRef<NetworkType>) {
     isLocal,
     walletType,
     error,
+    // Local wallet instances (for signing in local mode)
+    localEvmWallet,
+    localSvmKeypair,
     // Methods
     connectEvm,
     connectSvm,

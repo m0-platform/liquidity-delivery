@@ -27,16 +27,19 @@ function selectOrder(order: TrackedOrder) {
 
 function truncateAddress(address: string): string {
   if (address.length <= 13) return address
-  return `${address.slice(0, 6)}...${address.slice(-4)}`
+  return `${address.slice(0, 4)}…${address.slice(-8)}`
 }
 
 function formatAmount(amount: string): string {
-  const num = parseFloat(amount)
+  const num = parseInt(amount) / 10**6
   if (isNaN(num)) return amount
   return num.toLocaleString(undefined, { maximumFractionDigits: 6 })
 }
 
 function getChainName(chainId: number): string {
+  if (chainId === undefined || chainId === null || chainId === 0) {
+    return 'Unknown'
+  }
   const chains: Record<number, string> = {
     1: 'Ethereum',
     8453: 'Base',
@@ -160,7 +163,7 @@ watch([showMyOrdersOnly, () => props.walletAddress], loadOrders)
           v-for="(order, index) in orders"
           :key="order.order_id"
           @click="selectOrder(order)"
-          class="group bg-slate-925/60 rounded-xl p-4 cursor-pointer border border-white/5 hover:border-accent-500/30 hover:bg-slate-900/80 transition-all duration-200"
+          class="group bg-slate-925/60 rounded-xl p-4 cursor-pointer border border-white/5 hover:border-accent-500/30 hover:bg-slate-900/80 transition-all duration-200 overflow-hidden"
           :style="{ animationDelay: `${index * 50}ms` }"
         >
           <!-- Order Header -->
@@ -190,17 +193,17 @@ watch([showMyOrdersOnly, () => props.walletAddress], loadOrders)
           </div>
 
           <!-- Amount Row -->
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <div class="text-lg font-semibold text-white">{{ formatAmount(order.amount_in) }}</div>
-              <span class="text-surface-400">{{ order.token_in }}</span>
+          <div class="flex items-center justify-between gap-3 overflow-hidden">
+            <div class="flex items-center gap-2 min-w-0 flex-1">
+              <div class="text-lg font-semibold text-white flex-shrink-0">{{ formatAmount(order.amount_in) }}</div>
+              <span class="text-surface-400 text-sm font-mono truncate" :title="order.token_in">{{ truncateAddress(order.token_in) }}</span>
             </div>
-            <svg class="w-5 h-5 text-accent-500 group-hover:translate-x-1 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg class="w-5 h-5 text-accent-500 group-hover:translate-x-1 transition-transform flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 5l7 7m0 0l-7 7m7-7H3" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <div class="flex items-center gap-3 text-right">
-              <span class="text-surface-400">{{ order.token_out }}</span>
-              <div class="text-lg font-semibold text-white">{{ formatAmount(order.amount_out) }}</div>
+            <div class="flex items-center gap-2 min-w-0 flex-1 justify-end">
+              <span class="text-surface-400 text-sm font-mono truncate" :title="order.token_out">{{ truncateAddress(order.token_out) }}</span>
+              <div class="text-lg font-semibold text-white flex-shrink-0">{{ formatAmount(order.amount_out) }}</div>
             </div>
           </div>
 

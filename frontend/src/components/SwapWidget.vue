@@ -349,15 +349,18 @@ async function handleSwap() {
 
     const result = await executeSwap(chainType, {
       evmTransaction: quote.value.evmTransaction,
+      approvalTransaction: quote.value.approvalTransaction,
       svmTransaction: quote.value.svmTransaction,
       orderId: quote.value.orderId,
-      contractAddress: getOrderBookAddress(srcChain.chainId),
       svmRpcUrl: srcChain.rpc,
       localEvmSigner: props.evmSigner,
       localSvmKeypair: props.svmKeypair,
     })
 
     console.log('Swap executed:', result)
+    if (result.approvalTxHash) {
+      console.log('Approval tx:', result.approvalTxHash)
+    }
 
     // Emit order created event to navigate to order details
     emit('order-created', result.orderId)
@@ -366,22 +369,8 @@ async function handleSwap() {
   }
 }
 
-// Get the order book contract address for a chain
-function getOrderBookAddress(chainId: number): string {
-  // These should match the quoter config
-  // For now, hardcode the addresses based on network
-  const addresses: Record<number, string> = {
-    // Local (Anvil)
-    1: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
-    8453: '0x5FbDB2315678afecb367f032d93F642f64180aa3',
-    // Devnet
-    11155111: '0x...', // Sepolia
-    84532: '0x...', // Base Sepolia
-    // Mainnet
-    // Add mainnet addresses when deployed
-  }
-  return addresses[chainId] || ''
-}
+// Check if approval is needed
+const needsApproval = computed(() => !!quote.value?.approvalTransaction)
 
 // Combined loading state
 const isLoading = computed(() => loading.value || swapLoading.value)
@@ -723,6 +712,12 @@ const displayError = computed(() => error.value || swapError.value)
       <span v-else-if="swapLoading" class="flex items-center justify-center gap-2">
         <div class="loading-spinner"></div>
         Executing Swap...
+      </span>
+      <span v-else-if="needsApproval" class="flex items-center justify-center gap-2">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Approve &amp; Swap
       </span>
       <span v-else>Swap</span>
     </button>

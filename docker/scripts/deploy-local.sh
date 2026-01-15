@@ -12,8 +12,9 @@ ANVIL_PRIVATE_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f
 # Chain configurations
 CHAIN_A_RPC="${CHAIN_A_RPC:-http://anvil-chain-a:8545}"
 CHAIN_B_RPC="${CHAIN_B_RPC:-http://anvil-chain-b:8545}"
-CHAIN_A_ID=31337
-CHAIN_B_ID=31338
+CHAIN_A_ID=1
+CHAIN_B_ID=8453
+SOLANA_CHAIN_ID=1399811149
 
 # Function to wait for RPC to be ready
 wait_for_rpc() {
@@ -68,8 +69,9 @@ deploy_to_chain() {
     cd /app/evm
 
     # Run the deployment script
+    # DEST_CHAIN_IDS is a comma-separated list of destination chain IDs
     CHAIN_ID=$chain_id \
-    DEST_CHAIN_ID=$dest_chain_id \
+    DEST_CHAIN_IDS="$dest_chain_id,$SOLANA_CHAIN_ID" \
     SOLVER_ADDRESS=$SOLVER_ADDRESS \
     USER_ADDRESS=$USER_ADDRESS \
     forge script script/deploy/DeployLocal.s.sol:DeployLocal \
@@ -102,8 +104,4 @@ deploy_to_chain "$CHAIN_A_RPC" "$CHAIN_A_ID" "$CHAIN_B_ID" "Chain A"
 deploy_to_chain "$CHAIN_B_RPC" "$CHAIN_B_ID" "$CHAIN_A_ID" "Chain B"
 
 echo "Deployment Complete!"
-echo "Accounts funded:"
-echo "  Solver: $SOLVER_ADDRESS (10 ETH on each chain)"
-echo "  User: $USER_ADDRESS (10 ETH + 1000 USDC + 1000 USDT on each chain)"
-echo ""
-echo "Deployer finished successfully!"
+

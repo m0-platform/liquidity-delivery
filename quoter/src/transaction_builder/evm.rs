@@ -1,4 +1,4 @@
-use alloy::primitives::{Address, FixedBytes};
+use alloy::primitives::{Address, FixedBytes, U256};
 use alloy::providers::ProviderBuilder;
 use alloy::sol;
 use alloy::sol_types::SolCall;
@@ -6,7 +6,8 @@ use std::str::FromStr;
 
 use super::error::TransactionBuilderError;
 use super::order_id::OrderData;
-use super::{OpenOrderInput, TransactionResult};
+use super::{EvmTransactionResult, OpenOrderInput};
+use crate::models::EvmTransaction;
 
 // Define the IOrderBook interface with functions needed for transaction building
 sol! {
@@ -25,6 +26,15 @@ sol! {
 
         function openOrder(OrderParams calldata orderParams_) external returns (bytes32);
         function getSenderNonce(address sender_) external view returns (uint64);
+    }
+}
+
+// ERC20 interface for allowance check and approve
+sol! {
+    #[sol(rpc)]
+    interface IERC20 {
+        function allowance(address owner, address spender) external view returns (uint256);
+        function approve(address spender, uint256 amount) external returns (bool);
     }
 }
 
@@ -69,11 +79,64 @@ impl EvmTransactionBuilder {
         Ok(result)
     }
 
+    /// Check the current ERC20 allowance for a token
+    pub async fn get_allowance(
+        &self,
+        token: &str,
+        owner: &str,
+        spender: &str,
+    ) -> Result<U256, TransactionBuilderError> {
+        let rpc_url: url::Url = self
+            .rpc_url
+            .parse()
+            .map_err(|e| TransactionBuilderError::RpcError(format!("Invalid RPC URL: {}", e)))?;
+        let provider = ProviderBuilder::new().connect_http(rpc_url);
+
+        let token_addr = Address::from_str(token)
+            .map_err(|e| TransactionBuilderError::InvalidAddress(e.to_string()))?;
+        let owner_addr = Address::from_str(owner)
+            .map_err(|e| TransactionBuilderError::InvalidAddress(e.to_string()))?;
+        let spender_addr = Address::from_str(spender)
+            .map_err(|e| TransactionBuilderError::InvalidAddress(e.to_string()))?;
+
+        let contract = IERC20::new(token_addr, &provider);
+        let result = contract
+            .allowance(owner_addr, spender_addr)
+            .call()
+            .await
+            .map_err(|e| TransactionBuilderError::RpcError(e.to_string()))?;
+
+        Ok(result)
+    }
+
+    /// Build ERC20 approve calldata
+    pub fn build_approve_calldata(
+        token: &str,
+        spender: &str,
+        amount: u128,
+    ) -> Result<EvmTransaction, TransactionBuilderError> {
+        let spender_addr = Address::from_str(spender)
+            .map_err(|e| TransactionBuilderError::InvalidAddress(e.to_string()))?;
+
+        let calldata = IERC20::approveCall {
+            spender: spender_addr,
+            amount: U256::from(amount),
+        }
+        .abi_encode();
+
+        Ok(EvmTransaction {
+            to: token.to_string(),
+            data: format!("0x{}", hex::encode(&calldata)),
+            value: "0x0".to_string(),
+        })
+    }
+
     /// Build openOrder calldata (unsigned - frontend will wrap in transaction and sign)
+    /// Also checks allowance and returns approval transaction if needed
     pub async fn build_open_order_calldata(
         &self,
         input: &OpenOrderInput,
-    ) -> Result<TransactionResult, TransactionBuilderError> {
+    ) -> Result<EvmTransactionResult, TransactionBuilderError> {
         // Fetch sender nonce
         let nonce = self.get_sender_nonce(&input.sender_address).await?;
 
@@ -85,6 +148,26 @@ impl EvmTransactionBuilder {
 
         // Parse token_out as bytes32 (could be Solana address or EVM address)
         let token_out = parse_bytes32(&input.token_out)?;
+
+        // Check current allowance and build approval tx if needed
+        let current_allowance = self
+            .get_allowance(
+                &input.token_in,
+                &input.sender_address,
+                &format!("{:?}", self.contract_address),
+            )
+            .await?;
+
+        let approval_transaction = if current_allowance < U256::from(input.amount_in) {
+            // Build approval for max uint256 to avoid repeated approvals
+            Some(Self::build_approve_calldata(
+                &input.token_in,
+                &format!("{:?}", self.contract_address),
+                u128::MAX,
+            )?)
+        } else {
+            None
+        };
 
         // Build OrderParams
         let order_params = IOrderBook::OrderParams {
@@ -129,8 +212,13 @@ impl EvmTransactionBuilder {
         };
         let order_id = order_data.compute_order_id();
 
-        Ok(TransactionResult {
-            transaction: format!("0x{}", hex::encode(&calldata)),
+        Ok(EvmTransactionResult {
+            transaction: EvmTransaction {
+                to: format!("{:?}", self.contract_address),
+                data: format!("0x{}", hex::encode(&calldata)),
+                value: "0x0".to_string(),
+            },
+            approval_transaction,
             order_id: format!("0x{}", hex::encode(order_id)),
             nonce,
             contract_address: format!("{:?}", self.contract_address),

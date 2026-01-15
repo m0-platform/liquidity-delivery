@@ -18,7 +18,10 @@ use crate::contracts::IOrderBook;
 use crate::grpc_server::QuoteGrpcService;
 use crate::models::QuoteRequest;
 use crate::order_store::{OrderStore, TrackedOrder};
-use crate::transaction_builder::{EvmTransactionBuilder, OpenOrderInput, SvmTransactionBuilder};
+use crate::transaction_builder::{
+    EvmTransactionBuilder, EvmTransactionResult, OpenOrderInput, SvmTransactionBuilder,
+    TransactionBuilderError, TransactionResult,
+};
 
 #[derive(Clone)]
 pub struct ApiState {
@@ -70,7 +73,7 @@ pub fn create_router(state: ApiState) -> Router {
         .route("/health", get(health_check))
         .route("/quote", post(handle_quote_request))
         .route("/orders", get(handle_orders_request))
-        .route("/orders/{order_id}", get(handle_order_detail_request))
+        .route("/orders/:order_id", get(handle_order_detail_request))
         .route("/assets", get(handle_assets_request))
         .layer(CorsLayer::permissive())
         .with_state(Arc::new(state))
@@ -100,15 +103,10 @@ async fn handle_quote_request(
             .find(|c| c.chain_id == request.input_chain_id);
 
         if let Some(chain) = input_chain {
-            // Calculate fill_deadline (current time + 15 minutes)
-            let fill_deadline =
-                chrono::Utc::now().timestamp() as u64 + 900; // 15 minutes from now
-
-            // Get recipient (defaults to sender if not provided)
+            let fill_deadline = chrono::Utc::now().timestamp() as u64 + 3600; // 1h from now
             let recipient = request.recipient.as_ref().unwrap_or(sender_address);
 
             for quote in quotes.iter_mut() {
-                // Skip rejected quotes
                 if quote.rejected {
                     continue;
                 }
@@ -148,30 +146,29 @@ async fn handle_quote_request(
                 };
 
                 match chain.chain_type {
-                    ChainType::Evm => {
-                        match build_evm_transaction(chain, &input).await {
-                            Ok(result) => {
-                                quote.evm_transaction = Some(result.transaction);
-                                quote.order_id = Some(result.order_id);
-                                quote.nonce = Some(result.nonce);
-                            }
-                            Err(e) => {
-                                warn!(state.logger, "Failed to build EVM transaction"; "error" => %e);
-                            }
+                    ChainType::Evm => match build_evm_transaction(chain, &input).await {
+                        Ok(result) => {
+                            quote.evm_transaction = Some(result.transaction);
+                            quote.approval_transaction = result.approval_transaction;
+                            quote.order_id = Some(result.order_id);
+                            quote.nonce = Some(result.nonce);
+                            quote.orderbook_address = Some(chain.order_book_address.clone());
                         }
-                    }
-                    ChainType::Svm => {
-                        match build_svm_transaction(chain, &input).await {
-                            Ok(result) => {
-                                quote.svm_transaction = Some(result.transaction);
-                                quote.order_id = Some(result.order_id);
-                                quote.nonce = Some(result.nonce);
-                            }
-                            Err(e) => {
-                                warn!(state.logger, "Failed to build SVM transaction"; "error" => %e);
-                            }
+                        Err(e) => {
+                            warn!(state.logger, "Failed to build EVM transaction"; "error" => %e);
                         }
-                    }
+                    },
+                    ChainType::Svm => match build_svm_transaction(chain, &input).await {
+                        Ok(result) => {
+                            quote.svm_transaction = Some(result.transaction);
+                            quote.order_id = Some(result.order_id);
+                            quote.nonce = Some(result.nonce);
+                            quote.orderbook_address = Some(chain.order_book_address.clone());
+                        }
+                        Err(e) => {
+                            warn!(state.logger, "Failed to build SVM transaction"; "error" => %e);
+                        }
+                    },
                 }
             }
         }
@@ -184,8 +181,7 @@ async fn handle_quote_request(
 async fn build_evm_transaction(
     chain: &ChainConfig,
     input: &OpenOrderInput,
-) -> Result<crate::transaction_builder::TransactionResult, crate::transaction_builder::TransactionBuilderError>
-{
+) -> Result<EvmTransactionResult, TransactionBuilderError> {
     let builder = EvmTransactionBuilder::new(
         chain.rpc_url.clone(),
         chain.order_book_address.clone(),
@@ -198,8 +194,7 @@ async fn build_evm_transaction(
 async fn build_svm_transaction(
     chain: &ChainConfig,
     input: &OpenOrderInput,
-) -> Result<crate::transaction_builder::TransactionResult, crate::transaction_builder::TransactionBuilderError>
-{
+) -> Result<TransactionResult, TransactionBuilderError> {
     let builder = SvmTransactionBuilder::new(
         chain.rpc_url.clone(),
         Some(chain.order_book_address.clone()),
@@ -273,7 +268,7 @@ async fn handle_order_detail_request(
     };
 
     // Parse order_id as bytes32
-    let order_id_bytes: FixedBytes<32> = match FixedBytes::from_str(&format!("0x{}", order_id)) {
+    let order_id_bytes: FixedBytes<32> = match FixedBytes::from_str(&order_id) {
         Ok(bytes) => bytes,
         Err(_) => {
             return (

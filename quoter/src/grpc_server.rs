@@ -165,8 +165,10 @@ impl From<QuoteResponseProto> for QuoteResponse {
             // Transaction fields are populated by the API server after receiving the quote
             order_id: None,
             evm_transaction: None,
+            approval_transaction: None,
             svm_transaction: None,
             nonce: None,
+            orderbook_address: None,
         }
     }
 }

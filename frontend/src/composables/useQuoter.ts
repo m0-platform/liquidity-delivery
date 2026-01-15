@@ -10,16 +10,24 @@ interface QuoteRequest {
   recipient?: string;
 }
 
-interface QuoteResponse {
+export interface EvmTransaction {
+  to: string;
+  data: string;
+  value: string;
+}
+
+export interface QuoteResponse {
   amountOut: string;
   rate: number;
   fee: string;
   estimatedTime: string;
   solver?: string;
   orderId?: string;
-  evmTransaction?: string;
+  evmTransaction?: EvmTransaction;
+  approvalTransaction?: EvmTransaction;
   svmTransaction?: string;
   nonce?: number;
+  orderbookAddress?: string;
 }
 
 export function useQuoter() {
@@ -72,20 +80,26 @@ export function useQuoter() {
         throw new Error(quoteData.reject_reason || "Quote rejected");
       }
 
-      const outputAmount = String(quoteData.output_amount ?? quoteData.amount_out ?? "0");
+      const outputAmount = String(
+        quoteData.output_amount ?? quoteData.amount_out ?? "0"
+      );
       const inputAmount = parseInt(request.amount) || 1;
       const outputAmountNum = parseInt(outputAmount) || 1;
 
       quote.value = {
         amountOut: outputAmount,
-        rate: inputAmount / outputAmountNum,
+        rate: outputAmountNum / inputAmount,
         fee: String(quoteData.fee_bps ?? "0"),
-        estimatedTime: quoteData.est_fill_time_seconds ? `~${quoteData.est_fill_time_seconds}s` : "~30s",
+        estimatedTime: quoteData.est_fill_time_seconds
+          ? `~${quoteData.est_fill_time_seconds}s`
+          : "~30s",
         solver: quoteData.solver_address || quoteData.solver,
-        orderId: quoteData.quote_id || quoteData.order_id,
+        orderId: quoteData.order_id,
         evmTransaction: quoteData.evm_transaction,
+        approvalTransaction: quoteData.approval_transaction,
         svmTransaction: quoteData.svm_transaction,
         nonce: quoteData.nonce,
+        orderbookAddress: quoteData.orderbook_address,
       };
 
       return quote.value;

@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, shallowRef, computed, onMounted, watch } from 'vue'
 import NetworkSelector from './components/NetworkSelector.vue'
 import WalletConnect from './components/WalletConnect.vue'
 import SwapWidget from './components/SwapWidget.vue'
 import OrdersPage from './components/OrdersPage.vue'
 import OrderDetail from './components/OrderDetail.vue'
+
+import type { Wallet } from 'ethers'
+import type { Keypair } from '@solana/web3.js'
 
 const network = ref<'local' | 'devnet' | 'mainnet'>(
   (import.meta.env.VITE_NETWORK as 'local' | 'devnet' | 'mainnet') || 'local'
@@ -13,6 +16,9 @@ const evmConnected = ref(false)
 const svmConnected = ref(false)
 const evmAddress = ref<string | null>(null)
 const svmAddress = ref<string | null>(null)
+// Use shallowRef to preserve class instances with private properties
+const evmSigner = shallowRef<Wallet | null>(null)
+const svmKeypair = shallowRef<Keypair | null>(null)
 
 const isConnected = computed(() => evmConnected.value || svmConnected.value)
 
@@ -20,6 +26,56 @@ const isConnected = computed(() => evmConnected.value || svmConnected.value)
 type Tab = 'swap' | 'orders'
 const activeTab = ref<Tab>('swap')
 const selectedOrderId = ref<string | null>(null)
+
+// Parse URL state on mount
+function parseUrlState() {
+  const params = new URLSearchParams(window.location.search)
+  const tab = params.get('tab')
+  const orderId = params.get('order')
+
+  if (tab === 'orders' || orderId) {
+    activeTab.value = 'orders'
+    if (orderId) {
+      selectedOrderId.value = orderId
+    }
+  } else if (tab === 'swap') {
+    activeTab.value = 'swap'
+  }
+}
+
+// Update URL to reflect current state
+function updateUrl() {
+  const params = new URLSearchParams()
+
+  if (activeTab.value === 'orders') {
+    params.set('tab', 'orders')
+    if (selectedOrderId.value) {
+      params.set('order', selectedOrderId.value)
+    }
+  }
+  // Don't add params for swap tab (default state)
+
+  const newUrl = params.toString()
+    ? `${window.location.pathname}?${params.toString()}`
+    : window.location.pathname
+
+  window.history.pushState({}, '', newUrl)
+}
+
+// Handle browser back/forward
+function handlePopState() {
+  parseUrlState()
+}
+
+onMounted(() => {
+  parseUrlState()
+  window.addEventListener('popstate', handlePopState)
+})
+
+// Watch for navigation changes and update URL
+watch([activeTab, selectedOrderId], () => {
+  updateUrl()
+})
 
 function selectOrder(orderId: string) {
   selectedOrderId.value = orderId
@@ -81,6 +137,8 @@ function onOrderCreated(orderId: string) {
             @svm-connected="svmConnected = $event"
             @evm-address="evmAddress = $event"
             @svm-address="svmAddress = $event"
+            @evm-signer="evmSigner = $event"
+            @svm-keypair="svmKeypair = $event"
           />
         </div>
       </div>
@@ -145,6 +203,8 @@ function onOrderCreated(orderId: string) {
           :connected="isConnected"
           :evm-address="evmAddress"
           :svm-address="svmAddress"
+          :evm-signer="evmSigner"
+          :svm-keypair="svmKeypair"
           @order-created="onOrderCreated"
         />
 

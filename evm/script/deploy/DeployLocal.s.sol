@@ -3,6 +3,7 @@ pragma solidity 0.8.26;
 
 import { Script } from "../../lib/forge-std/src/Script.sol";
 import { console } from "../../lib/forge-std/src/console.sol";
+import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 
 import { OrderBook } from "../../src/OrderBook.sol";
 import { MockERC20 } from "../../test/mock/MockERC20.t.sol";
@@ -14,7 +15,7 @@ import { MockERC20 } from "../../test/mock/MockERC20.t.sol";
  *
  * Environment variables:
  *   CHAIN_ID - The chain ID for this deployment
- *   DEST_CHAIN_ID - The destination chain ID for cross-chain config
+ *   DEST_CHAIN_IDS - Comma-separated list of destination chain IDs for cross-chain config
  *   SOLVER_ADDRESS - Address of the solver/admin
  *   USER_ADDRESS - Address of the test user to receive tokens
  */
@@ -22,11 +23,18 @@ contract DeployLocal is Script {
     // Anvil's default funded account (account 0)
     uint256 constant ANVIL_PRIVATE_KEY = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
 
+    // Fixed salts for deterministic token addresses via CREATE2
+    bytes32 constant USDC_SALT = keccak256("LIQUIDITY_DELIVERY_USDC_V1");
+    bytes32 constant USDT_SALT = keccak256("LIQUIDITY_DELIVERY_USDT_V1");
+
     function run() external {
         uint32 chainId = uint32(vm.envUint("CHAIN_ID"));
-        uint32 destChainId = uint32(vm.envUint("DEST_CHAIN_ID"));
+        string memory destChainIdsStr = vm.envString("DEST_CHAIN_IDS");
         address solverAddress = vm.envAddress("SOLVER_ADDRESS");
         address userAddress = vm.envAddress("USER_ADDRESS");
+
+        // Parse comma-separated destination chain IDs
+        uint32[] memory destChainIds = parseChainIds(destChainIdsStr);
 
         vm.startBroadcast(ANVIL_PRIVATE_KEY);
 
@@ -39,20 +47,18 @@ contract DeployLocal is Script {
         // Initialize with deployer as admin first so we can configure
         orderBook.initialize(deployer);
 
-        // Configure destination chain
-        orderBook.setDestinationConfig(destChainId, true, 10);
-
-        // Grant admin role to solver
-        orderBook.grantRole(orderBook.DEFAULT_ADMIN_ROLE(), solverAddress);
-
-        // Renounce deployer's admin role (solver is now the only admin)
-        orderBook.renounceRole(orderBook.DEFAULT_ADMIN_ROLE(), deployer);
+        // Configure all destination chains (before transferring admin)
+        for (uint256 i = 0; i < destChainIds.length; i++) {
+            orderBook.setDestinationConfig(destChainIds[i], true, 10);
+            console.log("Configured destination chain:", destChainIds[i]);
+        }
 
         console.log("OrderBook deployed at:", address(orderBook));
 
-        // Deploy mock tokens
-        MockERC20 usdc = new MockERC20("USD Coin", "USDC", 6);
-        MockERC20 usdt = new MockERC20("Tether USD", "USDT", 6);
+        // Deploy mock tokens with CREATE2 for deterministic addresses
+        // These addresses will be the same regardless of deployment order or script changes
+        MockERC20 usdc = new MockERC20{salt: USDC_SALT}("USD Coin", "USDC", 6);
+        MockERC20 usdt = new MockERC20{salt: USDT_SALT}("Tether USD", "USDT", 6);
 
         console.log("USDC deployed at:", address(usdc));
         console.log("USDT deployed at:", address(usdt));
@@ -69,6 +75,79 @@ contract DeployLocal is Script {
         console.log("Minted", mintAmount, "USDC and USDT to user:", userAddress);
         console.log("Minted", mintAmount, "USDC and USDT to solver:", solverAddress);
 
+        // Grant admin role to solver
+        orderBook.grantRole(orderBook.DEFAULT_ADMIN_ROLE(), solverAddress);
+
+        // Renounce deployer's admin role (solver is now the only admin)
+        orderBook.renounceRole(orderBook.DEFAULT_ADMIN_ROLE(), deployer);
+
         vm.stopBroadcast();
+    }
+
+    /// @notice Parse a comma-separated string of chain IDs into an array
+    function parseChainIds(string memory str) internal pure returns (uint32[] memory) {
+        // Count commas to determine array size
+        bytes memory strBytes = bytes(str);
+        uint256 count = 1;
+        for (uint256 i = 0; i < strBytes.length; i++) {
+            if (strBytes[i] == ",") {
+                count++;
+            }
+        }
+
+        uint32[] memory result = new uint32[](count);
+        uint256 resultIndex = 0;
+        uint256 start = 0;
+
+        for (uint256 i = 0; i <= strBytes.length; i++) {
+            if (i == strBytes.length || strBytes[i] == ",") {
+                // Extract substring and convert to uint32
+                bytes memory numBytes = new bytes(i - start);
+                for (uint256 j = start; j < i; j++) {
+                    numBytes[j - start] = strBytes[j];
+                }
+                result[resultIndex] = uint32(parseUint(string(numBytes)));
+                resultIndex++;
+                start = i + 1;
+            }
+        }
+
+        return result;
+    }
+
+    /// @notice Parse a string to uint
+    function parseUint(string memory str) internal pure returns (uint256) {
+        bytes memory strBytes = bytes(str);
+        uint256 result = 0;
+        for (uint256 i = 0; i < strBytes.length; i++) {
+            uint8 c = uint8(strBytes[i]);
+            if (c >= 48 && c <= 57) {
+                result = result * 10 + (c - 48);
+            }
+        }
+        return result;
+    }
+
+    /// @notice Compute deterministic token addresses without deploying
+    /// @dev Useful for pre-computing addresses for config files
+    /// Run with: forge script DeployLocal --sig "computeAddresses()"
+    function computeAddresses() external view {
+        address deployer = vm.addr(ANVIL_PRIVATE_KEY);
+
+        bytes memory usdcBytecode = abi.encodePacked(
+            type(MockERC20).creationCode,
+            abi.encode("USD Coin", "USDC", uint8(6))
+        );
+        bytes memory usdtBytecode = abi.encodePacked(
+            type(MockERC20).creationCode,
+            abi.encode("Tether USD", "USDT", uint8(6))
+        );
+
+        address usdcAddress = Create2.computeAddress(USDC_SALT, keccak256(usdcBytecode), deployer);
+        address usdtAddress = Create2.computeAddress(USDT_SALT, keccak256(usdtBytecode), deployer);
+
+        console.log("Deployer:", deployer);
+        console.log("USDC will be deployed at:", usdcAddress);
+        console.log("USDT will be deployed at:", usdtAddress);
     }
 }

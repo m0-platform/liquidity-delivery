@@ -15,6 +15,17 @@ pub struct QuoteRequest {
     pub recipient: Option<String>,
 }
 
+/// EVM transaction parameters
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvmTransaction {
+    /// Target contract address (hex with 0x prefix)
+    pub to: String,
+    /// Transaction calldata (hex with 0x prefix)
+    pub data: String,
+    /// Transaction value in wei (hex with 0x prefix)
+    pub value: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QuoteResponse {
     pub quote_id: String,
@@ -29,13 +40,19 @@ pub struct QuoteResponse {
     /// Computed order ID (hex string) for redirect after order creation
     #[serde(skip_serializing_if = "Option::is_none")]
     pub order_id: Option<String>,
-    /// Serialized EVM transaction calldata (hex with 0x prefix)
+    /// EVM transaction to open the order
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub evm_transaction: Option<String>,
+    pub evm_transaction: Option<EvmTransaction>,
+    /// EVM approval transaction (if token allowance is insufficient)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub approval_transaction: Option<EvmTransaction>,
     /// Serialized SVM transaction (base64)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub svm_transaction: Option<String>,
     /// Nonce used for the order
     #[serde(skip_serializing_if = "Option::is_none")]
     pub nonce: Option<u64>,
+    /// OrderBook contract address for the input chain
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub orderbook_address: Option<String>,
 }

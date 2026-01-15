@@ -6,12 +6,14 @@ const props = defineProps<{
   network: 'local' | 'devnet' | 'mainnet'
 }>()
 
-const emit = defineEmits<{
-  'evm-connected': [connected: boolean]
-  'svm-connected': [connected: boolean]
-  'evm-address': [address: string | null]
-  'svm-address': [address: string | null]
-}>()
+const emit = defineEmits([
+  'evm-connected',
+  'svm-connected',
+  'evm-address',
+  'svm-address',
+  'evm-signer',
+  'svm-keypair',
+])
 
 // Pass network as a reactive ref so useWallet can react to changes
 const networkRef = toRef(props, 'network')
@@ -26,6 +28,8 @@ const {
   connectSvm,
   disconnectEvm,
   disconnectSvm,
+  localEvmWallet,
+  localSvmKeypair,
   error
 } = useWallet(networkRef)
 
@@ -33,6 +37,8 @@ watch(evmConnected, (val) => emit('evm-connected', val), { immediate: true })
 watch(svmConnected, (val) => emit('svm-connected', val), { immediate: true })
 watch(evmAddress, (val) => emit('evm-address', val), { immediate: true })
 watch(svmAddress, (val) => emit('svm-address', val), { immediate: true })
+watch(localEvmWallet, (val) => emit('evm-signer', val), { immediate: true })
+watch(localSvmKeypair, (val) => emit('svm-keypair', val), { immediate: true })
 
 const copied = ref<'evm' | 'svm' | null>(null)
 const showLocalInfo = ref(false)

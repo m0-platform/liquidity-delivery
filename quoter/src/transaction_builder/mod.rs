@@ -7,9 +7,25 @@ pub use error::TransactionBuilderError;
 pub use evm::EvmTransactionBuilder;
 pub use svm::SvmTransactionBuilder;
 
+use crate::models::EvmTransaction;
 use serde::{Deserialize, Serialize};
 
-/// Result of building a transaction
+/// Result of building an EVM transaction
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EvmTransactionResult {
+    /// The open order transaction
+    pub transaction: EvmTransaction,
+    /// Approval transaction if allowance is insufficient (None if not needed)
+    pub approval_transaction: Option<EvmTransaction>,
+    /// The computed order ID (hex, 32 bytes, with 0x prefix)
+    pub order_id: String,
+    /// The nonce used in this order
+    pub nonce: u64,
+    /// The contract/program address
+    pub contract_address: String,
+}
+
+/// Result of building a transaction (legacy for SVM compatibility)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionResult {
     /// The serialized transaction (base64 for SVM, hex for EVM calldata)
