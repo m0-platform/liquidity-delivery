@@ -15,6 +15,7 @@ pub struct Order {
     pub data: OrderData,
     pub filled_amount: u128,
     pub transaction_history: Vec<TransactionRecord>,
+    pub created_at: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -99,6 +100,7 @@ impl EventProcessor for OrderStore {
                     state: OrderState::Created,
                     data: e.order.clone(),
                     filled_amount: 0,
+                    created_at: e.created_timestamp,
                     transaction_history: vec![TransactionRecord {
                         transaction_hash: e.transaction_hash.clone(),
                         event: "OrderCreated".to_string(),

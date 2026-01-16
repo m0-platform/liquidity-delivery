@@ -171,7 +171,7 @@ onMounted(loadOrders)
     </div>
 
     <!-- Orders List -->
-    <div v-else class="space-y-3">
+    <div v-else class="space-y-3 max-h-[60vh] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-surface-600 scrollbar-track-transparent">
       <TransitionGroup
         enter-active-class="transition-all duration-300 ease-out"
         enter-from-class="opacity-0 translate-y-2"

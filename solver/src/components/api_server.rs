@@ -38,6 +38,7 @@ pub struct OrderSummary {
     pub amount_out: String,
     pub filled_amount: String,
     pub solver: String,
+    pub created_at: u64,
     pub transaction_history: Vec<TransactionRecord>,
 }
 
@@ -59,6 +60,7 @@ impl OrderSummary {
             amount_out: order.data.amount_out.to_string(),
             filled_amount: order.filled_amount.to_string(),
             solver: format_address(&order.data.solver),
+            created_at: order.created_at,
             transaction_history: order.transaction_history.clone(),
         }
     }
@@ -106,8 +108,10 @@ async fn health_check() -> impl IntoResponse {
 
 async fn handle_orders_request(State(order_store): State<Arc<OrderStore>>) -> impl IntoResponse {
     let orders = order_store.get_all_orders().await;
-    let order_list: Vec<OrderSummary> = orders.iter().map(OrderSummary::from_order).collect();
-    let count = order_list.len();
+    let count = orders.len();
+
+    let mut order_list: Vec<OrderSummary> = orders.iter().map(OrderSummary::from_order).collect();
+    order_list.sort_by(|a, b| b.created_at.cmp(&a.created_at));
 
     (
         StatusCode::OK,

@@ -26,12 +26,13 @@ pub enum SolverEvent {
 pub struct OrderCreatedEvent {
     pub order_id: String,
     pub timestamp: u64,
+    pub created_timestamp: u64,
     pub order: OrderData,
     pub transaction_hash: String,
 }
 
 impl OrderCreatedEvent {
-    pub fn new(order: OrderData, transaction_hash: String) -> Self {
+    pub fn new(order: OrderData, transaction_hash: String, created_timestamp: u64) -> Self {
         Self {
             order_id: hex::encode(order.compute_order_id()),
             timestamp: SystemTime::now()
@@ -40,6 +41,7 @@ impl OrderCreatedEvent {
                 .as_secs(),
             order,
             transaction_hash,
+            created_timestamp,
         }
     }
 }
@@ -113,7 +115,12 @@ pub struct OrderRefundClaimedEvent {
 }
 
 impl OrderRefundClaimedEvent {
-    pub fn new(order_id: String, sender: String, amount_refunded: u128, transaction_hash: String) -> Self {
+    pub fn new(
+        order_id: String,
+        sender: String,
+        amount_refunded: u128,
+        transaction_hash: String,
+    ) -> Self {
         Self {
             order_id,
             sender,

@@ -36,6 +36,7 @@ impl EventHandler for EventLogger {
                     "amount" => %e.order.amount_out,
                     "from_chain" => %e.order.origin_chain_id,
                     "to_chain" => %e.order.dest_chain_id,
+                    "transaction_hash" => %e.transaction_hash,
                 );
             }
             SolverEvent::Start => {
@@ -51,6 +52,7 @@ impl EventHandler for EventLogger {
                     "order_id" => %e.order_id,
                     "timestamp" => e.timestamp,
                     "amount" => %e.amount,
+                    "transaction_hash" => %e.transaction_hash,
                 );
             }
             SolverEvent::OrderRejected(e) => {
@@ -67,8 +69,8 @@ impl EventHandler for EventLogger {
                     self.logger,
                     "OrderCancelRequest";
                     "order_id" => %e.order_id,
-                    "timestamp" => e.timestamp,
-                    "new_fill_deadline" => e.new_fill_deadline,
+                    "requested_at" => e.requested_at,
+                    "transaction_hash" => %e.transaction_hash,
                 );
             }
             SolverEvent::OrderRefundClaimed(e) => {
@@ -79,6 +81,7 @@ impl EventHandler for EventLogger {
                     "timestamp" => e.timestamp,
                     "sender" => %e.sender,
                     "amount_refunded" => %e.amount_refunded,
+                    "transaction_hash" => %e.transaction_hash,
                 );
             }
             SolverEvent::OrderCompleted(e) => {
@@ -86,7 +89,7 @@ impl EventHandler for EventLogger {
                     self.logger,
                     "OrderCompleted";
                     "order_id" => %e.order_id,
-                    "timestamp" => e.timestamp,
+                    "transaction_hash" => %e.transaction_hash,
                 );
             }
             SolverEvent::RequestRebalance(e) => {
