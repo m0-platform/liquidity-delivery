@@ -1,5 +1,10 @@
 import { ref } from "vue";
 
+export interface TransactionRecord {
+  transaction_hash: string;
+  event: string;
+}
+
 export interface TrackedOrder {
   order_id: string;
   status: string;
@@ -16,6 +21,7 @@ export interface TrackedOrder {
   amount_out: string;
   filled_amount: string;
   solver: string;
+  transaction_history: TransactionRecord[];
 }
 
 export interface OrdersResponse {

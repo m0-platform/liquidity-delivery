@@ -339,7 +339,11 @@ impl EvmEventListener {
 
         let event_signature = topics[0];
 
-        // Convert alloy::rpc::types::Log to Log for decoding
+        let transaction_hash = log
+            .transaction_hash
+            .map(|h| format!("{:x}", h))
+            .unwrap_or_default();
+
         let log_data = Log {
             address: Address::from_slice(log.address().as_slice()),
             data: LogData::new(log.topics().to_vec(), log.data().data.clone())
@@ -348,21 +352,29 @@ impl EvmEventListener {
 
         // Match on event signature and decode
         if event_signature == OrderOpened::SIGNATURE_HASH {
-            return Ok(Some(Self::handle_order_open(chain_id, &log_data)?));
+            let event =
+                Self::handle_order_open(chain_id, &log_data, contract_address, provider, transaction_hash).await?;
+            return Ok(Some(event));
         } else if event_signature == OrderFilled::SIGNATURE_HASH {
-            return Ok(Some(Self::handle_fill(&log_data)?));
+            return Ok(Some(Self::handle_fill(&log_data, transaction_hash)?));
         } else if event_signature == CancelRequested::SIGNATURE_HASH {
-            return Ok(Some(Self::handle_cancel_request(&log_data)?));
+            return Ok(Some(Self::handle_cancel_request(&log_data, transaction_hash)?));
         } else if event_signature == RefundClaimed::SIGNATURE_HASH {
-            return Ok(Some(Self::handle_refund_claimed(&log_data)?));
+            return Ok(Some(Self::handle_refund_claimed(&log_data, transaction_hash)?));
         } else if event_signature == OrderCompleted::SIGNATURE_HASH {
-            return Ok(Some(Self::handle_order_completed(&log_data)?));
+            return Ok(Some(Self::handle_order_completed(&log_data, transaction_hash)?));
         }
 
         Ok(None)
     }
 
-    fn handle_order_open(chain_id: u32, log: &Log) -> Result<SolverEvent> {
+    async fn handle_order_open<P: Provider>(
+        chain_id: u32,
+        log: &Log,
+        contract_address: Address,
+        provider: &P,
+        transaction_hash: String,
+    ) -> Result<SolverEvent> {
         let event = OrderOpened::decode_log(log)
             .map_err(|e| SolverError::Component(format!("Failed to decode OrderOpen: {}", e)))?;
 
@@ -383,51 +395,50 @@ impl EvmEventListener {
 
         Ok(SolverEvent::OrderCreated(OrderCreatedEvent::new(
             order,
-            decode_evm_address(event.tokenIn),
+            transaction_hash,
         )))
     }
 
-    fn handle_fill(log: &Log) -> Result<SolverEvent> {
+    fn handle_fill(log: &Log, transaction_hash: String) -> Result<SolverEvent> {
         let event = OrderFilled::decode_log(log)
             .map_err(|e| SolverError::Component(format!("Failed to decode Fill: {}", e)))?;
 
         let order_id = format!("{:x}", event.orderId);
-        let fill_event = OrderFillEvent::new(order_id, event.amountOutFilled);
+        let fill_event = OrderFillEvent::new(order_id, event.amountOutFilled, transaction_hash);
 
         Ok(SolverEvent::OrderFill(fill_event))
     }
 
-    fn handle_cancel_request(log: &Log) -> Result<SolverEvent> {
+    fn handle_cancel_request(log: &Log, transaction_hash: String) -> Result<SolverEvent> {
         let event = CancelRequested::decode_log(log).map_err(|e| {
             SolverError::Component(format!("Failed to decode CancelRequest: {}", e))
         })?;
 
         let order_id = format!("{:x}", event.orderId);
-        let cancel_event =
-            OrderCancelRequestEvent::new(order_id, event.newFillDeadline.to::<u64>());
+        let cancel_event = OrderCancelRequestEvent::new(order_id, event.cancelRequestedAt as u64, transaction_hash);
 
         Ok(SolverEvent::OrderCancelRequest(cancel_event))
     }
 
-    fn handle_refund_claimed(log: &Log) -> Result<SolverEvent> {
+    fn handle_refund_claimed(log: &Log, transaction_hash: String) -> Result<SolverEvent> {
         let event = RefundClaimed::decode_log(log).map_err(|e| {
             SolverError::Component(format!("Failed to decode RefundClaimed: {}", e))
         })?;
 
         let order_id = format!("{:x}", event.orderId);
         let sender = format!("{:?}", event.sender);
-        let refund_event = OrderRefundClaimedEvent::new(order_id, sender, event.amountInRefunded);
+        let refund_event = OrderRefundClaimedEvent::new(order_id, sender, event.amountInRefunded, transaction_hash);
 
         Ok(SolverEvent::OrderRefundClaimed(refund_event))
     }
 
-    fn handle_order_completed(log: &Log) -> Result<SolverEvent> {
+    fn handle_order_completed(log: &Log, transaction_hash: String) -> Result<SolverEvent> {
         let event = OrderCompleted::decode_log(log).map_err(|e| {
             SolverError::Component(format!("Failed to decode OrderCompleted: {}", e))
         })?;
 
         let order_id = format!("{:x}", event.orderId);
-        let completed_event = OrderCompletedEvent::new(order_id);
+        let completed_event = OrderCompletedEvent::new(order_id, transaction_hash);
 
         Ok(SolverEvent::OrderCompleted(completed_event))
     }

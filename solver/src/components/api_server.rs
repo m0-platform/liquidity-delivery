@@ -14,7 +14,7 @@ use tower_http::cors::CorsLayer;
 use crate::{
     error::Result,
     events::{EventHandler, EventProcessor, SolverEvent},
-    stores::{Order, OrderState, OrderStore},
+    stores::{Order, OrderStore, TransactionRecord},
     utils::format_address,
 };
 
@@ -38,22 +38,14 @@ pub struct OrderSummary {
     pub amount_out: String,
     pub filled_amount: String,
     pub solver: String,
+    pub transaction_history: Vec<TransactionRecord>,
 }
 
 impl OrderSummary {
     fn from_order(order: &Order) -> Self {
-        let status = match order.state {
-            OrderState::Created => "created",
-            OrderState::PartiallyFilled => "partially_filled",
-            OrderState::Filled => "filled",
-            OrderState::Completed => "completed",
-            OrderState::Rejected => "rejected",
-            OrderState::Cancelled => "cancelled",
-        };
-
         Self {
             order_id: order.id.clone(),
-            status: status.to_string(),
+            status: order.state.to_string(),
             version: order.data.version,
             nonce: order.data.nonce,
             origin_chain_id: order.data.origin_chain_id,
@@ -67,6 +59,7 @@ impl OrderSummary {
             amount_out: order.data.amount_out.to_string(),
             filled_amount: order.filled_amount.to_string(),
             solver: format_address(&order.data.solver),
+            transaction_history: order.transaction_history.clone(),
         }
     }
 }

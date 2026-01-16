@@ -14,6 +14,7 @@ pub struct Order {
     pub state: OrderState,
     pub data: OrderData,
     pub filled_amount: u128,
+    pub transaction_history: Vec<TransactionRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,6 +38,12 @@ impl fmt::Display for OrderState {
             OrderState::Cancelled => write!(f, "Cancelled"),
         }
     }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TransactionRecord {
+    pub transaction_hash: String,
+    pub event: String,
 }
 
 /// Event store for tracking order status
@@ -92,6 +99,10 @@ impl EventProcessor for OrderStore {
                     state: OrderState::Created,
                     data: e.order.clone(),
                     filled_amount: 0,
+                    transaction_history: vec![TransactionRecord {
+                        transaction_hash: e.transaction_hash.clone(),
+                        event: "OrderCreated".to_string(),
+                    }],
                 };
                 orders.insert(order.id.clone(), order);
             }
@@ -106,6 +117,11 @@ impl EventProcessor for OrderStore {
                 if order.filled_amount >= order.data.amount_out {
                     order.state = OrderState::Filled;
                 }
+
+                order.transaction_history.push(TransactionRecord {
+                    transaction_hash: e.transaction_hash.clone(),
+                    event: "OrderFill".to_string(),
+                });
             }
             SolverEvent::OrderRejected(e) => {
                 let order = orders
@@ -120,15 +136,27 @@ impl EventProcessor for OrderStore {
                     .ok_or_else(|| SolverError::OrderNotFound(e.order_id.clone()))?;
 
                 order.state = OrderState::Cancelled;
+                order.transaction_history.push(TransactionRecord {
+                    transaction_hash: e.transaction_hash.clone(),
+                    event: "OrderCancelRequest".to_string(),
+                });
             }
             SolverEvent::OrderRefundClaimed(e) => {
                 if let Some(order) = orders.get_mut(&e.order_id) {
                     order.state = OrderState::Rejected;
+                    order.transaction_history.push(TransactionRecord {
+                        transaction_hash: e.transaction_hash.clone(),
+                        event: "OrderRefundClaimed".to_string(),
+                    });
                 }
             }
             SolverEvent::OrderCompleted(e) => {
                 if let Some(order) = orders.get_mut(&e.order_id) {
                     order.state = OrderState::Completed;
+                    order.transaction_history.push(TransactionRecord {
+                        transaction_hash: e.transaction_hash.clone(),
+                        event: "OrderCompleted".to_string(),
+                    });
                 }
             }
             _ => {}

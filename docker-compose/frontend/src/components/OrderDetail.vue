@@ -25,6 +25,9 @@ const POLL_INTERVAL = 10000 // 10 seconds
 let pollTimer: ReturnType<typeof setInterval> | null = null
 const isPolling = ref(false)
 
+// Copy feedback state
+const copiedTxHash = ref<string | null>(null)
+
 // Check if order is fully filled
 const isFullyFilled = computed(() => {
   if (!selectedOrder.value) return false
@@ -103,6 +106,18 @@ function getChainColor(chainId: number): string {
     1399811150: '#9945ff',
   }
   return colors[chainId] || '#64748b'
+}
+
+async function copyTransactionHash(hash: string) {
+  try {
+    await navigator.clipboard.writeText(hash)
+    copiedTxHash.value = hash
+    setTimeout(() => {
+      copiedTxHash.value = null
+    }, 2000)
+  } catch (err) {
+    console.error('Failed to copy transaction hash:', err)
+  }
 }
 
 function goBack() {
@@ -423,6 +438,48 @@ onUnmounted(() => {
           <div>
             <div class="text-xs text-surface-500 mb-1">Filled Amount</div>
             <div class="text-sm text-surface-200">{{ formatAmount(selectedOrder.filled_amount) }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Transaction History -->
+      <div v-if="selectedOrder.transaction_history && selectedOrder.transaction_history.length > 0" class="p-4 bg-slate-925/60 rounded-xl border border-white/5">
+        <div class="text-xs text-surface-500 mb-3 flex items-center gap-2">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Transaction History
+        </div>
+        <div class="space-y-3">
+          <div
+            v-for="(tx, index) in selectedOrder.transaction_history"
+            :key="index"
+            class="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg border border-white/5 cursor-pointer hover:bg-slate-800/80 transition-colors group"
+            @click="copyTransactionHash(tx.transaction_hash)"
+          >
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-full bg-accent-500/10 flex items-center justify-center flex-shrink-0">
+                <svg class="w-4 h-4 text-accent-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
+              <div>
+                <div class="text-sm font-medium text-surface-200">{{ tx.event }}</div>
+                <div class="text-xs text-surface-500 font-mono mt-0.5">{{ truncateAddress(tx.transaction_hash) }}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <!-- Checkmark icon when copied -->
+              <svg v-if="copiedTxHash === tx.transaction_hash" class="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <!-- Copy icon on hover -->
+              <svg v-else class="w-4 h-4 text-surface-500 opacity-0 group-hover:opacity-100 transition-opacity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+              </svg>
+              <span class="text-xs text-surface-500">#{{ index + 1 }}</span>
+            </div>
           </div>
         </div>
       </div>
