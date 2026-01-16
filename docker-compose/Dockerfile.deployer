@@ -19,7 +19,7 @@ WORKDIR /app
 COPY evm/ ./evm/
 
 # Copy deployment script
-COPY docker/scripts/deploy-local.sh ./deploy-local.sh
+COPY docker-compose/scripts/deploy-local.sh ./deploy-local.sh
 RUN chmod +x ./deploy-local.sh
 
 # Set working directory to evm for forge commands

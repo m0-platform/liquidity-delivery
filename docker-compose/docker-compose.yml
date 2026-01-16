@@ -15,12 +15,12 @@ services:
       -a 24PNhTaNtomHhoy3fTRaMhAFCRj4uHqhZEEoWrKDbR5p
     working_dir: /app
     volumes:
-      - ./docker/config/solana-keypair.json:/root/.config/solana/id.json:ro
-      - ./txtx.yml:/app/txtx.yml:ro
-      - ./Anchor.toml:/app/Anchor.toml:ro
-      - ./target:/app/target:ro
-      - ./svm/programs:/app/svm/programs:ro
-      - ./svm/runbooks:/app/svm/runbooks:ro
+      - ./config/solana-keypair.json:/root/.config/solana/id.json:ro
+      - ../txtx.yml:/app/txtx.yml:ro
+      - ../Anchor.toml:/app/Anchor.toml:ro
+      - ../target:/app/target:ro
+      - ../svm/programs:/app/svm/programs:ro
+      - ../svm/runbooks:/app/svm/runbooks:ro
     ports:
       - "8899:8899"
       - "8900:8900"
@@ -43,7 +43,7 @@ services:
         condition: service_healthy
     entrypoint: ["/bin/sh", "/scripts/fund-solana.sh"]
     volumes:
-      - ./docker/scripts/fund-solana.sh:/scripts/fund-solana.sh:ro
+      - ./scripts/fund-solana.sh:/scripts/fund-solana.sh:ro
     environment:
       - SURFPOOL_RPC=http://surfpool:8899
     networks:
@@ -84,8 +84,8 @@ services:
   # Contract deployer - deploys OrderBook and ERC20 tokens to Anvil nodes
   deployer:
     build:
-      context: .
-      dockerfile: docker/Dockerfile.deployer
+      context: ..
+      dockerfile: docker-compose/Dockerfile.deployer
     container_name: liquidity-deployer
     depends_on:
       anvil-chain-a:
@@ -103,7 +103,7 @@ services:
     image: wiremock/wiremock:latest
     container_name: liquidity-mock-api
     volumes:
-      - ./docker/wiremock/mappings:/home/wiremock/mappings:ro
+      - ./wiremock/mappings:/home/wiremock/mappings:ro
     ports:
       - "8080:8080"
     healthcheck:
@@ -118,8 +118,8 @@ services:
   # Quoter service - provides quotes via gRPC and HTTP API
   quoter:
     build:
-      context: .
-      dockerfile: quoter/Dockerfile
+      context: ..
+      dockerfile: docker-compose/quoter/Dockerfile
     container_name: liquidity-quoter
     depends_on:
       deployer:
@@ -132,7 +132,7 @@ services:
       - API_PORT=3000
       - QUOTER_CONFIG=/app/config.yaml
     volumes:
-      - ./docker/config/quoter-local.yaml:/app/config.yaml:ro
+      - ./config/quoter-local.yaml:/app/config.yaml:ro
     ports:
       - "3002:3000"   # HTTP API (host:container)
       - "50052:50051" # gRPC (host:container)
@@ -148,7 +148,7 @@ services:
   # Solver service - processes orders across chains
   solver:
     build:
-      context: .
+      context: ..
       dockerfile: solver/Dockerfile
     container_name: liquidity-solver
     depends_on:
@@ -159,7 +159,7 @@ services:
       deployer:
         condition: service_completed_successfully
     volumes:
-      - ./docker/config/solver-local.yaml:/app/config.yaml:ro
+      - ./config/solver-local.yaml:/app/config.yaml:ro
     ports:
       - "3001:3001"
     networks:

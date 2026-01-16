@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/ap
 
 # Copy workspace files
 COPY Cargo.toml Cargo.lock ./
-COPY quoter ./quoter
+COPY docker-compose/quoter ./docker-compose/quoter
 COPY solver ./solver
 COPY svm ./svm
 

@@ -1,5 +1,5 @@
 [workspace]
-members = ["svm/programs/*", "solver"]
+members = ["svm/programs/*", "solver", "docker-compose/quoter"]
 resolver = "2"
 
 [profile.release]

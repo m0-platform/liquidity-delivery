@@ -49,6 +49,8 @@ impl QuoterClient {
             .await
             .map_err(|e| SolverError::Component(format!("gRPC connection failed: {}", e)))?;
 
+        info!(self.logger, "Connected to quoter gRPC service"; "url" => %self.quoter_url);
+
         Ok(client)
     }
 

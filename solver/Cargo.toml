@@ -49,3 +49,8 @@ tonic-build = "0.12"
 mockito = "1.7.0"
 test-context = { version = "0.5.4" }
 ctor = "0.2"
+regex = "1.11"
+reqwest = { version = "0.12.23", features = ["json"] }
+quoter = { path = "../docker-compose/quoter" }
+portpicker = "0.1"
+anchor-spl = "0.31.1"
