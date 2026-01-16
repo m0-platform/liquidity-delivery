@@ -18,7 +18,7 @@ use tokio::{
 };
 
 use crate::{
-    components::{ApiServer, ComponentParams, EvmWriter, OrderProcessor, QuoterClient, SvmEventListener},
+    components::{ApiServer, ComponentParams, EvmWriter, OrderProcessor, QuoterClient, SvmEventListener, SvmWriter},
     error::SolverError,
     events::{EventHandler, SolverEvent},
 };
@@ -57,6 +57,7 @@ pub async fn run_solver(
     let evm_listener = Arc::new(EvmEventListener::new(&params));
     let evm_writer = Arc::new(EvmWriter::new(&params));
     let svm_listener = Arc::new(SvmEventListener::new(&params));
+    let svm_writer = Arc::new(SvmWriter::new(&params));
     let order_processor = Arc::new(OrderProcessor::new(&params));
     let inventory_manager = Arc::new(InventoryManager::new(&params));
     let event_logger = Arc::new(components::EventLogger::new(&params));
@@ -67,6 +68,7 @@ pub async fn run_solver(
     // Initialize all components
     evm_listener.initialize().await?;
     svm_listener.initialize().await?;
+    svm_writer.initialize().await?;
     order_processor.initialize().await?;
     inventory_manager.initialize().await?;
     event_logger.initialize().await?;
@@ -78,6 +80,7 @@ pub async fn run_solver(
     register_component(&evm_listener, &event_bus, &shutdown_tx, &logger);
     register_component(&evm_writer, &event_bus, &shutdown_tx, &logger);
     register_component(&svm_listener, &event_bus, &shutdown_tx, &logger);
+    register_component(&svm_writer, &event_bus, &shutdown_tx, &logger);
     register_component(&order_processor, &event_bus, &shutdown_tx, &logger);
     register_component(&inventory_manager, &event_bus, &shutdown_tx, &logger);
     register_component(&event_logger, &event_bus, &shutdown_tx, &logger);

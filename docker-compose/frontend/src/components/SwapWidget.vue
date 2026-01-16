@@ -44,6 +44,9 @@ const toBalanceLoading = ref(false)
 const fromBalanceHovered = ref(false)
 const toBalanceHovered = ref(false)
 
+// Post-swap redirect loading state
+const redirecting = ref(false)
+
 // Chain options based on network
 const chains = computed(() => {
   if (props.network === 'local') {
@@ -362,12 +365,15 @@ async function handleSwap() {
       console.log('Approval tx:', result.approvalTxHash)
     }
 
+    redirecting.value = true
     await new Promise(resolve => setTimeout(resolve, 1000))
 
     // Emit order created event to navigate to order details
     emit('order-created', result.orderId)
   } catch (err) {
     console.error('Swap failed:', err)
+  } finally {
+    redirecting.value = false
   }
 }
 
@@ -375,7 +381,7 @@ async function handleSwap() {
 const needsApproval = computed(() => !!quote.value?.approvalTransaction)
 
 // Combined loading state
-const isLoading = computed(() => loading.value || swapLoading.value)
+const isLoading = computed(() => loading.value || swapLoading.value || redirecting.value)
 
 // Combined error state
 const displayError = computed(() => error.value || swapError.value)
@@ -714,6 +720,10 @@ const displayError = computed(() => error.value || swapError.value)
       <span v-else-if="swapLoading" class="flex items-center justify-center gap-2">
         <div class="loading-spinner"></div>
         Executing Swap...
+      </span>
+      <span v-else-if="redirecting" class="flex items-center justify-center gap-2">
+        <div class="loading-spinner"></div>
+        Redirecting...
       </span>
       <span v-else-if="needsApproval" class="flex items-center justify-center gap-2">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

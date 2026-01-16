@@ -4,12 +4,21 @@ addon "svm" {
 }
 
 # DEPLOYMENT
+action "deploy_mock_portal" "svm::deploy_program" {
+    description = "Deploy mock_portal program"
+    program = svm::get_program_from_anchor_project("mock_portal")
+    authority = signer.authority
+    payer = signer.payer
+    instant_surfnet_deployment = true
+}
+
 action "deploy_order_book" "svm::deploy_program" {
     description = "Deploy order_book program"
     program = svm::get_program_from_anchor_project("order_book")
     authority = signer.authority
     payer = signer.payer
     instant_surfnet_deployment = true
+    depends_on = [action.deploy_mock_portal]
 }
 
 # INITIALIZATION

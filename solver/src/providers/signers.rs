@@ -24,6 +24,10 @@ impl Signers {
         self.svm_private_key.pubkey()
     }
 
+    pub fn svm_keypair(&self) -> Arc<Keypair> {
+        self.svm_private_key.clone()
+    }
+
     pub fn evm_address(&self) -> Address {
         self.evm_private_key.address()
     }

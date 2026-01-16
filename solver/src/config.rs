@@ -94,6 +94,8 @@ struct ChainConfigFile {
     rpc_url: String,
     ws_url: String,
     order_book_address: String,
+    portal_program_id: Option<String>,
+    bridge_adapter: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -147,50 +149,21 @@ impl Config {
         let liquidity_api_url =
             env::var("LIQUIDITY_API_URL").expect("LIQUIDITY_API_URL must be set");
 
-        // Load rate limit configuration
-        let max_requests_per_second = env::var("RATE_LIMIT_MAX_RPS")
-            .ok()
-            .and_then(|s| s.parse::<u32>().ok())
-            .unwrap_or(5);
-
-        let burst_size = env::var("RATE_LIMIT_BURST_SIZE")
-            .ok()
-            .and_then(|s| s.parse::<u32>().ok())
-            .unwrap_or(10);
-
-        // Load chain configurations from environment variables
-        let mut chains = Vec::new();
-        for chain in supported_chains() {
-            let chain_id = chain_id(chain);
-            let enabled_key = format!("CHAIN_{}_ENABLED", chain_id);
-
-            if env::var(enabled_key).unwrap_or(String::new()) != "true" {
-                continue;
-            }
-
-            let rpc_url = env::var(&format!("CHAIN_{}_RPC_URL", chain_id)).map_err(|_| {
-                ConfigError::InvalidChainConfig(format!("Missing RPC URL for chain {}", chain))
-            })?;
-            let ws_url = env::var(&format!("CHAIN_{}_WS_URL", chain_id)).map_err(|_| {
-                ConfigError::InvalidChainConfig(format!("Missing WSS URL for chain {}", chain))
-            })?;
-
-            let order_book_address = env::var(&format!("CHAIN_{}_ORDER_BOOK_ADDRESS", chain_id))
-                .map_err(|_| {
-                    ConfigError::InvalidChainConfig(format!(
-                        "Missing OrderBook address for chain {}",
-                        chain
-                    ))
-                })?;
-
-            chains.push(ChainConfig {
-                chain_id,
-                rpc_url,
-                ws_url,
-                order_book_address,
-                chain: chain_from_id(chain_id),
-            });
-        }
+        // Filter enabled chains and convert to ChainConfig
+        let chains: Vec<ChainConfig> = config_file
+            .chains
+            .into_iter()
+            .filter(|c| c.enabled)
+            .map(|c| ChainConfig {
+                chain_id: c.chain_id,
+                chain: chain_from_id(c.chain_id),
+                rpc_url: c.rpc_url,
+                ws_url: c.ws_url,
+                order_book_address: c.order_book_address,
+                portal_program_id: c.portal_program_id,
+                bridge_adapter: c.bridge_adapter,
+            })
+            .collect();
 
         if chains.is_empty() && environment != Environment::Local {
             return Err(ConfigError::InvalidConfig(
@@ -243,6 +216,8 @@ pub struct ChainConfig {
     pub rpc_url: String,
     pub ws_url: String,
     pub order_book_address: String,
+    pub portal_program_id: Option<String>,
+    pub bridge_adapter: Option<String>,
 }
 
 #[derive(Clone)]

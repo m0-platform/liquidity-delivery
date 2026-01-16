@@ -13,8 +13,8 @@ slog-json = "2.6"
 slog-term = "2.9"
 slog-async = "2.8"
 chrono = "0.4"
-m0-liquidity-sdk = "0.0.2"
-order_book = { version = "0.1.0", path = "../svm/programs/order_book" }
+m0-liquidity-sdk = "0.0.4"
+order_book = { version = "0.1.0", path = "../svm/programs/order_book", features = ["no-entrypoint"] }
 hex = "0.4.3"
 dotenvy = "0.15"
 alloy = { version = "1.0.38", features = [
@@ -31,7 +31,7 @@ serde_json = "1.0"
 futures-util = "0.3"
 anchor-client = { version = "0.31.1", features = ["async"] }
 spl-token = "8.0.0"
-spl-associated-token-account = "7.0.0"
+spl-associated-token-account = { version = "7.0.0", features = ["no-entrypoint"] }
 governor = "0.6"
 nanoid = "0.4"
 tonic = "0.12"
