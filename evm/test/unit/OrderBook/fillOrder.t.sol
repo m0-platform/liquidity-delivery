@@ -112,7 +112,11 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
+            IOrderBook.FillParams({
+                amountOutToFill: order.amountOut,
+                originRecipient: params.solver,
+                refundAddress: bytes32(0)
+            })
         );
     }
 
@@ -145,7 +149,11 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
+            IOrderBook.FillParams({
+                amountOutToFill: order.amountOut,
+                originRecipient: params.solver,
+                refundAddress: bytes32(0)
+            })
         );
     }
 
@@ -180,7 +188,11 @@ contract FillOrderTest is OrderBookTestBase {
         orderBook.fillOrder(
             orderId,
             orderData,
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
+            IOrderBook.FillParams({
+                amountOutToFill: order.amountOut,
+                originRecipient: params.solver,
+                refundAddress: bytes32(0)
+            })
         );
     }
 
@@ -212,7 +224,11 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: users["bob"].toBytes32() })
+            IOrderBook.FillParams({
+                amountOutToFill: order.amountOut,
+                originRecipient: users["bob"].toBytes32(),
+                refundAddress: bytes32(0)
+            })
         );
     }
 
@@ -242,7 +258,11 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
+            IOrderBook.FillParams({
+                amountOutToFill: order.amountOut,
+                originRecipient: params.solver,
+                refundAddress: bytes32(0)
+            })
         );
     }
 
@@ -277,7 +297,11 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
+            IOrderBook.FillParams({
+                amountOutToFill: order.amountOut,
+                originRecipient: params.solver,
+                refundAddress: bytes32(0)
+            })
         );
     }
 
@@ -307,7 +331,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: 0, originRecipient: params.solver })
+            IOrderBook.FillParams({ amountOutToFill: 0, originRecipient: params.solver, refundAddress: bytes32(0) })
         );
     }
 
@@ -347,7 +371,11 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
+            IOrderBook.FillParams({
+                amountOutToFill: order.amountOut,
+                originRecipient: params.solver,
+                refundAddress: bytes32(0)
+            })
         );
 
         // Check order status
@@ -443,7 +471,11 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: fillAmount, originRecipient: params.solver })
+            IOrderBook.FillParams({
+                amountOutToFill: fillAmount,
+                originRecipient: params.solver,
+                refundAddress: bytes32(0)
+            })
         );
 
         // Check order status
@@ -534,7 +566,11 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: fillAmount, originRecipient: params.solver })
+            IOrderBook.FillParams({
+                amountOutToFill: fillAmount,
+                originRecipient: params.solver,
+                refundAddress: bytes32(0)
+            })
         );
 
         // Check order status - should still be Created, not Completed
@@ -619,7 +655,11 @@ contract FillOrderTest is OrderBookTestBase {
         orderBook.fillOrder(
             orderId,
             orderData,
-            IOrderBook.FillParams({ amountOutToFill: orderData.amountOut, originRecipient: params.solver })
+            IOrderBook.FillParams({
+                amountOutToFill: orderData.amountOut,
+                originRecipient: params.solver,
+                refundAddress: bytes32(0)
+            })
         );
 
         // Check token transfers on destination chain
@@ -702,7 +742,11 @@ contract FillOrderTest is OrderBookTestBase {
         orderBook.fillOrder(
             orderId,
             orderData,
-            IOrderBook.FillParams({ amountOutToFill: fillAmount, originRecipient: params.solver })
+            IOrderBook.FillParams({
+                amountOutToFill: fillAmount,
+                originRecipient: params.solver,
+                refundAddress: bytes32(0)
+            })
         );
 
         // Check token transfers on destination chain
@@ -777,7 +821,11 @@ contract FillOrderTest is OrderBookTestBase {
         orderBook.fillOrder(
             orderId,
             orderData,
-            IOrderBook.FillParams({ amountOutToFill: fillAmount, originRecipient: params.solver })
+            IOrderBook.FillParams({
+                amountOutToFill: fillAmount,
+                originRecipient: params.solver,
+                refundAddress: bytes32(0)
+            })
         );
 
         // Check token transfers on destination chain
@@ -850,7 +898,11 @@ contract FillOrderTest is OrderBookTestBase {
         orderBook.fillOrder(
             orderId,
             orderData,
-            IOrderBook.FillParams({ amountOutToFill: orderData.amountOut, originRecipient: solver.toBytes32() })
+            IOrderBook.FillParams({
+                amountOutToFill: orderData.amountOut,
+                originRecipient: solver.toBytes32(),
+                refundAddress: bytes32(0)
+            })
         );
         vm.stopPrank();
     }
@@ -892,7 +944,11 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: fillAmount, originRecipient: order.solver })
+            IOrderBook.FillParams({
+                amountOutToFill: fillAmount,
+                originRecipient: order.solver,
+                refundAddress: bytes32(0)
+            })
         );
 
         // Check balances after the first fill
@@ -942,7 +998,11 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: remainingAmountOut, originRecipient: order.solver })
+            IOrderBook.FillParams({
+                amountOutToFill: remainingAmountOut,
+                originRecipient: order.solver,
+                refundAddress: bytes32(0)
+            })
         );
 
         // Check final balances
@@ -1015,7 +1075,11 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
+            IOrderBook.FillParams({
+                amountOutToFill: order.amountOut,
+                originRecipient: params.solver,
+                refundAddress: bytes32(0)
+            })
         );
 
         // Check order status
@@ -1054,7 +1118,11 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
+            IOrderBook.FillParams({
+                amountOutToFill: order.amountOut,
+                originRecipient: params.solver,
+                refundAddress: bytes32(0)
+            })
         );
     }
 
@@ -1089,8 +1157,95 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver }),
+            IOrderBook.FillParams({
+                amountOutToFill: order.amountOut,
+                originRecipient: params.solver,
+                refundAddress: bytes32(0)
+            }),
             new bytes(0)
+        );
+    }
+
+    function test_crossChainFill_refundAddressDefaultsToMsgSender() public {
+        // Create order data for a cross-chain order (originated on chain 2, destined for chain 1)
+        IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
+            version: 1,
+            originChainId: DEST_CHAIN_ID, // Order was created on chain 2
+            sender: users["alice"].toBytes32(),
+            nonce: 0,
+            destChainId: CHAIN_ID, // To be filled on chain 1 (current chain)
+            createdAt: uint64(block.timestamp),
+            fillDeadline: uint64(block.timestamp + FILL_DURATION),
+            amountIn: AMOUNT_IN,
+            amountOut: AMOUNT_OUT,
+            tokenIn: address(tokenIn).toBytes32(),
+            tokenOut: address(tokenOut).toBytes32(),
+            recipient: users["alice"].toBytes32(),
+            solver: params.solver
+        });
+
+        bytes32 orderId = orderBook.getOrderId(orderData);
+
+        // Fill the order with refundAddress = bytes32(0) (should default to msg.sender)
+        vm.prank(params.solver.toAddress());
+        orderBook.fillOrder(
+            orderId,
+            orderData,
+            IOrderBook.FillParams({
+                amountOutToFill: orderData.amountOut,
+                originRecipient: params.solver,
+                refundAddress: bytes32(0)
+            })
+        );
+
+        // Assert that the refundAddress captured by the portal is msg.sender (the solver)
+        assertEq(
+            portal.fillReportRefundAddresses(orderId),
+            params.solver.toAddress().toBytes32(),
+            "refundAddress should default to msg.sender when bytes32(0) is provided"
+        );
+    }
+
+    function test_crossChainFill_explicitRefundAddressIsForwarded() public {
+        // Create order data for a cross-chain order (originated on chain 2, destined for chain 1)
+        IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
+            version: 1,
+            originChainId: DEST_CHAIN_ID, // Order was created on chain 2
+            sender: users["alice"].toBytes32(),
+            nonce: 0,
+            destChainId: CHAIN_ID, // To be filled on chain 1 (current chain)
+            createdAt: uint64(block.timestamp),
+            fillDeadline: uint64(block.timestamp + FILL_DURATION),
+            amountIn: AMOUNT_IN,
+            amountOut: AMOUNT_OUT,
+            tokenIn: address(tokenIn).toBytes32(),
+            tokenOut: address(tokenOut).toBytes32(),
+            recipient: users["alice"].toBytes32(),
+            solver: params.solver
+        });
+
+        bytes32 orderId = orderBook.getOrderId(orderData);
+
+        // Use bob's address as the explicit refund address
+        bytes32 explicitRefundAddress = users["bob"].toBytes32();
+
+        // Fill the order with explicit refundAddress
+        vm.prank(params.solver.toAddress());
+        orderBook.fillOrder(
+            orderId,
+            orderData,
+            IOrderBook.FillParams({
+                amountOutToFill: orderData.amountOut,
+                originRecipient: params.solver,
+                refundAddress: explicitRefundAddress
+            })
+        );
+
+        // Assert that the refundAddress captured by the portal is the explicit address
+        assertEq(
+            portal.fillReportRefundAddresses(orderId),
+            explicitRefundAddress,
+            "explicit refundAddress should be forwarded to portal"
         );
     }
 }

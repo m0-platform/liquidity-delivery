@@ -163,7 +163,11 @@ contract CancelOrderTest is OrderBookTestBase {
         orderBook.fillOrder(
             xchainOrderId,
             xchainOrderData,
-            IOrderBook.FillParams({ amountOutToFill: params.amountOut, originRecipient: xchainOrderData.solver })
+            IOrderBook.FillParams({
+                amountOutToFill: params.amountOut,
+                originRecipient: xchainOrderData.solver,
+                refundAddress: bytes32(0)
+            })
         );
         vm.stopPrank();
 
@@ -514,7 +518,11 @@ contract CancelOrderTest is OrderBookTestBase {
         orderBook.fillOrder(
             xchainOrderId,
             xchainOrderData,
-            IOrderBook.FillParams({ amountOutToFill: partialFillAmountOut, originRecipient: xchainOrderData.solver })
+            IOrderBook.FillParams({
+                amountOutToFill: partialFillAmountOut,
+                originRecipient: xchainOrderData.solver,
+                refundAddress: bytes32(0)
+            })
         );
         vm.stopPrank();
 

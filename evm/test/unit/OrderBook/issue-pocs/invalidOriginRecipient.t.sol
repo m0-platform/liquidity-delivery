@@ -59,7 +59,8 @@ contract InvalidOriginRecipientTest is OrderBookTestBase {
             }),
             IOrderBook.FillParams({
                 amountOutToFill: params.amountOut,
-                originRecipient: address(orderBook).toBytes32()
+                originRecipient: address(orderBook).toBytes32(),
+                refundAddress: bytes32(0)
             })
         );
         vm.stopPrank();
@@ -104,7 +105,8 @@ contract InvalidOriginRecipientTest is OrderBookTestBase {
             }),
             IOrderBook.FillParams({
                 amountOutToFill: params.amountOut,
-                originRecipient: bytes32(0) // address(0)
+                originRecipient: bytes32(0), // address(0)
+                refundAddress: bytes32(0)
             })
         );
         vm.stopPrank();
