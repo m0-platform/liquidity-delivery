@@ -10529,6 +10529,7 @@ dependencies = [
  "alloy",
  "anchor-client",
  "anchor-spl",
+ "async-stream",
  "async-trait",
  "axum",
  "chrono",

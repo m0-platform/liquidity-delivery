@@ -40,7 +40,7 @@ async fn test_order_processed_chain_a(ctx: &EvmChainTestSuite) {
     .await;
 
     ctx.contains_order_lifecycle(
-        "77bf9f8455c1d9dcd84b9f15a8f3ddd6cd3788a7df3aea845525be85a87dcc62",
+        "bb2ebc4d21ccb42335c3280f1ae67382f0e01b3338c611cc89261f62fbee864a",
         &[
             "OrderCreated",
             "HoldSuccessful",
@@ -67,7 +67,7 @@ async fn test_order_processed_chain_b(ctx: &EvmChainTestSuite) {
     .await;
 
     ctx.contains_order_lifecycle(
-        "191fe545a21e074a407c6a8c5b34bfbc3925ccd67926384756c60fce8cbad58b",
+        "f3d9bb436a1a1bec3fe812c6ab36a7222c36fe5efd682d5384b3a4cf4503e3b4",
         &[
             "OrderCreated",
             "HoldSuccessful",
@@ -94,7 +94,7 @@ async fn test_order_invalid_out(ctx: &EvmChainTestSuite) {
     .await;
 
     ctx.contains_order_lifecycle(
-        "ce8959a0ac771c894491f414ae46149f9a6960e7aa43ac74740ef2a3fc4827ed",
+        "068ef0ce3108384345eb418a6f3d3bbe11128fccba6841bee043c1468687dede",
         &["OrderCreated", "OrderRejected"],
     )
     .await;
@@ -119,7 +119,7 @@ async fn test_order_insufficient_solver_funds(ctx: &EvmChainTestSuite) {
     .await;
 
     ctx.contains_order_lifecycle(
-        "c2880ef255c9dc5f304bb77d13d8b61d73be02b7fb4a428396ecb4182dedea06",
+        "f363ed204ea9f8e92373a07341e7175c1e0ddb2eeab38b2bdf8c083ff92a83e3",
         &[
             "OrderCreated",
             "HoldSuccessful",
@@ -149,7 +149,7 @@ async fn test_order_multiple_clips(ctx: &EvmChainTestSuite) {
 
     // Fill order in two clips
     ctx.contains_order_lifecycle(
-        "c9f50de3522efc0bca73b996ab5916ad68ec65d9be0229d76c00ae31ef48f466",
+        "b789ee6ee2c03f240b34eea05f0a19f0bd18d26133b477df4723c1b274ce06cb",
         &[
             "OrderCreated",
             "HoldSuccessful",

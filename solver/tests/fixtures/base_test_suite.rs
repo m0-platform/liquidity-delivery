@@ -56,6 +56,12 @@ sol!(
     "tests/artifacts/exampleERC20.json"
 );
 
+sol!(
+    #[sol(rpc)]
+    MockMessenger,
+    "tests/artifacts/MockMessenger.json"
+);
+
 pub use IOrderBook::OrderParams;
 
 pub struct BaseTestSuite {
@@ -86,6 +92,60 @@ pub struct ChainInstance {
 }
 
 impl BaseTestSuite {
+    /// Create a test suite with a mock quoter gRPC server (for API tests)
+    pub async fn setup_with_mock_quoter(quoter_grpc_url: String) -> BaseTestSuite {
+        // Create a log buffer for capturing logs
+        let log_buffer = LogBuffer::new();
+        let logger = Logger::root(
+            slog_async::Async::new(log_buffer.clone().fuse())
+                .build()
+                .fuse(),
+            slog::o!("component" => "TestSuite"),
+        );
+
+        let evm_signer = PrivateKeySigner::from_bytes(&FixedBytes::from([1u8; 32])).unwrap();
+        let evm_user = PrivateKeySigner::from_bytes(&FixedBytes::from([2u8; 32])).unwrap();
+        let svm_signer = Arc::new(Keypair::from_base58_string("2MqZwxzsfaEvQvnj4CgvUo2aknYXxJW2bBn5ewbftnbjU9DAtWX1XzCHy7Wd8dBSq5bmRwj6Ya5XTAnEe8sy2qS9"));
+        let svm_user = Arc::new(Keypair::from_base58_string("24VxBmMCYGp7SZquR2PdN3CJMErv1jVVbp5KFdHuVzv3sZ3537uiPDfyDATS5H7AMHS7b7nq1LFqxQMUKHSAQgDQ"));
+
+        // Create mock API with default test tokens
+        let mock_server = mock_api::mock_api_with_assets(vec![]).await;
+
+        // Setup solver config
+        let mut config = Config::default();
+        config.environment = Environment::Local;
+        config.liquidity_api_url = mock_server.url();
+        config.signers = Signers::new(evm_signer.clone(), svm_signer.clone());
+        config.max_order_clip_size = 100;
+        config.max_clip_reprocess_delay_sec = 1;
+        config.connect_to_quote_stream = true;
+        config.quoter_grpc_url = quoter_grpc_url;
+
+        let shutdown_tx = solver::run_solver(config, logger.clone())
+            .await
+            .expect("Failed to start solver");
+
+        let suite = BaseTestSuite {
+            chains: vec![],
+            _evm_signer: evm_signer,
+            evm_user,
+            _svm_signer: svm_signer,
+            svm_user,
+            svm_mint: None,
+            surfpool_process: None,
+            quoter_process: None,
+            shutdown_tx,
+            _mock_server: mock_server,
+            log_buffer,
+            logger,
+        };
+
+        // Wait for solver to start
+        suite.contains_log("All components registered").await;
+
+        suite
+    }
+
     /// Create a new test suite with Anvil and deployed contracts
     pub async fn setup_with_chains(evm_chains: Vec<u32>, start_quoter_api: bool) -> BaseTestSuite {
         // Create a log buffer for capturing logs
@@ -206,11 +266,26 @@ impl BaseTestSuite {
                 .wallet(evm_signer.clone())
                 .connect_http(anvil.endpoint_url());
 
-            let contract = IOrderBook::deploy(provider.clone(), chain_id, Address::new([0u8; 20]))
+            // Deploy MockMessenger first
+            let messenger = MockMessenger::deploy(&provider)
+                .await
+                .expect("Failed to deploy MockMessenger");
+
+            let contract = IOrderBook::deploy(provider.clone(), chain_id, *messenger.address())
                 .await
                 .expect("Failed to deploy contract");
 
             let &contract_address = contract.address();
+
+            // Configure MockMessenger with OrderBook address
+            messenger
+                .setOrderBook(contract_address)
+                .send()
+                .await
+                .expect("Failed to send setOrderBook transaction")
+                .get_receipt()
+                .await
+                .expect("Failed to confirm setOrderBook transaction");
 
             // Initialize the contract with admin role
             contract
