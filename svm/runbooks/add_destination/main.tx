@@ -1,0 +1,24 @@
+addon "svm" {
+    rpc_api_url = input.rpc_api_url
+    network_id = input.network_id
+}
+
+variable "orderbook_program" {
+    value = svm::get_program_from_anchor_project("order_book")
+}
+
+action "configure_destination" "svm::process_instructions" {
+    description = "Adds a destination chain"
+    signers = [signer.caller]
+    instruction {
+        program_idl = variable.orderbook_program.idl
+        instruction_name = "add_destination"
+        admin {
+            public_key = signer.caller.public_key
+        }
+        destination_account {
+            public_key = "9xjWHcEqYYmCqCHrTU6sGHBWrHUYQcZ8yCEtaejgj8Me"
+        }
+        instruction_args = [input.destination_chain_id]
+    }
+}

@@ -35,3 +35,5 @@ target
 svm/target
 **/*.rs.bk
 test-ledger
+txtx.yml
+.surfpool/
