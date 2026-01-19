@@ -2,17 +2,20 @@
 import { ref, onMounted, computed } from 'vue'
 import { useOrders, type TrackedOrder } from '../composables/useOrders'
 import { useAssets } from '../composables/useAssets'
+import type { NetworkType } from '../config/network'
 
 const props = defineProps<{
   walletAddress: string | null
+  network: NetworkType
 }>()
 
 const emit = defineEmits<{
   (e: 'select-order', orderId: string): void
 }>()
 
-const { orders, loading, error, fetchOrders, getOrdersBySender } = useOrders()
-const { assets } = useAssets()
+const networkRef = computed(() => props.network)
+const { orders, loading, error, fetchOrders, getOrdersBySender } = useOrders(networkRef)
+const { assets } = useAssets(networkRef)
 
 const showMyOrdersOnly = ref(false)
 

@@ -1,4 +1,5 @@
-import { ref } from "vue";
+import { getOrdersUrl, NetworkType } from "@/config/network";
+import { computed, MaybeRef, ref, toValue } from "vue";
 
 export interface TransactionRecord {
   transaction_hash: string;
@@ -29,19 +30,19 @@ export interface OrdersResponse {
   count: number;
 }
 
-export function useOrders() {
+export function useOrders(networkRef: MaybeRef<NetworkType>) {
   const orders = ref<TrackedOrder[]>([]);
   const loading = ref(false);
   const error = ref<string | null>(null);
 
-  const solverUrl = import.meta.env.VITE_SOLVER_URL || "http://localhost:3001";
+  const solverUrl = computed(() => getOrdersUrl(toValue(networkRef)));
 
   async function fetchOrders(): Promise<TrackedOrder[]> {
     loading.value = true;
     error.value = null;
 
     try {
-      const response = await fetch(`${solverUrl}/orders`);
+      const response = await fetch(`${solverUrl.value}/orders`);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -66,7 +67,7 @@ export function useOrders() {
 
   function getOrdersBySender(sender: string): TrackedOrder[] {
     return orders.value.filter(
-      (order) => order.sender.toLowerCase() === sender.toLowerCase()
+      (order) => order.sender.toLowerCase() === sender.toLowerCase(),
     );
   }
 

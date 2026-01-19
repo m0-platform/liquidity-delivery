@@ -18,6 +18,10 @@ interface ImportMetaEnv {
   readonly VITE_LIQUIDITY_API_DEVNET: string;
   readonly VITE_LIQUIDITY_API_MAINNET: string;
 
+  readonly VITE_ORDERS_API_LOCAL: string;
+  readonly VITE_ORDERS_API_DEVNET: string;
+  readonly VITE_ORDERS_API_MAINNET: string;
+
   // Localnet RPC endpoints
   readonly VITE_LOCALNET_ETHEREUM_RPC: string;
   readonly VITE_LOCALNET_SOLANA_RPC: string;

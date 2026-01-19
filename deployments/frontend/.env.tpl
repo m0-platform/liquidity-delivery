@@ -9,6 +9,10 @@ VITE_LIQUIDITY_API_LOCAL=http://localhost:8080
 VITE_LIQUIDITY_API_DEVNET=https://api-devnet-devnet.up.railway.app
 VITE_LIQUIDITY_API_MAINNET=https://swap-api-devnet.up.railway.app
 
+VITE_ORDERS_API_LOCAL=http://localhost:3001
+VITE_ORDERS_API_DEVNET=https://solver-devnet.up.railway.app
+VITE_ORDERS_API_MAINNET=https://solver-mainnet.up.railway.app
+
 # =============================================================================
 # LOCALNET RPC ENDPOINTS (Ethereum, Solana, Base)
 # =============================================================================

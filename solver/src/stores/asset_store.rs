@@ -10,7 +10,7 @@ use tokio::sync::RwLock;
 
 use crate::error::{Result, SolverError};
 use crate::events::{EventProcessor, SolverEvent};
-use crate::utils::{self, decode_evm_address};
+use crate::utils::{self, chain_id, chain_runtime, decode_evm_address};
 
 /// Event store for tracking order status
 pub struct AssetStore {
@@ -72,7 +72,7 @@ impl AssetStore {
     }
 
     fn parse_address(chain: Chain, address: String) -> [u8; 32] {
-        if chain == Chain::Solana {
+        if chain_runtime(chain_id(chain)) == ChainRuntime::Svm {
             let bytes = bs58::decode(address)
                 .into_vec()
                 .expect("Invalid base58 in Solana asset address");

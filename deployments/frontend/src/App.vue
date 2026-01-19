@@ -220,6 +220,7 @@ function onOrderCreated(orderId: string) {
         <div v-else class="w-full max-w-md animate-in">
           <OrdersPage
             :wallet-address="evmAddress"
+            :network="network"
             @select-order="selectOrder"
           />
         </div>

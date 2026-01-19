@@ -13,9 +13,10 @@ const emit = defineEmits<{
   (e: 'back'): void
 }>()
 
-const { orders, fetchOrders, getOrder } = useOrders()
 const { clearFilledAmounts } = useFilledAmounts()
-const { assets } = useAssets()
+const networkRef = computed(() => props.network)
+const { assets } = useAssets(networkRef)
+const { orders, fetchOrders, getOrder } = useOrders(networkRef)
 
 // Selected order from the list
 const selectedOrder = ref<TrackedOrder | undefined>(undefined)

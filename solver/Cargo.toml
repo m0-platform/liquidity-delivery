@@ -13,7 +13,7 @@ slog-json = "2.6"
 slog-term = "2.9"
 slog-async = "2.8"
 chrono = "0.4"
-m0-liquidity-sdk = "0.0.4"
+m0-liquidity-sdk = "0.0.5"
 order_book = { version = "0.1.0", path = "../svm/programs/order_book", features = ["no-entrypoint"] }
 hex = "0.4.3"
 dotenvy = "0.15"

@@ -13,9 +13,13 @@ pub fn chain_id(chain: Chain) -> u32 {
         Chain::Optimism => 10,
         Chain::Base => 8453,
         Chain::Linea => 59144,
-        Chain::Fogo => 4294967294,
+        Chain::SolanaDevnet => SOLANA_CHAIN_ID_DEVNET,
         Chain::Sepolia => 11155111,
         Chain::ArbitrumSepolia => 421614,
+        Chain::HyperEvm => 999,
+        Chain::BinanceSmartChain => 56,
+        Chain::Mantra => 5888,
+        Chain::Plasma => 9745,
     }
 }
 
@@ -27,12 +31,13 @@ pub fn chain_from_id(chain_id: u32) -> Chain {
         10 => Chain::Optimism,
         8453 => Chain::Base,
         59144 => Chain::Linea,
-        4294967294 => Chain::Fogo,
         11155111 => Chain::Sepolia,
         421614 => Chain::ArbitrumSepolia,
         56 => Chain::BinanceSmartChain,
         999 => Chain::HyperEvm,
-        SOLANA_CHAIN_ID_DEVNET => Chain::Solana,
+        SOLANA_CHAIN_ID_DEVNET => Chain::SolanaDevnet,
+        5888 => Chain::Mantra,
+        9745 => Chain::Plasma,
         _ => panic!("Unsupported chain ID: {}", chain_id),
     }
 }
@@ -41,21 +46,30 @@ pub fn supported_chains() -> Vec<Chain> {
     vec![
         Chain::Ethereum,
         Chain::Solana,
+        Chain::SolanaDevnet,
         Chain::Arbitrum,
         Chain::Optimism,
         Chain::Base,
         Chain::Linea,
-        Chain::Fogo,
         Chain::Sepolia,
         Chain::ArbitrumSepolia,
     ]
 }
 
 pub fn chain_runtime(chain_id: u32) -> ChainRuntime {
-    if chain_id == SOLANA_CHAIN_ID || chain_id == SOLANA_CHAIN_ID_DEVNET || chain_id == 4294967294 {
+    if chain_id == SOLANA_CHAIN_ID || chain_id == SOLANA_CHAIN_ID_DEVNET {
         ChainRuntime::Svm
     } else {
         ChainRuntime::Evm
+    }
+}
+
+pub fn decode_address(address: String, chain_id: u32) -> Option<[u8; 32]> {
+    if chain_runtime(chain_id) == ChainRuntime::Svm {
+        return Some(Pubkey::from_str(&address).ok()?.to_bytes());
+    } else {
+        let evm_address = Address::from_str(&address).ok()?;
+        return Some(decode_evm_address(evm_address));
     }
 }
 

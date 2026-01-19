@@ -37,7 +37,7 @@ deploy-quoter:
 
 deploy-dashboard:
 	railway environment devnet
-	docker build --platform linux/amd64 -t ghcr.io/m0-foundation/liquidity-delivery:dashboard -f deployments/frontend/Dockerfile .
+	docker build --platform linux/amd64 -t ghcr.io/m0-foundation/liquidity-delivery:dashboard -f deployments/frontend/Dockerfile deployments/frontend
 	docker push ghcr.io/m0-foundation/liquidity-delivery:dashboard
 	sleep 1
 	railway redeploy --service "Orders Dashboard" --yes
