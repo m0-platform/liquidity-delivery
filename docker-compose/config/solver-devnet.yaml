@@ -1,0 +1,50 @@
+# Dev environment configuration for the solver
+
+environment: development
+network: devnet
+
+# HTTP API port
+http_port: 3001
+
+# Quoter connection
+quoter_grpc_url: http://quoter.railway.internal:50051
+connect_to_quote_stream: true
+
+liquidity_api_url: http://api-devnet.railway.internal:5600
+
+# RPC rate limiting
+rpc_rate_limit:
+  max_requests_per_second: 10
+  burst_size: 20
+
+# Order configuration
+max_order_clip_size: 5000
+max_clip_reprocess_delay_sec: 60
+solver_fee_bps: 5
+auto_rebalance: false
+
+evm_private_key: "afdfd9c3d2095ef696594f6cedcae59e72dcd697e2a7521b1578140422a4f890"
+svm_private_key: "2MqZwxzsfaEvQvnj4CgvUo2aknYXxJW2bBn5ewbftnbjU9DAtWX1XzCHy7Wd8dBSq5bmRwj6Ya5XTAnEe8sy2qS9"
+
+# Asset configuration
+supported_assets:
+  third_party_whitelist: []
+  first_party_blacklist: []
+
+# Chain configuration
+chains:
+  # Ethereum Sepolia Testnet
+  - chain_id: 11155111
+    chain: Sepolia
+    rpc_url: https://eth-sepolia.g.alchemy.com/v2/w-r8VabcoQMvw_Sp-krrirztyoLSc2sS
+    ws_url: wss://eth-sepolia.g.alchemy.com/v2/w-r8VabcoQMvw_Sp-krrirztyoLSc2sS
+    order_book_address: "0xYOUR_ORDER_BOOK_ADDRESS"
+    enabled: true
+
+  # Solana Devnet
+  - chain_id: 1399811150
+    chain: SolanaDevnet
+    rpc_url: https://devnet.helius-rpc.com/?api-key=c5cd4e3c-bba3-47ce-bec8-74a82995a1c1
+    ws_url: wss://devnet.helius-rpc.com/?api-key=c5cd4e3c-bba3-47ce-bec8-74a82995a1c1
+    order_book_address: "MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK"
+    enabled: true

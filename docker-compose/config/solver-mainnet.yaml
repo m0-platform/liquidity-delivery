@@ -1,0 +1,50 @@
+# Production environment configuration for the solver
+# NOTE: Private keys are passed via environment variables (EVM_PRIVATE_KEY, SVM_PRIVATE_KEY)
+# NOTE: Liquidity API URL is passed via environment variable (LIQUIDITY_API_URL)
+
+environment: production
+network: mainnet
+
+# HTTP API port
+http_port: 3001
+
+# Quoter connection
+quoter_grpc_url: http://quoter.railway.internal:50051
+connect_to_quote_stream: true
+
+# RPC rate limiting
+rpc_rate_limit:
+  max_requests_per_second: 10
+  burst_size: 20
+
+# Order configuration
+max_order_clip_size: 10000
+max_clip_reprocess_delay_sec: 60
+solver_fee_bps: 1
+auto_rebalance: false
+
+# Asset configuration
+supported_assets:
+  third_party_whitelist:
+    # USDC addresses for production networks
+    - "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"  # Ethereum USDC
+    - "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"  # Solana USDC
+  first_party_blacklist: []
+
+# Chain configuration
+chains:
+  # Ethereum Mainnet
+  - chain_id: 1
+    chain: Ethereum
+    rpc_url: https://mainnet.infura.io/v3/YOUR_INFURA_KEY
+    ws_url: wss://mainnet.infura.io/ws/v3/YOUR_INFURA_KEY
+    order_book_address: "0xYOUR_ORDER_BOOK_ADDRESS"
+    enabled: true
+
+  # Solana Mainnet
+  - chain_id: 1399811149
+    chain: Solana
+    rpc_url: https://mainnet.helius-rpc.com/?api-key=c5cd4e3c-bba3-47ce-bec8-74a82995a1c1
+    ws_url: wss://mainnet.helius-rpc.com/?api-key=c5cd4e3c-bba3-47ce-bec8-74a82995a1c1
+    order_book_address: "MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK"
+    enabled: true

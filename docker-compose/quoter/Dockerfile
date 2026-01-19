@@ -25,6 +25,9 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /app/target/release/quoter /app/quoter
 
+# Copy config files
+COPY docker-compose/config/quoter-*.yaml /app/config/
+
 # Environment defaults
 ENV QUOTER_ENV=development
 ENV QUOTE_TIMEOUT_MS=500

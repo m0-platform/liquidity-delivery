@@ -20,32 +20,3 @@ chains:
     order_book_address: "MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK"
     starting_block: 0
     chain_type: svm
-
-assets:
-  - ticker: "USDC"
-    name: "USD Coin"
-    icon: "https://cryptologos.cc/logos/usd-coin-usdc-logo.svg"
-    address: "0x63d5B14C052fFd52596246a49b43Ce3bE114C994"
-    chain_ids: [1, 8453]
-    decimals: 6
-
-  - ticker: "wM"
-    name: "wM by M0"
-    icon: "https://green-obedient-albatross-155.mypinata.cloud/ipfs/bafkreickomstkfveoq5kmyvapoj6qfa3eja7sn2qoukziuqlsov4texx54"
-    address: "0xF6d8b261781Db63dD04Ec127A3F336310589170b"
-    chain_ids: [1, 8453]
-    decimals: 6
-
-  - ticker: "USDC"
-    name: "USD Coin"
-    icon: "https://cryptologos.cc/logos/usd-coin-usdc-logo.svg"
-    address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
-    chain_ids: [1399811149]
-    decimals: 6
-
-  - ticker: "wM"
-    name: "wM by M0"
-    icon: "https://green-obedient-albatross-155.mypinata.cloud/ipfs/bafkreickomstkfveoq5kmyvapoj6qfa3eja7sn2qoukziuqlsov4texx54"
-    address: "usdsfJbX78ktZUnoRC7dwvvQz7xH3WdkpGne76gdUia"
-    chain_ids: [1399811149]
-    decimals: 6

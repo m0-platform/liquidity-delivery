@@ -27,7 +27,7 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /app/target/release/solver /app/solver
 
-# Config will be mounted or provided
-ENV CONFIG_PATH=/app/config.yaml
+# Copy config files
+COPY docker-compose/config/solver-*.yaml /config/
 
-CMD ["/app/solver", "/app/config.yaml"]
+CMD ["/app/solver"]

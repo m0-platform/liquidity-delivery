@@ -1,0 +1,19 @@
+# Production environment configuration for the quoter
+
+chains:
+  # Ethereum Mainnet
+  - chain_id: 1
+    enabled: true
+    rpc_url: https://eth-mainnet.g.alchemy.com/v2/w-r8VabcoQMvw_Sp-krrirztyoLSc2sS
+    ws_url: wss://eth-mainnet.g.alchemy.com/v2/w-r8VabcoQMvw_Sp-krrirztyoLSc2sS
+    order_book_address: "0xYOUR_ORDER_BOOK_ADDRESS"
+    starting_block: 0
+
+  # Solana Mainnet
+  - chain_id: 1399811149
+    enabled: true
+    rpc_url: https://mainnet.helius-rpc.com/?api-key=c5cd4e3c-bba3-47ce-bec8-74a82995a1c1
+    ws_url: wss://mainnet.helius-rpc.com/?api-key=c5cd4e3c-bba3-47ce-bec8-74a82995a1c1
+    order_book_address: "MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK"
+    starting_block: 0
+    chain_type: svm

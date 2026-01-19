@@ -13,11 +13,3 @@ chains:
     ws_url: ws://anvil-chain-b:8545
     order_book_address: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
     starting_block: 0
-
-assets:
-  - ticker: "USDC"
-    name: "USD Coin"
-    icon: "https://cryptologos.cc/logos/usd-coin-usdc-logo.svg"
-    address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-    chain_ids: [1, 8453]
-    decimals: 6

@@ -17,7 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let environment = env::var("QUOTER_ENV").unwrap_or_else(|_| "development".to_string());
 
     let drain = {
-        let decorator = slog_term::TermDecorator::new().build();
+        let decorator = slog_term::PlainDecorator::new(std::io::stdout());
         let drain = slog_term::FullFormat::new(decorator).build().fuse();
         slog_async::Async::new(drain).build().fuse()
     };

@@ -5,11 +5,12 @@ use std::error::Error;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
-    let _ = dotenvy::dotenv();
-    let config = Config::from_env()?;
+    let config_path = std::env::var("CONFIG_PATH").unwrap_or_else(|_| "config.yaml".to_string());
 
-    // Create the root logger
-    let logger = if config.environment == Environment::Production {
+    let config = Config::from_file(&config_path)?;
+
+    // Create logger
+    let drain = if config.environment != Environment::Local {
         // JSON format for production
         let drain = slog_json::Json::default(std::io::stdout()).fuse();
         let drain = slog_async::Async::new(drain).build().fuse();
