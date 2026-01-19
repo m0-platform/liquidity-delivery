@@ -8,6 +8,7 @@ target/
 
 # Node modules (frontend has its own)
 node_modules/
+dist/
 
 # IDE
 .vscode/
@@ -37,5 +38,3 @@ evm/broadcast/
 # SVM development artifacts
 svm/target/
 
-# Docker
-docker-compose.override.yml

@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/ap
 
 # Copy workspace files
 COPY Cargo.toml Cargo.lock ./
-COPY docker-compose/quoter ./docker-compose/quoter
+COPY deployments/quoter ./deployments/quoter
 COPY solver ./solver
 COPY svm ./svm
 # EVM contract ABIs are needed at compile time for alloy sol! macro
@@ -28,6 +28,6 @@ WORKDIR /app
 COPY --from=builder /app/target/release/solver /app/solver
 
 # Copy config files
-COPY docker-compose/config/solver-*.yaml /config/
+COPY deployments/config/solver-*.yaml /config/
 
 CMD ["/app/solver"]

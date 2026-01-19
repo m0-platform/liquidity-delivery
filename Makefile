@@ -5,13 +5,13 @@ run-svm-localnet:
 	surfpool start -r deployment -r initialize -a test4MzZzYk2NAP1222FSuKqq83GuXY5tHakqREDHPo --rpc-url https://hatty-73mn84-fast-mainnet.helius-rpc.com
 
 run-local-solver:
-	docker compose -f docker-compose/docker-compose.yml up -d
+	docker compose -f deployments/docker-compose.yml up -d
 
 restart-solver:
-	docker compose -f docker-compose/docker-compose.yml up -d --build --no-deps solver
+	docker compose -f deployments/docker-compose.yml up -d --build --no-deps solver
 
 stop-local-solver:
-	docker compose -f docker-compose/docker-compose.yml down
+	docker compose -f deployments/docker-compose.yml down
 
 test-solver:
 	RUSTFLAGS='-Awarnings' cargo test --package solver -- --nocapture
@@ -29,7 +29,7 @@ deploy-solver:
 
 deploy-quoter:
 	railway environment devnet
-	docker build --platform linux/amd64 -t ghcr.io/m0-foundation/liquidity-delivery:quoter-service -f docker-compose/quoter/Dockerfile .
+	docker build --platform linux/amd64 -t ghcr.io/m0-foundation/liquidity-delivery:quoter-service -f deployments/quoter/Dockerfile .
 	docker push ghcr.io/m0-foundation/liquidity-delivery:quoter-service
 	sleep 1
 	railway redeploy --service Quoter --yes

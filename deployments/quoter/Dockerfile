@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/ap
 
 # Copy workspace files
 COPY Cargo.toml Cargo.lock ./
-COPY docker-compose/quoter ./docker-compose/quoter
+COPY deployments/quoter ./deployments/quoter
 COPY solver ./solver
 COPY svm ./svm
 
@@ -26,7 +26,7 @@ WORKDIR /app
 COPY --from=builder /app/target/release/quoter /app/quoter
 
 # Copy config files
-COPY docker-compose/config/quoter-*.yaml /app/config/
+COPY deployments/config/quoter-*.yaml /app/config/
 
 # Environment defaults
 ENV QUOTER_ENV=development

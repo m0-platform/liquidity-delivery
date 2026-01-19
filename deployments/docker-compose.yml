@@ -1,16 +1,4 @@
 services:
-  # Loki - Log aggregation for local development
-  loki:
-    image: grafana/loki:3.0.0
-    container_name: loki
-    command: -config.file=/etc/loki/local-config.yaml
-    ports:
-      - "3100:3100"
-    volumes:
-      - loki-data:/loki
-    networks:
-      - liquidity-network
-
   # Surfpool - Local Solana validator with program deployment
   surfpool:
     image: surfpool/surfpool:latest
@@ -97,7 +85,7 @@ services:
   deployer:
     build:
       context: ..
-      dockerfile: docker-compose/Dockerfile.deployer
+      dockerfile: deployments/Dockerfile.deployer
     container_name: liquidity-deployer
     depends_on:
       anvil-chain-a:
@@ -131,7 +119,7 @@ services:
   quoter:
     build:
       context: ..
-      dockerfile: docker-compose/quoter/Dockerfile
+      dockerfile: deployments/quoter/Dockerfile
     container_name: liquidity-quoter
     depends_on:
       deployer:
@@ -164,8 +152,6 @@ services:
       dockerfile: solver/Dockerfile
     container_name: liquidity-solver
     depends_on:
-      loki:
-        condition: service_started
       quoter:
         condition: service_healthy
       mock-api:
@@ -176,13 +162,6 @@ services:
       - ./config/solver-local.yaml:/app/config.yaml:ro
     ports:
       - "3001:3001"
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://host.docker.internal:3100/loki/api/v1/push"
-        loki-batch-size: "400"
-        loki-retries: "3"
-        loki-external-labels: "service=solver,environment=local"
     networks:
       - liquidity-network
 
@@ -208,9 +187,6 @@ services:
         condition: service_healthy
     networks:
       - liquidity-network
-
-volumes:
-  loki-data:
 
 networks:
   liquidity-network:

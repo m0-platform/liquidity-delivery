@@ -45,8 +45,7 @@ target
 .surfpool/
 
 # Frontend build output
-frontend/dist
-frontend/dist-ssr
+dist
 
 # Editor directories
 .idea
