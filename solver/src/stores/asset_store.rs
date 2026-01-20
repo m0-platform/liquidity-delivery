@@ -48,7 +48,7 @@ impl AssetStore {
 
     pub fn get_native(chain: Chain) -> Asset {
         match chain {
-            Chain::Solana => Asset {
+            Chain::Solana | Chain::SolanaDevnet => Asset {
                 chain,
                 address: String::default(),
                 decimals: 9,

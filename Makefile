@@ -1,6 +1,9 @@
 run-solver:
 	cd solver && cargo run --package solver --bin solver -- $(args)
 
+run-devnet-solver:
+	cd solver && CONFIG_PATH=../deployments/config/solver-devnet.yaml cargo run --package solver --bin solver
+
 run-svm-localnet:
 	surfpool start -r deployment -r initialize -a test4MzZzYk2NAP1222FSuKqq83GuXY5tHakqREDHPo --rpc-url https://hatty-73mn84-fast-mainnet.helius-rpc.com
 

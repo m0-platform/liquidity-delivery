@@ -8,9 +8,9 @@ http_port: 3001
 
 # Quoter connection
 quoter_grpc_url: http://quoter.railway.internal:50051
-connect_to_quote_stream: true
+connect_to_quote_stream: false
 
-liquidity_api_url: http://api-devnet.railway.internal:5600
+liquidity_api_url: http://api-devnet-devnet.up.railway.app
 
 # RPC rate limiting
 rpc_rate_limit:
