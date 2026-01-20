@@ -1,10 +1,11 @@
 import { ref } from 'vue'
 import { sendTransaction, getAccount, waitForTransactionReceipt } from '@wagmi/core'
 import { Connection, Transaction, VersionedTransaction } from '@solana/web3.js'
-import { wagmiConfig, solflare } from '../wallets'
+import { wagmiConfig } from '../wallets'
 import type { Wallet } from 'ethers'
 import type { Keypair } from '@solana/web3.js'
 import type { EvmTransaction } from './useQuoter'
+import type Solflare from '@solflare-wallet/sdk'
 
 export interface SwapResult {
   orderId: string
@@ -97,7 +98,8 @@ export function useSwap() {
     transactionBase64: string,
     orderId: string,
     rpcUrl: string,
-    localKeypair?: Keypair | null
+    localKeypair?: Keypair | null,
+    solflareWallet?: Solflare | null
   ): Promise<SwapResult> {
     loading.value = true
     error.value = null
@@ -129,7 +131,7 @@ export function useSwap() {
         txHash = signature
       } else {
         // External wallet mode - use Solflare
-        if (!solflare.isConnected) {
+        if (!solflareWallet || !solflareWallet.isConnected) {
           throw new Error('Solflare wallet not connected')
         }
 
@@ -141,7 +143,7 @@ export function useSwap() {
           transaction = VersionedTransaction.deserialize(transactionBuffer)
         }
 
-        const signedTransaction = await solflare.signTransaction(transaction)
+        const signedTransaction = await solflareWallet.signTransaction(transaction)
         const signature = await connection.sendRawTransaction(
           signedTransaction.serialize()
         )
@@ -170,6 +172,7 @@ export function useSwap() {
       svmRpcUrl?: string
       localEvmSigner?: Wallet | null
       localSvmKeypair?: Keypair | null
+      solflareWallet?: Solflare | null
     }
   ): Promise<SwapResult> {
     const {
@@ -179,7 +182,8 @@ export function useSwap() {
       orderId,
       svmRpcUrl,
       localEvmSigner,
-      localSvmKeypair
+      localSvmKeypair,
+      solflareWallet
     } = options
 
     if (chainType === 'evm') {
@@ -194,7 +198,7 @@ export function useSwap() {
       if (!svmRpcUrl) {
         throw new Error('No SVM RPC URL provided')
       }
-      return executeSvmSwap(svmTransaction, orderId, svmRpcUrl, localSvmKeypair)
+      return executeSvmSwap(svmTransaction, orderId, svmRpcUrl, localSvmKeypair, solflareWallet)
     }
   }
 

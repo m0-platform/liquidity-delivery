@@ -9,6 +9,7 @@ import SolverBalancesPage from './components/SolverBalancesPage.vue'
 
 import type { Wallet } from 'ethers'
 import type { Keypair } from '@solana/web3.js'
+import type Solflare from '@solflare-wallet/sdk'
 
 const network = ref<'local' | 'devnet' | 'mainnet'>('devnet')
 const evmConnected = ref(false)
@@ -18,6 +19,7 @@ const svmAddress = ref<string | null>(null)
 // Use shallowRef to preserve class instances with private properties
 const evmSigner = shallowRef<Wallet | null>(null)
 const svmKeypair = shallowRef<Keypair | null>(null)
+const solflareWallet = shallowRef<Solflare | null>(null)
 
 const isConnected = computed(() => evmConnected.value || svmConnected.value)
 
@@ -142,6 +144,7 @@ function onOrderCreated(orderId: string) {
             @svm-address="svmAddress = $event"
             @evm-signer="evmSigner = $event"
             @svm-keypair="svmKeypair = $event"
+            @solflare-wallet="solflareWallet = $event"
           />
         </div>
       </div>
@@ -228,6 +231,7 @@ function onOrderCreated(orderId: string) {
           :svm-address="svmAddress"
           :evm-signer="evmSigner"
           :svm-keypair="svmKeypair"
+          :solflare-wallet="solflareWallet"
           @order-created="onOrderCreated"
         />
       </div>

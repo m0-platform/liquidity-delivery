@@ -1,11 +1,7 @@
 import { ref } from "vue";
 import { JsonRpcProvider, Contract } from "ethers";
 import { Connection, PublicKey } from "@solana/web3.js";
-import {
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  Token,
-  TOKEN_PROGRAM_ID,
-} from "@solana/spl-token";
+import { ASSOCIATED_TOKEN_PROGRAM_ID, Token } from "@solana/spl-token";
 
 // Standard ERC20 ABI for balanceOf
 const ERC20_ABI = [
@@ -28,7 +24,7 @@ export function useBalance() {
     rpcUrl: string,
     walletAddress: string,
     tokenAddress: string,
-    decimals: number = 6
+    decimals: number = 6,
   ): Promise<BalanceResult | null> {
     loading.value = true;
     error.value = null;
@@ -63,7 +59,8 @@ export function useBalance() {
     rpcUrl: string,
     walletAddress: string,
     mintAddress: string,
-    decimals: number = 6
+    tokenProgramId: string,
+    decimals: number = 6,
   ): Promise<BalanceResult | null> {
     loading.value = true;
     error.value = null;
@@ -72,13 +69,14 @@ export function useBalance() {
       const connection = new Connection(rpcUrl, "confirmed");
       const walletPubkey = new PublicKey(walletAddress);
       const mintPubkey = new PublicKey(mintAddress);
+      const tokenProgramPubkey = new PublicKey(tokenProgramId);
 
       // Get the associated token account address
       const ata = await Token.getAssociatedTokenAddress(
         ASSOCIATED_TOKEN_PROGRAM_ID,
-        TOKEN_PROGRAM_ID,
+        tokenProgramPubkey,
         mintPubkey,
-        walletPubkey
+        walletPubkey,
       );
 
       // Fetch the token account balance
@@ -117,10 +115,17 @@ export function useBalance() {
     rpcUrl: string,
     walletAddress: string,
     tokenAddress: string,
-    decimals: number = 6
+    decimals: number = 6,
+    tokenProgramId?: string,
   ): Promise<BalanceResult | null> {
     if (chainId === "solana") {
-      return fetchSolanaBalance(rpcUrl, walletAddress, tokenAddress, decimals);
+      return fetchSolanaBalance(
+        rpcUrl,
+        walletAddress,
+        tokenAddress,
+        tokenProgramId!,
+        decimals,
+      );
     } else {
       return fetchEvmBalance(rpcUrl, walletAddress, tokenAddress, decimals);
     }

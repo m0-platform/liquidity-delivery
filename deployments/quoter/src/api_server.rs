@@ -119,6 +119,13 @@ async fn handle_quote_request(
                     },
                 }
             }
+        } else {
+            warn!(
+                state.logger,
+                "Chain config not found for input chain";
+                "input_chain_id" => request.input_chain_id,
+                "available_chains" => ?state.chains.iter().map(|c| c.chain_id).collect::<Vec<_>>()
+            );
         }
     }
 

@@ -2,7 +2,7 @@ import { createConfig, http } from "@wagmi/core";
 import { mainnet, sepolia, baseSepolia } from "@wagmi/core/chains";
 import { injected } from "@wagmi/connectors";
 import Solflare from "@solflare-wallet/sdk";
-import { getEthereumRpc } from "./config/network";
+import { getEthereumRpc, type NetworkType } from "./config/network";
 
 // Define Base chain
 const base = {
@@ -39,5 +39,8 @@ export const wagmiConfig = createConfig({
   },
 });
 
-// Solflare instance (singleton) for Solana wallet connections
-export const solflare = new Solflare();
+// Create a Solflare instance configured for the specified network
+export function createSolflare(network: NetworkType): Solflare {
+  const solflareNetwork = network === 'mainnet' ? 'mainnet-beta' : 'devnet';
+  return new Solflare({ network: solflareNetwork });
+}

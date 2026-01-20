@@ -13,6 +13,7 @@ const emit = defineEmits([
   'svm-address',
   'evm-signer',
   'svm-keypair',
+  'solflare-wallet',
 ])
 
 // Pass network as a reactive ref so useWallet can react to changes
@@ -30,6 +31,7 @@ const {
   disconnectSvm,
   localEvmWallet,
   localSvmKeypair,
+  getSolflare,
   error
 } = useWallet(networkRef)
 
@@ -39,6 +41,8 @@ watch(evmAddress, (val) => emit('evm-address', val), { immediate: true })
 watch(svmAddress, (val) => emit('svm-address', val), { immediate: true })
 watch(localEvmWallet, (val) => emit('evm-signer', val), { immediate: true })
 watch(localSvmKeypair, (val) => emit('svm-keypair', val), { immediate: true })
+// Emit Solflare instance whenever SVM connection state changes
+watch(svmConnected, () => emit('solflare-wallet', getSolflare()), { immediate: true })
 
 const copied = ref<'evm' | 'svm' | null>(null)
 const showLocalInfo = ref(false)

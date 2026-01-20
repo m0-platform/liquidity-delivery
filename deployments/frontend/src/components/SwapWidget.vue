@@ -7,6 +7,7 @@ import { useSwap, type ChainType } from '../composables/useSwap'
 import { getNetworkConfig } from '../config/network'
 import type { Wallet } from 'ethers'
 import type { Keypair } from '@solana/web3.js'
+import type Solflare from '@solflare-wallet/sdk'
 
 const props = defineProps<{
   network: 'local' | 'devnet' | 'mainnet'
@@ -15,6 +16,7 @@ const props = defineProps<{
   svmAddress: string | null
   evmSigner?: Wallet | null
   svmKeypair?: Keypair | null
+  solflareWallet?: Solflare | null
 }>()
 
 const emit = defineEmits<{
@@ -22,7 +24,7 @@ const emit = defineEmits<{
 }>()
 
 const { getQuote, loading, error, quote } = useQuoter(toRef(props, 'network'))
-const { assets, getAssetForChain, getUniqueTickers } = useAssets(toRef(props, 'network'))
+const { assets, getAssetForChain, getTickersForChain } = useAssets(toRef(props, 'network'))
 const { fetchBalance } = useBalance()
 const { executeSwap, loading: swapLoading, error: swapError } = useSwap()
 
@@ -71,10 +73,22 @@ const chains = computed(() => {
   }
 })
 
-// Get unique token tickers for dropdown display
-const tokenTickers = computed(() => {
-  if (assets.value.length > 0) {
-    return getUniqueTickers()
+// Get token tickers available on the "from" chain
+const fromTokenTickers = computed(() => {
+  const chain = chains.value.find(c => c.id === fromChain.value)
+  if (chain && assets.value.length > 0) {
+    const tickers = getTickersForChain(chain.chainId)
+    return tickers.length > 0 ? tickers : ['USDC', 'wM']
+  }
+  return ['USDC', 'wM']
+})
+
+// Get token tickers available on the "to" chain
+const toTokenTickers = computed(() => {
+  const chain = chains.value.find(c => c.id === toChain.value)
+  if (chain && assets.value.length > 0) {
+    const tickers = getTickersForChain(chain.chainId)
+    return tickers.length > 0 ? tickers : ['USDC', 'wM']
   }
   return ['USDC', 'wM']
 })
@@ -131,6 +145,19 @@ const missingWalletType = computed(() => {
   if (!hasRequiredEvmWallet.value) return 'evm'
   if (!hasRequiredSvmWallet.value) return 'svm'
   return null
+})
+
+// Reset token selection when chain changes or assets load if current token isn't available
+watch([fromChain, fromTokenTickers], () => {
+  if (!fromTokenTickers.value.includes(fromToken.value) && fromTokenTickers.value.length > 0) {
+    fromToken.value = fromTokenTickers.value[0]
+  }
+})
+
+watch([toChain, toTokenTickers], () => {
+  if (!toTokenTickers.value.includes(toToken.value) && toTokenTickers.value.length > 0) {
+    toToken.value = toTokenTickers.value[0]
+  }
 })
 
 // Swap direction
@@ -261,7 +288,8 @@ async function fetchFromBalance() {
       chain.rpc,
       walletAddress,
       asset.address,
-      asset.decimals
+      asset.decimals,
+      asset.extensionTokenProgramId
     )
     fromBalance.value = result?.formatted || null
   } catch (err) {
@@ -290,7 +318,8 @@ async function fetchToBalance() {
       chain.rpc,
       walletAddress,
       asset.address,
-      asset.decimals
+      asset.decimals,
+      asset.extensionTokenProgramId
     )
     toBalance.value = result?.formatted || null
   } catch (err) {
@@ -359,6 +388,7 @@ async function handleSwap() {
       svmRpcUrl: srcChain.rpc,
       localEvmSigner: props.evmSigner,
       localSvmKeypair: props.svmKeypair,
+      solflareWallet: props.solflareWallet,
     })
 
     console.log('Swap executed:', result)
@@ -473,7 +503,7 @@ const displayError = computed(() => error.value || swapError.value)
               v-model="fromToken"
               class="bg-transparent text-sm font-medium text-white outline-none cursor-pointer appearance-none pr-4"
             >
-              <option v-for="ticker in tokenTickers" :key="ticker" :value="ticker" class="bg-slate-900">
+              <option v-for="ticker in fromTokenTickers" :key="ticker" :value="ticker" class="bg-slate-900">
                 {{ ticker }}
               </option>
             </select>
@@ -578,7 +608,7 @@ const displayError = computed(() => error.value || swapError.value)
               v-model="toToken"
               class="bg-transparent text-sm font-medium text-white outline-none cursor-pointer appearance-none pr-4"
             >
-              <option v-for="ticker in tokenTickers" :key="ticker" :value="ticker" class="bg-slate-900">
+              <option v-for="ticker in toTokenTickers" :key="ticker" :value="ticker" class="bg-slate-900">
                 {{ ticker }}
               </option>
             </select>

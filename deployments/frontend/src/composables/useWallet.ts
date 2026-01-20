@@ -2,8 +2,9 @@ import { ref, shallowRef, computed, watch, toValue, type MaybeRef, onUnmounted }
 import { Wallet, JsonRpcProvider } from 'ethers'
 import { Keypair } from '@solana/web3.js'
 import { getAccount, watchAccount, disconnect as wagmiDisconnect, connect as wagmiConnect, getConnectors } from '@wagmi/core'
-import { wagmiConfig, solflare } from '../wallets'
+import { wagmiConfig, createSolflare } from '../wallets'
 import { getEthereumRpc, type NetworkType } from '../config/network'
+import type Solflare from '@solflare-wallet/sdk'
 
 export type { NetworkType } from '../config/network'
 
@@ -28,6 +29,9 @@ export function useWallet(networkRef: MaybeRef<NetworkType>) {
   const localEvmWallet = shallowRef<Wallet | null>(null)
   const localSvmKeypair = shallowRef<Keypair | null>(null)
 
+  // Solflare instance - created dynamically based on network
+  const solflareInstance = shallowRef<Solflare | null>(null)
+
   // Computed that reactively gets the current network
   const currentNetwork = computed(() => toValue(networkRef))
   const isLocal = computed(() => currentNetwork.value === 'local')
@@ -36,7 +40,6 @@ export function useWallet(networkRef: MaybeRef<NetworkType>) {
 
   // Track watchers for cleanup
   let unwatchWagmi: (() => void) | null = null
-  let solflareListenersSetup = false
 
   // Setup wagmi watcher for EVM account changes
   function setupWagmiWatcher() {
@@ -63,7 +66,14 @@ export function useWallet(networkRef: MaybeRef<NetworkType>) {
 
   // Setup Solflare event listeners for Solana account changes
   function setupSolflareListeners() {
-    if (isLocal.value || solflareListenersSetup) return
+    if (isLocal.value) return
+
+    // Create a new Solflare instance for the current network
+    const network = currentNetwork.value
+    if (network === 'local') return
+
+    solflareInstance.value = createSolflare(network)
+    const solflare = solflareInstance.value
 
     solflare.on('connect', () => {
       if (isLocal.value) return
@@ -76,8 +86,6 @@ export function useWallet(networkRef: MaybeRef<NetworkType>) {
         svmAddress.value = null
       }
     })
-
-    solflareListenersSetup = true
 
     // Check if already connected
     if (solflare.isConnected && solflare.publicKey) {
@@ -158,10 +166,12 @@ export function useWallet(networkRef: MaybeRef<NetworkType>) {
           console.warn('Wagmi disconnect error:', e)
         }
         try {
-          await solflare.disconnect()
+          await solflareInstance.value?.disconnect()
         } catch (e) {
           console.warn('Solflare disconnect error:', e)
         }
+        // Clear the old instance since we'll create a new one for the new network
+        solflareInstance.value = null
       }
 
       // Setup for new network
@@ -210,7 +220,11 @@ export function useWallet(networkRef: MaybeRef<NetworkType>) {
     }
 
     try {
-      await solflare.connect()
+      if (!solflareInstance.value) {
+        error.value = 'Solflare wallet not initialized'
+        return
+      }
+      await solflareInstance.value.connect()
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to connect Solflare wallet'
       console.error('SVM connect error:', e)
@@ -242,7 +256,7 @@ export function useWallet(networkRef: MaybeRef<NetworkType>) {
     }
 
     try {
-      await solflare.disconnect()
+      await solflareInstance.value?.disconnect()
     } catch (e) {
       console.error('SVM disconnect error:', e)
     }
@@ -269,7 +283,7 @@ export function useWallet(networkRef: MaybeRef<NetworkType>) {
 
   // Get Solflare instance for external wallet signing
   function getSolflare() {
-    return isLocal.value ? null : solflare
+    return isLocal.value ? null : solflareInstance.value
   }
 
   // Cleanup on unmount

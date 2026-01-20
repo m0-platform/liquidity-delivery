@@ -10,7 +10,7 @@ chains:
     starting_block: 10078462
 
   # Solana Devnet
-  - chain_id: 1399811149
+  - chain_id: 1399811150
     enabled: true
     rpc_url: https://devnet.helius-rpc.com/?api-key=c5cd4e3c-bba3-47ce-bec8-74a82995a1c1
     ws_url: wss://devnet.helius-rpc.com/?api-key=c5cd4e3c-bba3-47ce-bec8-74a82995a1c1
