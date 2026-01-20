@@ -23,7 +23,7 @@ max_clip_reprocess_delay_sec: 60
 solver_fee_bps: 1
 auto_rebalance: false
 
-evm_private_key: "afdfd9c3d2095ef696594f6cedcae59e72dcd697e2a7521b1578140422a4f890"
+evm_private_key: "5a4ee9382b2dcff9a2caa22b1087ff9dd2c3f7d4f72e4acba43bb75f9be5b426"
 svm_private_key: "2MqZwxzsfaEvQvnj4CgvUo2aknYXxJW2bBn5ewbftnbjU9DAtWX1XzCHy7Wd8dBSq5bmRwj6Ya5XTAnEe8sy2qS9"
 
 supported_assets:

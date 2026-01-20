@@ -11,10 +11,12 @@ use slog::{info, warn};
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
+use m0_liquidity_sdk::types::Asset;
+
 use crate::{
     error::Result,
     events::{EventHandler, EventProcessor, SolverEvent},
-    stores::{Order, OrderStore, TransactionRecord},
+    stores::{BalanceStore, Order, OrderStore, TransactionRecord},
     utils::format_address,
 };
 
@@ -73,11 +75,48 @@ pub struct OrdersResponse {
     pub count: usize,
 }
 
+/// Balance summary for API response
+#[derive(Debug, Serialize)]
+pub struct BalanceSummary {
+    pub chain: String,
+    pub address: String,
+    pub symbol: String,
+    pub decimals: i64,
+    pub balance: String,
+}
+
+impl BalanceSummary {
+    fn from_asset(asset: &Asset, balance: u128) -> Self {
+        Self {
+            chain: format!("{:?}", asset.chain),
+            address: asset.address.clone(),
+            symbol: asset.symbol.clone(),
+            decimals: asset.decimals,
+            balance: balance.to_string(),
+        }
+    }
+}
+
+/// Response for GET /balances
+#[derive(Debug, Serialize)]
+pub struct BalancesResponse {
+    pub balances: Vec<BalanceSummary>,
+    pub count: usize,
+}
+
+/// Shared state for API routes
+#[derive(Clone)]
+struct AppState {
+    order_store: Arc<OrderStore>,
+    balance_store: Arc<BalanceStore>,
+}
+
 /// API Server component
 pub struct ApiServer {
     port: Option<u16>,
     logger: slog::Logger,
     order_store: Arc<OrderStore>,
+    balance_store: Arc<BalanceStore>,
 }
 
 impl ApiServer {
@@ -88,17 +127,22 @@ impl ApiServer {
             port: params.config.http_port,
             logger,
             order_store: Arc::new(OrderStore::new()),
+            balance_store: Arc::new(BalanceStore::new()),
         }
     }
 
     fn create_router(&self) -> Router {
-        let order_store = self.order_store.clone();
+        let state = AppState {
+            order_store: self.order_store.clone(),
+            balance_store: self.balance_store.clone(),
+        };
 
         Router::new()
             .route("/health", get(health_check))
             .route("/orders", get(handle_orders_request))
+            .route("/balances", get(handle_balances_request))
             .layer(CorsLayer::permissive())
-            .with_state(order_store)
+            .with_state(state)
     }
 }
 
@@ -106,8 +150,8 @@ async fn health_check() -> impl IntoResponse {
     (StatusCode::OK, "OK")
 }
 
-async fn handle_orders_request(State(order_store): State<Arc<OrderStore>>) -> impl IntoResponse {
-    let orders = order_store.get_all_orders().await;
+async fn handle_orders_request(State(state): State<AppState>) -> impl IntoResponse {
+    let orders = state.order_store.get_all_orders().await;
     let count = orders.len();
 
     let mut order_list: Vec<OrderSummary> = orders.iter().map(OrderSummary::from_order).collect();
@@ -122,10 +166,29 @@ async fn handle_orders_request(State(order_store): State<Arc<OrderStore>>) -> im
     )
 }
 
+async fn handle_balances_request(State(state): State<AppState>) -> impl IntoResponse {
+    let balances = state.balance_store.get_all_balances().await;
+    let count = balances.len();
+
+    let balance_list: Vec<BalanceSummary> = balances
+        .iter()
+        .map(|(asset, balance)| BalanceSummary::from_asset(asset, *balance))
+        .collect();
+
+    (
+        StatusCode::OK,
+        Json(BalancesResponse {
+            balances: balance_list,
+            count,
+        }),
+    )
+}
+
 #[async_trait]
 impl EventHandler for ApiServer {
     async fn initialize(&self) -> Result<()> {
         self.order_store.initialize().await?;
+        self.balance_store.initialize().await?;
 
         let Some(port) = self.port else {
             warn!(self.logger, "HTTP API port not configured, server disabled");
@@ -162,6 +225,7 @@ impl EventHandler for ApiServer {
         }
 
         let _ = self.order_store.handle_event(event.clone()).await;
+        let _ = self.balance_store.handle_event(event.clone()).await;
 
         Ok(Vec::new())
     }

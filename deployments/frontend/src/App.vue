@@ -5,6 +5,7 @@ import WalletConnect from './components/WalletConnect.vue'
 import SwapWidget from './components/SwapWidget.vue'
 import OrdersPage from './components/OrdersPage.vue'
 import OrderDetail from './components/OrderDetail.vue'
+import SolverBalancesPage from './components/SolverBalancesPage.vue'
 
 import type { Wallet } from 'ethers'
 import type { Keypair } from '@solana/web3.js'
@@ -21,7 +22,7 @@ const svmKeypair = shallowRef<Keypair | null>(null)
 const isConnected = computed(() => evmConnected.value || svmConnected.value)
 
 // Navigation state
-type Tab = 'swap' | 'orders'
+type Tab = 'swap' | 'orders' | 'balances'
 const activeTab = ref<Tab>('swap')
 const selectedOrderId = ref<string | null>(null)
 
@@ -36,6 +37,8 @@ function parseUrlState() {
     if (orderId) {
       selectedOrderId.value = orderId
     }
+  } else if (tab === 'balances') {
+    activeTab.value = 'balances'
   } else if (tab === 'swap') {
     activeTab.value = 'swap'
   }
@@ -50,6 +53,8 @@ function updateUrl() {
     if (selectedOrderId.value) {
       params.set('order', selectedOrderId.value)
     }
+  } else if (activeTab.value === 'balances') {
+    params.set('tab', 'balances')
   }
   // Don't add params for swap tab (default state)
 
@@ -187,6 +192,27 @@ function onOrderCreated(orderId: string) {
               class="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-accent-400 to-accent-500"
             ></span>
           </button>
+
+          <button
+            @click="activeTab = 'balances'"
+            :class="[
+              'relative px-5 py-3.5 text-sm font-medium transition-all duration-200',
+              activeTab === 'balances'
+                ? 'text-white'
+                : 'text-surface-400 hover:text-surface-200'
+            ]"
+          >
+            <span class="relative z-10 flex items-center gap-2">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M2 10h20M2 14h20M6 18h12M8 22h8M4 6h16M8 2h8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              Balances
+            </span>
+            <span
+              v-if="activeTab === 'balances'"
+              class="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-accent-400 to-accent-500"
+            ></span>
+          </button>
         </div>
       </div>
     </nav>
@@ -225,6 +251,11 @@ function onOrderCreated(orderId: string) {
           />
         </div>
       </template>
+
+      <!-- Balances Tab -->
+      <div v-else-if="activeTab === 'balances'" class="w-full max-w-2xl animate-in">
+        <SolverBalancesPage :network="network" />
+      </div>
     </main>
 
     <!-- Footer -->

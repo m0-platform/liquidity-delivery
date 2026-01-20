@@ -2,7 +2,7 @@
 set -e
 
 # Deterministic addresses from private keys
-SOLVER_ADDRESS="0x06A85356DCb5b307096726FB86A78c59D38e08ee"
+SOLVER_ADDRESS="0xd39f64F38761c2B1a1056dAbc10ABCf3ef33133C"
 USER_ADDRESS="0xc5b879eB5dfe67dC612Ca6971cA4DFcFB8915adF"
 
 # Anvil's default funded account (account 0)
