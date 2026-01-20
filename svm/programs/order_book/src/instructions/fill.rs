@@ -194,48 +194,18 @@ impl FillNativeOrder<'_> {
 
         // Calculate the fill amount as the minimum of the provided fill amount out and the remaining amount out to fill
         // Also, calculate the corresponding amount in to release to the solver
-        let amount_out_remaining: u128 = order
-            .amount_out
-            .checked_sub(order.amount_out_filled)
-            .ok_or(OrderBookError::MathUnderflow)?;
-        let amount_in_remaining: u128 = order
-            .amount_in
-            .checked_sub(order.amount_in_released)
-            .ok_or(OrderBookError::MathUnderflow)?;
-        require!(amount_out_remaining > 0, OrderBookError::OrderFilled);
-        let full_fill: bool = fill_params.amount_out_to_fill as u128 >= amount_out_remaining;
-        let (amount_in_to_release, amount_out_to_fill): (u64, u64) = if full_fill {
+        let (full_fill, amount_in_to_release, amount_out_to_fill) = calculate_fill(
+            order_data.amount_in,
+            order_data.amount_out,
+            order.amount_in_released,
+            order.amount_out_filled,
+            fill_params.amount_out_to_fill as u128
+        )?;
+
+        if full_fill {
             // Set the order status to completed
             order.status = OrderStatus::Completed;
-
-            // Set the fill amount out to the remaining amount
-            // The amount in to release is the remaining amount in the order ATA
-            // Any extra tokens are considered a donation to the solver that completes the order
-            require!(
-                ctx.accounts.order_token_in_ata.amount
-                    >= amount_in_remaining
-                        .try_into()
-                        .map_err(|_| OrderBookError::InvalidFillAmount)?,
-                OrderBookError::InvalidFillAmount
-            );
-            (
-                ctx.accounts.order_token_in_ata.amount,
-                amount_out_remaining
-                    .try_into()
-                    .map_err(|_| OrderBookError::InvalidFillAmount)?,
-            )
-        } else {
-            // Calculate the amount in to release based on the proportion of amount out being filled
-            let amount_in_to_release: u64 = (fill_params.amount_out_to_fill as u128)
-                .checked_mul(order.amount_in)
-                .ok_or(OrderBookError::MathOverflow)?
-                .checked_div(order.amount_out)
-                .ok_or(OrderBookError::MathUnderflow)?
-                .try_into()
-                .map_err(|_| OrderBookError::MathOverflow)?;
-
-            (amount_in_to_release, fill_params.amount_out_to_fill)
-        };
+        }
 
         // Update the amount filled on the order
         order.amount_in_released += amount_in_to_release as u128;
@@ -423,41 +393,17 @@ impl<'info> FillForeignOrder<'info> {
 
         // Calculate the fill amount as the minimum of the provided fill amount out and the remaining amount out to fill
         // Also, calculate the corresponding amount in to release to the solver
-        let amount_out_remaining: u128 = order_data
-            .amount_out
-            .checked_sub(order.amount_out_filled)
-            .ok_or(OrderBookError::MathUnderflow)?;
-        let amount_in_remaining: u128 = order_data
-            .amount_in
-            .checked_sub(order.amount_in_released)
-            .ok_or(OrderBookError::MathUnderflow)?;
-        require!(amount_out_remaining > 0, OrderBookError::OrderFilled);
-        let full_fill: bool = fill_params.amount_out_to_fill as u128 >= amount_out_remaining;
-        let (amount_in_to_release, amount_out_to_fill): (u64, u64) = if full_fill {
+        let (full_fill, amount_in_to_release, amount_out_to_fill) = calculate_fill(
+            order_data.amount_in,
+            order_data.amount_out,
+            order.amount_in_released,
+            order.amount_out_filled,
+            fill_params.amount_out_to_fill as u128
+        )?;
+
+        if full_fill {
             // Set the order status to completed
             order.status = OrderStatus::Completed;
-
-            // Set the fill amount out to the remaining amount
-            // Set the amount in to release to the remaining amount in
-            (
-                amount_in_remaining
-                    .try_into()
-                    .map_err(|_| OrderBookError::InvalidFillAmount)?,
-                amount_out_remaining
-                    .try_into()
-                    .map_err(|_| OrderBookError::InvalidFillAmount)?,
-            )
-        } else {
-            // Calculate the amount in to release based on the proportion of amount out being filled
-            let amount_in_to_release: u64 = (fill_params.amount_out_to_fill as u128)
-                .checked_mul(order_data.amount_in)
-                .ok_or(OrderBookError::MathOverflow)?
-                .checked_div(order_data.amount_out)
-                .ok_or(OrderBookError::MathUnderflow)?
-                .try_into()
-                .map_err(|_| OrderBookError::MathOverflow)?;
-
-            (amount_in_to_release, fill_params.amount_out_to_fill)
         };
 
         // Update the fill amounts on the order
@@ -651,6 +597,28 @@ impl ReportOrderFill<'_> {
     pub fn handler(ctx: Context<Self>, _source_chain_id: u32, fill_report: FillReport) -> Result<()> {
         let order = &mut ctx.accounts.order.data;
 
+        // Calculate expected fill amounts and compare to reported amounts
+        let (full_fill, expected_amount_in_to_release, expected_amount_out_filled) = calculate_fill(
+            order.amount_in,
+            order.amount_out,
+            order.amount_in_released,
+            order.amount_out_filled,
+            fill_report.amount_out_filled
+        )?;
+
+        // Check the filled amount out matches the report
+        // It can be at most what was remaining to be filled
+        require!(
+            expected_amount_out_filled as u128 == fill_report.amount_out_filled,
+            OrderBookError::InvalidFillAmount
+        ); 
+        // Check that the amount in to release matches the report
+        // This confirms the ratio of the report matches the order
+        require!(
+            expected_amount_in_to_release as u128 == fill_report.amount_in_to_release,
+            OrderBookError::InvalidFillAmount
+        );
+
         // Update the filled amounts on the order
         order.amount_in_released += fill_report.amount_in_to_release;
         order.amount_out_filled += fill_report.amount_out_filled;
@@ -672,7 +640,7 @@ impl ReportOrderFill<'_> {
         );
 
         // Mark order as completed if fully filled
-        if order.amount_out_filled == order.amount_out {
+        if full_fill {
             // Mark the order as completed if fully filled
             order.status = OrderStatus::Completed;
             emit_cpi!(OrderCompleted { 
@@ -708,5 +676,33 @@ impl ReportOrderFill<'_> {
     }
 }
 
+fn calculate_fill(
+    total_amount_in_: u128,
+    total_amount_out_: u128,
+    amount_in_released_: u128,
+    amount_out_filled_: u128,
+    amount_out_to_fill_: u128
+) -> Result<(bool, u64, u64)> {
+    // Determine the amount out to fill as the minimum of the filler provided amount and the remaining unfilled amount
+    let amount_out_remaining_ = total_amount_out_.checked_sub(amount_out_filled_).ok_or(OrderBookError::MathUnderflow)?;
+    let full_fill_ = amount_out_to_fill_ >= amount_out_remaining_;
+    let amount_out_to_fill_ = if full_fill_ {
+        amount_out_remaining_
+    } else {
+        amount_out_to_fill_
+    };
 
+    // Calculate the corresponding amount of token in to release to the filler
+    let amount_in_to_release_ = if full_fill_ {
+        total_amount_in_.checked_sub(amount_in_released_).ok_or(OrderBookError::MathUnderflow)? // remaining amount
+    } else {
+        total_amount_in_.checked_mul(amount_out_to_fill_).ok_or(OrderBookError::MathOverflow)?
+            .checked_div(total_amount_out_).ok_or(OrderBookError::MathUnderflow)?
+    };
 
+    Ok((
+        full_fill_, 
+        amount_in_to_release_.try_into().map_err(|_| OrderBookError::InvalidFillAmount)?, 
+        amount_out_to_fill_.try_into().map_err(|_| OrderBookError::InvalidFillAmount)?
+    ))
+}

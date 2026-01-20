@@ -614,7 +614,6 @@ contract OrderBook is
         );
 
         // Check the filled amount out matches the expected amount
-        // This check catches overfills
         if (expectedAmountOutFilled_ != report_.amountOutFilled) revert InvalidReport();
         // Check the amount in to release matches the expected amount
         // This checks that the ratio of token in to token out is correct
