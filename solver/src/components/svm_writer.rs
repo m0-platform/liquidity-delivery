@@ -1,6 +1,5 @@
 use anchor_client::anchor_lang::AnchorSerialize;
 use anchor_client::solana_sdk::{
-    hash::hash,
     instruction::{AccountMeta, Instruction},
     pubkey::Pubkey,
     signature::Keypair,
@@ -21,20 +20,10 @@ use crate::error::{Result, SolverError};
 use crate::events::{EventHandler, EventProcessor, FillOrderSuccessfulEvent, SolverEvent};
 use crate::providers::ProviderManager;
 use crate::stores::OrderStore;
-use crate::utils::{chain_runtime, decode_order_id};
-
-// Default portal program ID
-const DEFAULT_PORTAL_PROGRAM_ID: &str = "MzBrgc8yXBj4P16GTkcSyDZkEQZB9qDqf3fh9bByJce";
-const DEFAULT_BRIDGE_ADAPTER: &str = "mzp1q2j5Hr1QuLC3KFBCAUz5aUckT6qyuZKZ3WJnMmY";
-
-/// Compute Anchor instruction discriminator (first 8 bytes of sha256("global:<instruction_name>"))
-fn anchor_discriminator(instruction_name: &str) -> [u8; 8] {
-    let preimage = format!("global:{}", instruction_name);
-    let hash = hash(preimage.as_bytes());
-    let mut discriminator = [0u8; 8];
-    discriminator.copy_from_slice(&hash.as_ref()[..8]);
-    discriminator
-}
+use crate::utils::{
+    anchor_discriminator, chain_runtime, decode_order_id, derive_wormhole_accounts, find_pda,
+    PORTAL_PROGRAM_ID, WORMHOLE_ADAPTER,
+};
 
 pub struct SvmWriter {
     order_store: Arc<OrderStore>,
@@ -65,34 +54,18 @@ impl SvmWriter {
             })
     }
 
-    fn get_portal_program_id(&self, chain_id: u32) -> Result<Pubkey> {
-        let portal_id = self
-            .chains
-            .iter()
-            .find(|c| c.chain_id == chain_id)
-            .and_then(|c| c.portal_program_id.as_ref())
-            .map(|s| s.as_str())
-            .unwrap_or(DEFAULT_PORTAL_PROGRAM_ID);
-
-        Pubkey::from_str(portal_id)
-            .map_err(|e| SolverError::Component(format!("Invalid portal program ID: {}", e)))
-    }
-
     fn get_bridge_adapter(&self, chain_id: u32) -> Result<Pubkey> {
-        let adapter_id = self
+        let chain = self
             .chains
             .iter()
             .find(|c| c.chain_id == chain_id)
-            .and_then(|c| c.bridge_adapter.as_ref())
-            .map(|s| s.as_str())
-            .unwrap_or(DEFAULT_BRIDGE_ADAPTER);
+            .ok_or_else(|| SolverError::Component("Chain not found for bridge adapter".into()))?;
 
-        Pubkey::from_str(adapter_id)
-            .map_err(|e| SolverError::Component(format!("Invalid adapter program ID: {}", e)))
-    }
-
-    fn find_pda(&self, seeds: &[&[u8]], program_id: &Pubkey) -> Pubkey {
-        Pubkey::find_program_address(seeds, program_id).0
+        match &chain.bridge_adapter {
+            Some(adapter) => Pubkey::from_str(adapter)
+                .map_err(|e| SolverError::Component(format!("Invalid adapter program ID: {e}"))),
+            None => Ok(WORMHOLE_ADAPTER),
+        }
     }
 
     async fn fill_native_order(
@@ -113,9 +86,9 @@ impl SvmWriter {
         let order_id_bytes = decode_order_id(&order_id.to_string());
 
         // Derive accounts
-        let global_account = self.find_pda(&[order_book::GLOBAL_SEED], &program_id);
-        let event_authority = self.find_pda(&[b"__event_authority"], &program_id);
-        let order_account = self.find_pda(
+        let global_account = find_pda(&[order_book::GLOBAL_SEED], &program_id);
+        let event_authority = find_pda(&[b"__event_authority"], &program_id);
+        let order_account = find_pda(
             &[order_book::ORDER_SEED_PREFIX, &order_id_bytes],
             &program_id,
         );
@@ -136,7 +109,6 @@ impl SvmWriter {
         };
 
         // Build instruction data using Anchor format:
-        // [8-byte discriminator] [order_id] [order_data] [fill_params]
         let mut ix_data = vec![];
         ix_data.extend_from_slice(&anchor_discriminator("fill_native_order"));
         ix_data.extend_from_slice(&order_id_bytes);
@@ -164,7 +136,6 @@ impl SvmWriter {
             AccountMeta::new(order_token_in_ata, false),
             AccountMeta::new_readonly(spl_token::ID, false),
             AccountMeta::new_readonly(event_authority, false),
-            AccountMeta::new_readonly(program_id, false),
         ];
 
         let ix = Instruction {
@@ -212,23 +183,22 @@ impl SvmWriter {
         let rpc_client = provider.client().await;
 
         let program_id = self.get_order_book_program_id(dest_chain_id)?;
-        let portal_program_id = self.get_portal_program_id(dest_chain_id)?;
         let bridge_adapter = self.get_bridge_adapter(dest_chain_id)?;
 
         let solver_pubkey = self.keypair.pubkey();
         let order_id_bytes = decode_order_id(&order_id.to_string());
 
         // Derive OrderBook accounts
-        let global_account = self.find_pda(&[order_book::GLOBAL_SEED], &program_id);
-        let event_authority = self.find_pda(&[b"__event_authority"], &program_id);
-        let order_account = self.find_pda(
+        let global_account = find_pda(&[order_book::GLOBAL_SEED], &program_id);
+        let event_authority = find_pda(&[b"__event_authority"], &program_id);
+        let order_account = find_pda(
             &[order_book::ORDER_SEED_PREFIX, &order_id_bytes],
             &program_id,
         );
 
         // Derive Portal accounts
-        let portal_global = self.find_pda(&[b"global"], &portal_program_id);
-        let portal_authority = self.find_pda(&[b"authority"], &portal_program_id);
+        let portal_global = find_pda(&[b"global"], &PORTAL_PROGRAM_ID);
+        let portal_authority = find_pda(&[b"authority"], &PORTAL_PROGRAM_ID);
 
         let token_out_mint = Pubkey::new_from_array(order_data.token_out);
         let recipient = Pubkey::new_from_array(order_data.recipient);
@@ -254,7 +224,7 @@ impl SvmWriter {
         })?;
 
         // Build instruction with account metas matching FillForeignOrder struct order
-        let accounts = vec![
+        let mut accounts = vec![
             AccountMeta::new(solver_pubkey, true),
             AccountMeta::new(global_account, false),
             AccountMeta::new_readonly(token_out_mint, false),
@@ -265,13 +235,25 @@ impl SvmWriter {
             AccountMeta::new_readonly(spl_associated_token_account::ID, false),
             AccountMeta::new_readonly(system_program::ID, false),
             AccountMeta::new(order_account, false),
-            AccountMeta::new_readonly(portal_program_id, false),
+            AccountMeta::new_readonly(PORTAL_PROGRAM_ID, false),
             AccountMeta::new(portal_global, false),
             AccountMeta::new_readonly(portal_authority, false),
             AccountMeta::new_readonly(bridge_adapter, false),
             AccountMeta::new_readonly(event_authority, false),
-            AccountMeta::new_readonly(program_id, false),
         ];
+
+        match bridge_adapter {
+            adapter if adapter == WORMHOLE_ADAPTER => {
+                accounts.extend(derive_wormhole_accounts(dest_chain_id))
+            }
+            _ => {
+                error!(
+                    self.logger,
+                    "Unsupported bridge adapter for foreign SVM fill";
+                    "adapter" => %bridge_adapter,
+                );
+            }
+        }
 
         let ix = Instruction {
             program_id,

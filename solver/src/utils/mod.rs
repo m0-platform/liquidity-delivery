@@ -1,7 +1,8 @@
 pub mod chains;
-pub mod logger;
+pub mod svm;
 
 pub use chains::*;
+pub use svm::*;
 
 pub fn unix_timestamp_secs() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
