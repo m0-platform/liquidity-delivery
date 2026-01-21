@@ -34,12 +34,14 @@ interface IOrderBook {
      * @param solver The address of the solver that filled the order
      * @param amountOutFilled The amount of output token that was filled
      * @param amountInToRelease The amount of input token they will receive on the origin chain
+     * @param messageId The ID of the crosschain message reporting this fill back to the origin chain (zero for same-chain fills)
      */
     event OrderFilled(
         bytes32 indexed orderId,
         address indexed solver,
         uint128 amountInToRelease,
-        uint128 amountOutFilled
+        uint128 amountOutFilled,
+        bytes32 indexed messageId
     );
 
     /**
@@ -62,8 +64,9 @@ interface IOrderBook {
      * @notice Emitted when an order is cancelled
      * @dev This event is emitted on the destination chain
      * @param orderId The ID of the cancelled order
+     * @param messageId The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      */
-    event OrderCancelled(bytes32 indexed orderId);
+    event OrderCancelled(bytes32 indexed orderId, bytes32 indexed messageId);
 
     /**
      * @notice Emitted when the support for a destination chain is updated
@@ -324,9 +327,9 @@ interface IOrderBook {
      * @notice Opens an order
      * @dev Must be called by the user providing the input funds
      * @param orderParams_ order creation parameters (see OrderParams definition)
-     * @return The unique ID of the opened order
+     * @return orderId_ The unique ID of the opened order
      */
-    function openOrder(OrderParams calldata orderParams_) external returns (bytes32);
+    function openOrder(OrderParams calldata orderParams_) external returns (bytes32 orderId_);
 
     /**
      * @notice Opens an order with an EIP-2612 permit signature for token approval
@@ -336,7 +339,7 @@ interface IOrderBook {
      * @param v_ v parameter of the permit signature
      * @param r_ r parameter of the permit signature
      * @param s_ s parameter of the permit signature
-     * @return The unique ID of the opened order
+     * @return orderId_ The unique ID of the opened order
      */
     function openOrderWithPermit(
         OrderParams calldata orderParams_,
@@ -344,7 +347,7 @@ interface IOrderBook {
         uint8 v_,
         bytes32 r_,
         bytes32 s_
-    ) external returns (bytes32);
+    ) external returns (bytes32 orderId_);
 
     /**
      * @notice Opens an order with an EIP-2612 permit signature for token approval
@@ -352,13 +355,13 @@ interface IOrderBook {
      * @param orderParams_ order creation parameters (see OrderParams definition)
      * @param deadline_ deadline for the permit signature
      * @param permitSignature_ packed encoding of the permit signature
-     * @return The unique ID of the opened order
+     * @return orderId_ The unique ID of the opened order
      */
     function openOrderWithPermit(
         OrderParams calldata orderParams_,
         uint256 deadline_,
         bytes memory permitSignature_
-    ) external returns (bytes32);
+    ) external returns (bytes32 orderId_);
 
     /**
      * @notice Opens a gasless order on behalf of a user
@@ -366,12 +369,12 @@ interface IOrderBook {
      * @param orderParams_ gasless order creation parameters (see GaslessOrderParams definition)
      * @param orderSignature_ Order sender's signature of the EIP-712 payload
      *        containing the orderParams (see getGaslessOrderDigest)
-     * @return The unique ID of the opened order
+     * @return orderId_ The unique ID of the opened order
      */
     function openOrderFor(
         GaslessOrderParams calldata orderParams_,
         bytes calldata orderSignature_
-    ) external returns (bytes32);
+    ) external returns (bytes32 orderId_);
 
     /**
      * @notice Opens a gasless order on behalf of a user with an EIP-2612 permit signature for token approval
@@ -383,7 +386,7 @@ interface IOrderBook {
      * @param v_ v parameter of the permit signature
      * @param r_ r parameter of the permit signature
      * @param s_ s parameter of the permit signature
-     * @return The unique ID of the opened order
+     * @return orderId_ The unique ID of the opened order
      */
     function openOrderForWithPermit(
         GaslessOrderParams calldata orderParams_,
@@ -392,7 +395,7 @@ interface IOrderBook {
         uint8 v_,
         bytes32 r_,
         bytes32 s_
-    ) external returns (bytes32);
+    ) external returns (bytes32 orderId_);
 
     /**
      * @notice Opens a gasless order on behalf of a user with an EIP-2612 permit signature for token approval
@@ -402,14 +405,14 @@ interface IOrderBook {
      *        containing the orderParams (see getGaslessOrderDigest)
      * @param deadline_ deadline for the permit signature
      * @param permitSignature_ packed encoding of the permit signature
-     * @return The unique ID of the opened order
+     * @return orderId_ The unique ID of the opened order
      */
     function openOrderForWithPermit(
         GaslessOrderParams calldata orderParams_,
         bytes calldata orderSignature_,
         uint256 deadline_,
         bytes memory permitSignature_
-    ) external returns (bytes32);
+    ) external returns (bytes32 orderId_);
 
     /* ========== Refunding Orders ========== */
 
@@ -419,11 +422,12 @@ interface IOrderBook {
      * @dev Can be called by anyone after the fill deadline (permissionless refunds)
      * @param orderId_ - ID of the order to cancel
      * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
+     * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
-    function cancelOrder(bytes32 orderId_, OrderData calldata orderData_) external payable;
+    function cancelOrder(bytes32 orderId_, OrderData calldata orderData_) external payable returns (bytes32 messageId_);
 
     /**
      * @notice Cancel an order with additional message data required by some crosschain messages
@@ -432,6 +436,7 @@ interface IOrderBook {
      * @param orderId_ ID of the order to cancel
      * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
+     * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
@@ -440,7 +445,7 @@ interface IOrderBook {
         bytes32 orderId_,
         OrderData calldata orderData_,
         bytes calldata bridgeAdapterArgs_
-    ) external payable;
+    ) external payable returns (bytes32 messageId_);
 
     /**
      * @notice Cancel an order with additional message data required by some crosschain messages
@@ -450,6 +455,7 @@ interface IOrderBook {
      * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
      * @param bridgeAdapter_ Address of the bridge adapter to use for crosschain messages (must be supported by Portal V2)
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
+     * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
@@ -459,7 +465,7 @@ interface IOrderBook {
         OrderData calldata orderData_,
         address bridgeAdapter_,
         bytes calldata bridgeAdapterArgs_
-    ) external payable;
+    ) external payable returns (bytes32 messageId_);
 
     /**
      * @notice Cancel an order on behalf of the recipient
@@ -467,6 +473,7 @@ interface IOrderBook {
      * @param orderId_ ID of the order to cancel
      * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
      * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelOrderDigest)
+     * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
@@ -475,7 +482,7 @@ interface IOrderBook {
         bytes32 orderId_,
         OrderData calldata orderData_,
         bytes calldata signature_
-    ) external payable;
+    ) external payable returns (bytes32 messageId_);
 
     /**
      * @notice Cancel an order on behalf of the recipient with additional message data required by some crosschain messages
@@ -484,6 +491,7 @@ interface IOrderBook {
      * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
      * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelOrderDigest)
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
+     * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
@@ -493,7 +501,7 @@ interface IOrderBook {
         OrderData calldata orderData_,
         bytes calldata signature_,
         bytes calldata bridgeAdapterArgs_
-    ) external payable;
+    ) external payable returns (bytes32 messageId_);
 
     /**
      * @notice Cancel an order on behalf of the recipient with additional message data required by some crosschain messages
@@ -503,6 +511,7 @@ interface IOrderBook {
      * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelOrderDigest)
      * @param bridgeAdapter_ Address of the bridge adapter to use for crosschain messages (must be supported by Portal V2)
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
+     * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
@@ -513,7 +522,7 @@ interface IOrderBook {
         bytes calldata signature_,
         address bridgeAdapter_,
         bytes calldata bridgeAdapterArgs_
-    ) external payable;
+    ) external payable returns (bytes32 messageId_);
 
     /* ========== Filling Orders ========== */
 
@@ -522,6 +531,7 @@ interface IOrderBook {
      * @param orderId_ ID of the order to fill
      * @param orderData_ OrderData payload with all order information required to identify an order to be filled
      * @param fillerParams_ Parameters supplied by the solver of the order
+     * @return messageId_ The ID of the crosschain message reporting this fill back to the origin chain (zero for same-chain cancels)
      * @dev   The orderData is packed and hashed to verify the order ID as a safeguard for solvers
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
@@ -531,7 +541,7 @@ interface IOrderBook {
         bytes32 orderId_,
         OrderData calldata orderData_,
         FillParams calldata fillerParams_
-    ) external payable;
+    ) external payable returns (bytes32 messageId_);
 
     /**
      * @notice Fill an order on this chain with additional message data required by some crosschain messages
@@ -539,6 +549,7 @@ interface IOrderBook {
      * @param orderData_ OrderData payload with all order information required to identify an order to be filled
      * @param fillerParams_ Parameters supplied by the solver of the order
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
+     * @return messageId_ The ID of the crosschain message reporting this fill back to the origin chain (zero for same-chain cancels)
      * @dev   The orderData is packed and hashed to verify the order ID as a safeguard for solvers
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
@@ -549,7 +560,7 @@ interface IOrderBook {
         OrderData calldata orderData_,
         FillParams calldata fillerParams_,
         bytes calldata bridgeAdapterArgs_
-    ) external payable;
+    ) external payable returns (bytes32 messageId_);
 
     /**
      * @notice Fill an order on this chain with additional message data required by some crosschain messages
@@ -558,6 +569,7 @@ interface IOrderBook {
      * @param fillerParams_ Parameters supplied by the solver of the order
      * @param bridgeAdapter_ Address of the bridge adapter to use for crosschain messages (must be supported by Portal V2)
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
+     * @return messageId_ The ID of the crosschain message reporting this fill back to the origin chain (zero for same-chain cancels)
      * @dev   The orderData is packed and hashed to verify the order ID as a safeguard for solvers
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
@@ -569,7 +581,7 @@ interface IOrderBook {
         FillParams calldata fillerParams_,
         address bridgeAdapter_,
         bytes calldata bridgeAdapterArgs_
-    ) external payable;
+    ) external payable returns (bytes32 messageId_);
 
     /**
      * @notice Report a fill that was made on another chain back to this chain as the origin chain
