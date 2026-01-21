@@ -377,9 +377,18 @@ contract OrderBook is
         // Verify signature
         if (signature_.length == 64) {
             (bytes32 r, bytes32 vs) = abi.decode(signature_, (bytes32, bytes32));
-            _revertIfInvalidSignature(orderData_.recipient.toAddress(), getCancelOrderDigest(orderId_), r, vs);
+            _revertIfInvalidSignature(
+                orderData_.recipient.toAddress(),
+                getCancelOrderDigest(orderId_, bridgeAdapter_, bridgeAdapterArgs_),
+                r,
+                vs
+            );
         } else {
-            _revertIfInvalidSignature(orderData_.recipient.toAddress(), getCancelOrderDigest(orderId_), signature_);
+            _revertIfInvalidSignature(
+                orderData_.recipient.toAddress(),
+                getCancelOrderDigest(orderId_, bridgeAdapter_, bridgeAdapterArgs_),
+                signature_
+            );
         }
 
         _cancel(orderId_, orderData_, bridgeAdapter_, bridgeAdapterArgs_);
@@ -769,8 +778,12 @@ contract OrderBook is
     }
 
     /// @inheritdoc IOrderBook
-    function getCancelOrderDigest(bytes32 orderId_) public view override returns (bytes32) {
-        return _getDigest(keccak256(abi.encode(CANCEL_ORDER_TYPEHASH, orderId_)));
+    function getCancelOrderDigest(
+        bytes32 orderId_,
+        address bridgeAdapter_,
+        bytes memory bridgeAdapterArgs_
+    ) public view override returns (bytes32) {
+        return _getDigest(keccak256(abi.encode(CANCEL_ORDER_TYPEHASH, orderId_, bridgeAdapter_, bridgeAdapterArgs_)));
     }
 
     /* ========== Internal Helper Functions ========== */

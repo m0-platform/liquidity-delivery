@@ -95,13 +95,13 @@ contract CancelOrderForTest is OrderBookTestBase {
     }
 
     function _signStandardECDSA(VmSafe.Wallet memory wallet_, bytes32 orderId_) internal returns (bytes memory) {
-        bytes32 digest = orderBook.getCancelOrderDigest(orderId_);
+        bytes32 digest = orderBook.getCancelOrderDigest(orderId_, address(0), "");
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(wallet_, digest);
         return abi.encodePacked(r, s, v);
     }
 
     function _signCompactECDSA(VmSafe.Wallet memory wallet_, bytes32 orderId_) internal returns (bytes memory) {
-        bytes32 digest = orderBook.getCancelOrderDigest(orderId_);
+        bytes32 digest = orderBook.getCancelOrderDigest(orderId_, address(0), "");
         (bytes32 r, bytes32 vs) = vm.signCompact(wallet_, digest);
         return abi.encodePacked(r, vs);
     }

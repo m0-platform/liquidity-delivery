@@ -650,6 +650,14 @@ interface IOrderBook {
     /**
      * @notice Returns the EIP-712 digest that a user must sign to cancel orders gaslessly
      * @param orderId_ ID of the order to cancel
+     * @param bridgeAdapter_ Address of the bridge adapter to use for crosschain messages (see Portal V2 for more info).
+     *                       It can be zero address to use default or for same-chain cancels.
+     * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info).
+     *                       It can be empty for no additional args or for same-chain cancels.
      */
-    function getCancelOrderDigest(bytes32 orderId_) external view returns (bytes32);
+    function getCancelOrderDigest(
+        bytes32 orderId_,
+        address bridgeAdapter_,
+        bytes memory bridgeAdapterArgs_
+    ) external view returns (bytes32);
 }
