@@ -121,6 +121,7 @@ interface IOrderBook {
     error OrderAlreadyExists();
     error OrderAlreadyFilled();
     error OrderIdMismatch();
+    error SameTokenOrder();
     error ZeroAdmin();
     error ZeroPauser();
     error ZeroPortal();
