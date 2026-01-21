@@ -25,6 +25,7 @@ use std::error::Error;
 fn default_order_params(test: &OrderBookTest) -> order_book::instructions::open::OrderParams {
     order_book::instructions::open::OrderParams {
         dest_chain_id: CHAIN_ID, // local order
+        created_at: test.current_time(),
         fill_deadline: test.current_time() + 86400,
         token_out: test.get_mint("token-out-spl-6").to_bytes(),
         amount_in: 1_000_000,

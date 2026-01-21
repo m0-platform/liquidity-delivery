@@ -184,12 +184,13 @@ mod xchain_orders {
         // Create a same chain order (origin_chain_id == chain_id)
         let order_params = OrderParams {
             dest_chain_id: CHAIN_ID,
+            created_at: test.current_time(),
+            fill_deadline: test.current_time() + 100,
             token_out: test.get_mint("token-out-spl-6").to_bytes(),
             amount_in: 1_000_000,
             amount_out: 1_000_000,
             recipient: test.get_user("alice").pubkey().to_bytes(),
             solver: test.get_user("solver").pubkey().to_bytes(),
-            fill_deadline: test.current_time() + 100,
         };
         let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
         let (_, native_order) = test.get_native_order_account(&order_id)?;

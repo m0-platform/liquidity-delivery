@@ -73,6 +73,7 @@ fn test_report_fill_unauthorized_portal_reverts() -> Result<(), Box<dyn Error>> 
     // Create a native order (origin = CHAIN_ID, dest = DEST_CHAIN_ID)
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID, // foreign destination
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm
@@ -121,6 +122,7 @@ fn test_report_fill_invalid_source_chain_reverts() -> Result<(), Box<dyn Error>>
     // Create a native order (origin = CHAIN_ID, dest = DEST_CHAIN_ID)
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID, // foreign destination
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm
@@ -245,6 +247,7 @@ fn test_report_fill_order_completed_reverts() -> Result<(), Box<dyn Error>> {
     // Create native order
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID,
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm
@@ -305,6 +308,7 @@ fn test_report_fill_order_cancelled_reverts() -> Result<(), Box<dyn Error>> {
     // Create cross-chain native order
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID,
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm
@@ -365,6 +369,7 @@ fn test_report_fill_cancelled_order_partial_refund_success() -> Result<(), Box<d
     // Create cross-chain native order
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID,
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm
@@ -439,6 +444,7 @@ fn test_report_fill_cancelled_order_exceeds_remaining_reverts() -> Result<(), Bo
     // Create cross-chain native order
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID,
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm
@@ -503,6 +509,7 @@ fn test_report_fill_zero_amount_reverts() -> Result<(), Box<dyn Error>> {
     // Create native order
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID,
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm
@@ -549,6 +556,7 @@ fn test_report_fill_wrong_token_mint_reverts() -> Result<(), Box<dyn Error>> {
     // Create native order
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID,
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm
@@ -604,6 +612,7 @@ fn test_report_fill_wrong_recipient_reverts() -> Result<(), Box<dyn Error>> {
     // Create native order
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID,
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm
@@ -658,6 +667,7 @@ fn test_report_fill_wrong_order_pda_reverts() -> Result<(), Box<dyn Error>> {
     // Create native order
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID,
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm
@@ -717,6 +727,7 @@ fn test_report_fill_partial_success() -> Result<(), Box<dyn Error>> {
     // Create native order
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID,
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm
@@ -790,6 +801,7 @@ fn test_report_fill_full_fill_success() -> Result<(), Box<dyn Error>> {
     // Create native order
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID,
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm
@@ -865,6 +877,7 @@ fn test_report_fill_multiple_partial_fills() -> Result<(), Box<dyn Error>> {
     // Create native order
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID,
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm
@@ -940,6 +953,7 @@ fn test_report_fill_with_donation_success() -> Result<(), Box<dyn Error>> {
     // Create native order
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID,
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm
@@ -1028,6 +1042,7 @@ fn test_report_fill_paused_success() -> Result<(), Box<dyn Error>> {
     // Create a cross-chain order (required for report_fill)
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID, // cross-chain order
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm

@@ -58,6 +58,7 @@ mod local_orders {
     ) -> order_book::instructions::open::OrderParams {
         order_book::instructions::open::OrderParams {
             dest_chain_id: CHAIN_ID, // local order
+            created_at: test.current_time(),
             fill_deadline: test.ctx.svm.get_sysvar::<Clock>().unix_timestamp as u64 + 86400,
             token_out: test.get_mint("token-out-spl-6").clone().to_bytes(),
             amount_in: 1_000_000,
@@ -1219,6 +1220,7 @@ mod xchain_orders {
         // Create a native order (local order)
         let order_params = order_book::instructions::open::OrderParams {
             dest_chain_id: CHAIN_ID, // local order
+            created_at: test.current_time(),
             fill_deadline: test.ctx.svm.get_sysvar::<Clock>().unix_timestamp as u64 + 86400,
             token_out: test.get_mint("token-out-spl-6").to_bytes(),
             amount_in: 1_000_000,

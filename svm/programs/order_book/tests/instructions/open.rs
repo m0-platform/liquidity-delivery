@@ -38,6 +38,7 @@ mod local_orders {
     ) -> order_book::instructions::open::OrderParams {
         order_book::instructions::open::OrderParams {
             dest_chain_id: CHAIN_ID, // local order
+            created_at: test.current_time(),
             fill_deadline: test.ctx.svm.get_sysvar::<Clock>().unix_timestamp as u64 + 86400,
             token_out: test.mints.get("token-out-spl-6").unwrap().to_bytes(),
             amount_in: 1_000_000,
@@ -135,6 +136,119 @@ mod local_orders {
         test.ctx
             .execute_instruction(ix, &[alice])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidFillDeadline));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_local_order_created_at_in_past_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Warp time forward so we can test past timestamps
+        test.warp_forward(100);
+
+        let alice = test.users.get("alice").unwrap();
+        let token_in_mint = test.mints.get("token-in-spl-6").unwrap();
+        let sender_token_in_account = test.atas.get(&("token-in-spl-6", "alice")).unwrap();
+
+        // Prepare order parameters with created_at in the past
+        let mut order_params = default_order_params(&test, "alice");
+        order_params.created_at = test.current_time() - 1; // 1 second in the past
+
+        let (_, ix) = test.create_open_order_ix(
+            &alice.pubkey(),
+            &token_in_mint,
+            &sender_token_in_account,
+            None,
+            &order_params,
+        )?;
+
+        test.ctx
+            .execute_instruction(ix, &[alice])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidCreatedAtTimestamp));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_local_order_created_at_too_far_in_future_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        let alice = test.users.get("alice").unwrap();
+        let token_in_mint = test.mints.get("token-in-spl-6").unwrap();
+        let sender_token_in_account = test.atas.get(&("token-in-spl-6", "alice")).unwrap();
+
+        // Prepare order parameters with created_at beyond the 5-minute window
+        let mut order_params = default_order_params(&test, "alice");
+        order_params.created_at = test.current_time() + 301; // 301 seconds (> 5 min window)
+        order_params.fill_deadline = order_params.created_at + 86400; // Must be after created_at
+
+        let (_, ix) = test.create_open_order_ix(
+            &alice.pubkey(),
+            &token_in_mint,
+            &sender_token_in_account,
+            None,
+            &order_params,
+        )?;
+
+        test.ctx
+            .execute_instruction(ix, &[alice])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidCreatedAtTimestamp));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_local_order_created_at_at_current_time_succeeds() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        let alice = test.users.get("alice").unwrap();
+        let token_in_mint = test.mints.get("token-in-spl-6").unwrap();
+        let sender_token_in_account = test.atas.get(&("token-in-spl-6", "alice")).unwrap();
+
+        // Prepare order parameters with created_at exactly at current time
+        let mut order_params = default_order_params(&test, "alice");
+        order_params.created_at = test.current_time(); // Exactly at current time
+
+        let (_, ix) = test.create_open_order_ix(
+            &alice.pubkey(),
+            &token_in_mint,
+            &sender_token_in_account,
+            None,
+            &order_params,
+        )?;
+
+        test.ctx.execute_instruction(ix, &[alice])?.assert_success();
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_local_order_created_at_at_upper_bound_succeeds() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        let alice = test.users.get("alice").unwrap();
+        let token_in_mint = test.mints.get("token-in-spl-6").unwrap();
+        let sender_token_in_account = test.atas.get(&("token-in-spl-6", "alice")).unwrap();
+
+        // Prepare order parameters with created_at at the upper boundary (5 min)
+        let mut order_params = default_order_params(&test, "alice");
+        order_params.created_at = test.current_time() + 300; // Exactly at 5 min boundary
+        order_params.fill_deadline = order_params.created_at + 86400; // Must be after created_at
+
+        let (_, ix) = test.create_open_order_ix(
+            &alice.pubkey(),
+            &token_in_mint,
+            &sender_token_in_account,
+            None,
+            &order_params,
+        )?;
+
+        test.ctx.execute_instruction(ix, &[alice])?.assert_success();
 
         Ok(())
     }
@@ -461,6 +575,7 @@ mod xchain_orders {
     ) -> order_book::instructions::open::OrderParams {
         order_book::instructions::open::OrderParams {
             dest_chain_id: DEST_CHAIN_ID, // xchain order
+            created_at: test.current_time(),
             fill_deadline: test.ctx.svm.get_sysvar::<Clock>().unix_timestamp as u64 + 86400,
             token_out: test.mints.get("token-out-spl-6").unwrap().to_bytes(),
             amount_in: 1_000_000,
