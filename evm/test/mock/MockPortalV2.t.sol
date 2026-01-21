@@ -25,6 +25,7 @@ contract MockPortalV2 is IPortalV2Like {
     ) external payable override returns (bytes32 messageId) {
         fillReports[report.orderId] = report;
         emit FillReportSent(destinationChainId, report);
+        messageId = keccak256(abi.encodePacked("fill", report.orderId));
     }
 
     function sendFillReport(
@@ -36,6 +37,7 @@ contract MockPortalV2 is IPortalV2Like {
     ) external payable override returns (bytes32 messageId) {
         fillReports[report.orderId] = report;
         emit FillReportSent(destinationChainId, report);
+        messageId = keccak256(abi.encodePacked("fill", report.orderId));
     }
 
     function sendCancelReport(
@@ -47,6 +49,7 @@ contract MockPortalV2 is IPortalV2Like {
         cancelReports[report.orderId] = true;
         cancelReportValues[report.orderId] = msg.value;
         emit CancelReportSent(destinationChainId, report);
+        messageId = keccak256(abi.encodePacked("cancel", report.orderId));
     }
 
     function sendCancelReport(
@@ -59,6 +62,7 @@ contract MockPortalV2 is IPortalV2Like {
         cancelReports[report.orderId] = true;
         cancelReportValues[report.orderId] = msg.value;
         emit CancelReportSent(destinationChainId, report);
+        messageId = keccak256(abi.encodePacked("cancel", report.orderId));
     }
 
     function receiveFillReport(uint32 sourceChainId, IOrderBook.FillReport calldata report) external {

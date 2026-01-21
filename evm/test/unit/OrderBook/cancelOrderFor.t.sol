@@ -147,10 +147,13 @@ contract CancelOrderForTest is OrderBookTestBase {
 
         bytes memory signature = _signCompactECDSA(recipient, orderId);
 
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(orderId);
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(orderId, bytes32(0));
 
-        orderBook.cancelOrderFor{ value: 0 }(orderId, orderData, signature);
+        bytes32 messageId = orderBook.cancelOrderFor{ value: 0 }(orderId, orderData, signature);
+
+        // Check messageId is zero for local orders
+        assertEq(messageId, bytes32(0), "messageId should be zero for local orders");
 
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Cancelled));
@@ -162,10 +165,13 @@ contract CancelOrderForTest is OrderBookTestBase {
 
         bytes memory signature = _signStandardECDSA(recipient, orderId);
 
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(orderId);
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(orderId, bytes32(0));
 
-        orderBook.cancelOrderFor{ value: 0 }(orderId, orderData, signature);
+        bytes32 messageId = orderBook.cancelOrderFor{ value: 0 }(orderId, orderData, signature);
+
+        // Check messageId is zero for local orders
+        assertEq(messageId, bytes32(0), "messageId should be zero for local orders");
 
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(uint8(updatedOrder.status), uint8(IOrderBook.OrderStatus.Cancelled));
@@ -263,12 +269,15 @@ contract CancelOrderForTest is OrderBookTestBase {
         vm.expectEmit(true, true, false, true);
         emit IOrderBook.RefundClaimed(orderId, sender.addr, params.amountIn);
 
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(orderId);
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(orderId, bytes32(0));
 
         uint256 senderBalanceBefore = tokenIn.balanceOf(sender.addr);
 
-        orderBook.cancelOrderFor{ value: 0 }(orderId, orderData, signature);
+        bytes32 messageId = orderBook.cancelOrderFor{ value: 0 }(orderId, orderData, signature);
+
+        // Check messageId is zero for local orders
+        assertEq(messageId, bytes32(0), "messageId should be zero for local orders");
 
         uint256 senderBalanceAfter = tokenIn.balanceOf(sender.addr);
         assertEq(senderBalanceAfter - senderBalanceBefore, params.amountIn);
@@ -288,11 +297,15 @@ contract CancelOrderForTest is OrderBookTestBase {
         assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.DoesNotExist));
 
         bytes memory signature = _signStandardECDSA(recipient, xchainOrderId);
+        bytes32 expectedMessageId = keccak256(abi.encodePacked("cancel", xchainOrderId));
 
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(xchainOrderId);
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(xchainOrderId, expectedMessageId);
 
-        orderBook.cancelOrderFor{ value: 1 }(xchainOrderId, xchainOrderData, signature);
+        bytes32 messageId = orderBook.cancelOrderFor{ value: 1 }(xchainOrderId, xchainOrderData, signature);
+
+        // Check messageId is non-zero for cross-chain orders
+        assertEq(messageId, expectedMessageId, "messageId should match expected value for cross-chain orders");
 
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(xchainOrderId);
         assertEq(
