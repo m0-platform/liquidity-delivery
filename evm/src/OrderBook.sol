@@ -71,6 +71,8 @@ contract OrderBook is
     /* ========== Construct and Initialize ========== */
 
     constructor(address portal_) {
+        _disableInitializers(); // prevent initializing the implementation contract
+
         if (portal_ == address(0)) revert ZeroPortal();
         portal = portal_;
     }
