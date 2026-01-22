@@ -277,7 +277,7 @@ contract FillOrderTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: params.solver })
+            IOrderBook.FillParams({ amountOutToFill: order.amountOut, originRecipient: users["bob"].toBytes32() })
         );
     }
 
@@ -819,7 +819,7 @@ contract FillOrderTest is OrderBookTestBase {
     }
 
     function test_solverNotSpecified_anyoneCanFill_success(address solver) public {
-        vm.assume(solver != address(orderBook) && solver != users["alice"]);
+        vm.assume(solver != address(0) && solver != address(orderBook) && solver != users["alice"]);
 
         vm.deal(solver, 1 ether);
         tokenOut.mint(solver, MINT_AMOUNT);

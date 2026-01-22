@@ -166,7 +166,7 @@ abstract contract OrderBookTestBase is Test {
         orderBook.fillOrder(
             orderId_,
             _getOrderDataFromOrder(orderId_, order),
-            IOrderBook.FillParams({ amountOutToFill: fillAmount_, originRecipient: order.solver })
+            IOrderBook.FillParams({ amountOutToFill: fillAmount_, originRecipient: solver_.toBytes32() })
         );
     }
 

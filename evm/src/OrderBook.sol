@@ -504,6 +504,7 @@ contract OrderBook is
         if (orderData_.version != VERSION) revert InvalidOrderVersion();
         if (orderData_.createdAt > block.timestamp) revert InvalidTimestamp();
         if (fillerParams_.amountOutToFill == 0) revert FillAmountZero();
+        if (fillerParams_.originRecipient == bytes32(0)) revert InvalidRecipient();
 
         // If the solver is specified, ensure that the caller is the designated solver
         address solver_ = orderData_.solver.toAddress();

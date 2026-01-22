@@ -8,8 +8,7 @@ import { IOrderBook } from "../../../../src/interfaces/IOrderBook.sol";
 import { SafeERC20 } from "../../../../src/libs/SafeERC20.sol";
 
 /// @notice Tests demonstrating originRecipient validation behavior
-/// @dev When solver sets originRecipient to address(orderBook), safeTransferExact catches it
-///      but an explicit check would provide clearer errors and fail earlier
+/// @dev The contract validates originRecipient is not zero address and catches orderBook address via safeTransferExact
 contract InvalidOriginRecipientTest is OrderBookTestBase {
     using TypeConverter for *;
 
@@ -65,10 +64,9 @@ contract InvalidOriginRecipientTest is OrderBookTestBase {
         vm.stopPrank();
     }
 
-    /// @notice Demonstrates that address(0) burns tokens - no revert!
-    /// @dev fillOrder with originRecipient = address(0) succeeds, tokens sent to zero address
-    ///      This is worse than address(orderBook) case which at least reverts
-    function test_originRecipientIsZero_burnsTokens() public {
+    /// @notice Verifies that zero address originRecipient reverts with InvalidRecipient
+    /// @dev fillOrder with originRecipient = address(0) now properly reverts
+    function test_originRecipientIsZero_reverts() public {
         // Setup: Create a local order (same chain) for immediate fill
         params.destChainId = CHAIN_ID;
 
@@ -77,14 +75,11 @@ contract InvalidOriginRecipientTest is OrderBookTestBase {
 
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
 
-        // Record balances before
-        uint256 zeroAddressBalanceBefore = tokenIn.balanceOf(address(0));
-        uint256 solverBalanceBefore = tokenIn.balanceOf(users["solver"]);
-
         vm.startPrank(users["solver"]);
         tokenOut.approve(address(orderBook), params.amountOut);
 
-        // Does NOT revert! Tokens are sent to address(0) and burned
+        // Reverts with InvalidRecipient when originRecipient is zero address
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidRecipient.selector));
         orderBook.fillOrder(
             orderId,
             IOrderBook.OrderData({
@@ -108,17 +103,5 @@ contract InvalidOriginRecipientTest is OrderBookTestBase {
             })
         );
         vm.stopPrank();
-
-        // Tokens were burned - sent to address(0)
-        uint256 zeroAddressBalanceAfter = tokenIn.balanceOf(address(0));
-        assertEq(zeroAddressBalanceAfter - zeroAddressBalanceBefore, params.amountIn, "tokens burned to address(0)");
-
-        // Solver received nothing from the fill - tokens went to address(0) instead
-        uint256 solverBalanceAfter = tokenIn.balanceOf(users["solver"]);
-        assertEq(
-            solverBalanceAfter,
-            solverBalanceBefore,
-            "solver balance unchanged - should have received amountIn but got nothing"
-        );
     }
 }

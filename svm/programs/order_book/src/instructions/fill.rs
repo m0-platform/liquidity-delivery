@@ -389,6 +389,12 @@ impl<'info> FillForeignOrder<'info> {
             OrderBookError::InvalidOriginChainId
         );
 
+        // Validate the origin recipient is not the zero address
+        require!(
+            fill_params.origin_recipient != [0u8; 32],
+            OrderBookError::InvalidRecipient
+        );
+
         Ok(())
     }
 
