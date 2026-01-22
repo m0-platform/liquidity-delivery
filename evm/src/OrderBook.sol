@@ -60,8 +60,8 @@ contract OrderBook is
     bytes32 public constant GASLESS_ORDER_TYPEHASH = 0xdcc220f897990a71a7c6f1069339af0681016bb96f2d791f2214e234d7029603;
 
     /// @notice the type hash used for cancel order signatures
-    /// @dev keccak256("CancelOrder(bytes32 orderId)")
-    bytes32 public constant CANCEL_ORDER_TYPEHASH = 0xab1417524886d631bf88c47a7f88d9a906122217bc08d3c5a21c80abcf1a8077;
+    /// @dev keccak256("CancelOrder(bytes32 orderId, address bridgeAdapter, bytes bridgeAdapterArgs)")
+    bytes32 public constant CANCEL_ORDER_TYPEHASH = 0x6919f4958bcd1b5b4e13b800c6d41c4792cfc2a12d0bd9ad19da6e0bfe8ac04f;
 
     /// @notice the portal contract used for cross-chain communication
     /// @dev sends crosschain messages to report fills on this chain to other chains
@@ -783,7 +783,10 @@ contract OrderBook is
         address bridgeAdapter_,
         bytes memory bridgeAdapterArgs_
     ) public view override returns (bytes32) {
-        return _getDigest(keccak256(abi.encode(CANCEL_ORDER_TYPEHASH, orderId_, bridgeAdapter_, bridgeAdapterArgs_)));
+        return
+            _getDigest(
+                keccak256(abi.encode(CANCEL_ORDER_TYPEHASH, orderId_, bridgeAdapter_, keccak256(bridgeAdapterArgs_)))
+            );
     }
 
     /* ========== Internal Helper Functions ========== */
