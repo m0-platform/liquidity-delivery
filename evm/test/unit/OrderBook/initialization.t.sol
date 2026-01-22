@@ -121,9 +121,10 @@ contract InitializationTest is Test {
             uint256 chainId,
             address verifyingContract,
             ,
-            // bytes32 salt
+
+        ) = // bytes32 salt
             // uint256[] memory extensions
-        ) = orderBook.eip712Domain();
+            orderBook.eip712Domain();
 
         assertEq(name, "M0 OrderBook");
         assertEq(version, "1");

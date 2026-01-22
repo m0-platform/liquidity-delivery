@@ -984,7 +984,7 @@ mod xchain_orders {
         // Set recipient to zero address
         order_params.recipient = [0u8; 32];
 
-        let (order_id, ix) = test.create_open_order_ix(
+        let (_, ix) = test.create_open_order_ix(
             &sender.pubkey(),
             &token_in_mint,
             &sender_token_in_account,

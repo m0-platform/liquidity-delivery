@@ -351,8 +351,8 @@ contract CancelOrderForTest is OrderBookTestBase {
         address bridgeAdapter = address(0x1234);
         bytes memory signature = _signStandardECDSAWithBridge(recipient, orderId, bridgeAdapter, "");
 
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(orderId);
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(orderId, bytes32(0));
 
         orderBook.cancelOrderFor{ value: 0 }(orderId, orderData, signature, bridgeAdapter, "");
 
@@ -367,8 +367,8 @@ contract CancelOrderForTest is OrderBookTestBase {
         address bridgeAdapter = address(0x1234);
         bytes memory signature = _signCompactECDSAWithBridge(recipient, orderId, bridgeAdapter, "");
 
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(orderId);
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(orderId, bytes32(0));
 
         orderBook.cancelOrderFor{ value: 0 }(orderId, orderData, signature, bridgeAdapter, "");
 
@@ -383,8 +383,8 @@ contract CancelOrderForTest is OrderBookTestBase {
         bytes memory bridgeAdapterArgs = abi.encode("some data");
         bytes memory signature = _signStandardECDSAWithBridge(recipient, orderId, address(0), bridgeAdapterArgs);
 
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(orderId);
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(orderId, bytes32(0));
 
         orderBook.cancelOrderFor{ value: 0 }(orderId, orderData, signature, bridgeAdapterArgs);
 
@@ -400,8 +400,8 @@ contract CancelOrderForTest is OrderBookTestBase {
         bytes memory bridgeAdapterArgs = abi.encode(uint256(123), address(0xBEEF));
         bytes memory signature = _signStandardECDSAWithBridge(recipient, orderId, bridgeAdapter, bridgeAdapterArgs);
 
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(orderId);
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(orderId, bytes32(0));
 
         orderBook.cancelOrderFor{ value: 0 }(orderId, orderData, signature, bridgeAdapter, bridgeAdapterArgs);
 
@@ -471,9 +471,10 @@ contract CancelOrderForTest is OrderBookTestBase {
 
         address bridgeAdapter = address(0x1234);
         bytes memory signature = _signStandardECDSAWithBridge(recipient, xchainOrderId, bridgeAdapter, "");
+        bytes32 expectedMessageId = keccak256(abi.encodePacked("cancel", xchainOrderId));
 
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(xchainOrderId);
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(xchainOrderId, expectedMessageId);
 
         orderBook.cancelOrderFor{ value: 1 }(xchainOrderId, xchainOrderData, signature, bridgeAdapter, "");
 
@@ -517,8 +518,8 @@ contract CancelOrderForTest is OrderBookTestBase {
         bytes memory bridgeAdapterArgs = abi.encode("test args");
         bytes memory signature = _signStandardECDSAWithBridge(recipient, orderId, address(0), bridgeAdapterArgs);
 
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(orderId);
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(orderId, bytes32(0));
 
         // Use the 4-parameter overload
         orderBook.cancelOrderFor{ value: 0 }(orderId, orderData, signature, bridgeAdapterArgs);
@@ -540,8 +541,8 @@ contract CancelOrderForTest is OrderBookTestBase {
         vm.expectEmit(true, true, false, true);
         emit IOrderBook.RefundClaimed(orderId, sender.addr, params.amountIn);
 
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(orderId);
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(orderId, bytes32(0));
 
         // Use the 5-parameter overload
         orderBook.cancelOrderFor{ value: 0 }(orderId, orderData, signature, bridgeAdapter, bridgeAdapterArgs);
@@ -560,8 +561,8 @@ contract CancelOrderForTest is OrderBookTestBase {
         // Sign with default params
         bytes memory signature = _signStandardECDSA(recipient, orderId);
 
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(orderId);
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(orderId, bytes32(0));
 
         // Explicitly pass address(0) and empty bytes - should match default signature
         orderBook.cancelOrderFor{ value: 0 }(orderId, orderData, signature, address(0), "");

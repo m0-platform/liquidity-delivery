@@ -1096,6 +1096,7 @@ fn test_report_fill_wrong_amount_in_too_high_reverts() -> Result<(), Box<dyn Err
     // Create a cross-chain native order with 1:1 ratio
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID,
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm
@@ -1144,6 +1145,7 @@ fn test_report_fill_wrong_amount_in_too_low_reverts() -> Result<(), Box<dyn Erro
     // Create a cross-chain native order with 1:1 ratio
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID,
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm
@@ -1192,6 +1194,7 @@ fn test_report_fill_amount_out_exceeds_remaining_reverts() -> Result<(), Box<dyn
     // Create a cross-chain native order
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID,
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm
@@ -1256,6 +1259,7 @@ fn test_report_fill_prorata_different_ratios_success() -> Result<(), Box<dyn Err
     // Create a cross-chain native order with 1:2 ratio (amount_in=1M, amount_out=2M)
     let order_params = order_book::instructions::open::OrderParams {
         dest_chain_id: DEST_CHAIN_ID,
+        created_at: test.current_time(),
         fill_deadline: test
             .ctx
             .svm
