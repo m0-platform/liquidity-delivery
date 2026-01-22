@@ -532,7 +532,7 @@ interface IOrderBook {
      * @param orderId_ ID of the order to fill
      * @param orderData_ OrderData payload with all order information required to identify an order to be filled
      * @param fillerParams_ Parameters supplied by the solver of the order
-     * @return messageId_ The ID of the crosschain message reporting this fill back to the origin chain (zero for same-chain cancels)
+     * @return messageId_ The ID of the crosschain message reporting this fill back to the origin chain (zero for same-chain fills)
      * @dev   The orderData is packed and hashed to verify the order ID as a safeguard for solvers
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
@@ -550,7 +550,7 @@ interface IOrderBook {
      * @param orderData_ OrderData payload with all order information required to identify an order to be filled
      * @param fillerParams_ Parameters supplied by the solver of the order
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
-     * @return messageId_ The ID of the crosschain message reporting this fill back to the origin chain (zero for same-chain cancels)
+     * @return messageId_ The ID of the crosschain message reporting this fill back to the origin chain (zero for same-chain fills)
      * @dev   The orderData is packed and hashed to verify the order ID as a safeguard for solvers
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
@@ -570,7 +570,7 @@ interface IOrderBook {
      * @param fillerParams_ Parameters supplied by the solver of the order
      * @param bridgeAdapter_ Address of the bridge adapter to use for crosschain messages (must be supported by Portal V2)
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
-     * @return messageId_ The ID of the crosschain message reporting this fill back to the origin chain (zero for same-chain cancels)
+     * @return messageId_ The ID of the crosschain message reporting this fill back to the origin chain (zero for same-chain fills)
      * @dev   The orderData is packed and hashed to verify the order ID as a safeguard for solvers
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
      *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
