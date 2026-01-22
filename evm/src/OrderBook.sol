@@ -193,6 +193,11 @@ contract OrderBook is
         if (orderParams_.recipient == bytes32(0)) revert InvalidRecipient();
         if (orderParams_.solver == orderParams_.recipient) revert InvalidSolver();
 
+        // Validate that tokenIn and tokenOut are not the same for same-chain orders
+        uint32 chainId = block.chainid.safe32();
+        if (orderParams_.destChainId == chainId && orderParams_.tokenOut == orderParams_.tokenIn.toBytes32())
+            revert SameTokenOrder();
+
         // Destination chain must either be the current chain or a supported destination
         if (!isDestinationSupported(orderParams_.destChainId)) revert InvalidDestinationChain();
 
@@ -203,7 +208,7 @@ contract OrderBook is
         orderId_ = getOrderId(
             OrderData({
                 version: VERSION, // origin contract version
-                originChainId: block.chainid.safe32(),
+                originChainId: chainId,
                 sender: sender_.toBytes32(),
                 nonce: nonce_,
                 destChainId: orderParams_.destChainId,
