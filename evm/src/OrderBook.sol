@@ -586,17 +586,20 @@ contract OrderBook is
 
             // Send fill report to the origin chain and pass along msg.value
             // to the portal for crosschain message fee
+            bytes32 refundAddress = fillerParams_.refundAddress == bytes32(0)
+                ? msg.sender.toBytes32()
+                : fillerParams_.refundAddress;
             messageId_ = bridgeAdapter_ == address(0)
                 ? IPortalV2Like(portal).sendFillReport{ value: msg.value }(
                     orderData_.originChainId, // destinationChainId (of this message)
-                    report_, // report
-                    msg.sender.toBytes32(), // refundAddress
+                    report_,
+                    refundAddress,
                     bridgeAdapterArgs_
                 )
                 : IPortalV2Like(portal).sendFillReport{ value: msg.value }(
                     orderData_.originChainId, // destinationChainId (of this message)
-                    report_, // report
-                    msg.sender.toBytes32(), // refundAddress
+                    report_,
+                    refundAddress,
                     bridgeAdapter_,
                     bridgeAdapterArgs_
                 );

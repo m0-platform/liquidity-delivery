@@ -304,10 +304,14 @@ interface IOrderBook {
      *      and are not part of the original order data
      * @param amountOutToFill The amount of output token the filler is providing to fill
      * @param originRecipient The address on the origin chain that should receive released funds
+     * @param refundAddress (optional) The address to send any bridge refund costs to.
+     *                       See PortalV2 for more info. If not provided (i.e. zero address),
+     *                       it defaults to msg.sender. Not required for same chain fills.
      */
     struct FillParams {
         uint128 amountOutToFill;
         bytes32 originRecipient;
+        bytes32 refundAddress;
     }
 
     /**
