@@ -125,6 +125,11 @@ impl OpenOrder<'_> {
                 destination_account.is_supported,
                 OrderBookError::DestinationNotSupported
             );
+        } else {
+            require!(
+                Pubkey::new_from_array(params.token_out) != self.token_in_mint.key(),
+                OrderBookError::InvalidTokenOutMint
+            );
         }
 
         // Validate params

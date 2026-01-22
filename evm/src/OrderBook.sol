@@ -90,8 +90,8 @@ contract OrderBook is
     /* ========== Creating Orders ========== */
 
     /// @inheritdoc IOrderBook
-    function openOrder(OrderParams calldata orderParams_) external override returns (bytes32) {
-        return _openOrder(msg.sender, orderParams_);
+    function openOrder(OrderParams calldata orderParams_) external override returns (bytes32 orderId_) {
+        orderId_ = _openOrder(msg.sender, orderParams_);
     }
 
     /// @inheritdoc IOrderBook
@@ -101,7 +101,7 @@ contract OrderBook is
         uint8 v_,
         bytes32 r_,
         bytes32 s_
-    ) external override returns (bytes32) {
+    ) external override returns (bytes32 orderId_) {
         try
             IERC20Extended(orderParams_.tokenIn).permit(
                 msg.sender,
@@ -113,7 +113,7 @@ contract OrderBook is
                 s_
             )
         {} catch {}
-        return _openOrder(msg.sender, orderParams_);
+        orderId_ = _openOrder(msg.sender, orderParams_);
     }
 
     /// @inheritdoc IOrderBook
@@ -121,7 +121,7 @@ contract OrderBook is
         OrderParams calldata orderParams_,
         uint256 deadline_,
         bytes memory permitSignature_
-    ) external override returns (bytes32) {
+    ) external override returns (bytes32 orderId_) {
         try
             IERC20Extended(orderParams_.tokenIn).permit(
                 msg.sender,
@@ -131,15 +131,15 @@ contract OrderBook is
                 permitSignature_
             )
         {} catch {}
-        return _openOrder(msg.sender, orderParams_);
+        orderId_ = _openOrder(msg.sender, orderParams_);
     }
 
     /// @inheritdoc IOrderBook
     function openOrderFor(
         GaslessOrderParams calldata orderParams_,
         bytes calldata orderSignature_
-    ) external override returns (bytes32) {
-        return _openOrderFor(orderParams_, orderSignature_);
+    ) external override returns (bytes32 orderId_) {
+        orderId_ = _openOrderFor(orderParams_, orderSignature_);
     }
 
     /// @inheritdoc IOrderBook
@@ -150,7 +150,7 @@ contract OrderBook is
         uint8 v_,
         bytes32 r_,
         bytes32 s_
-    ) external override returns (bytes32) {
+    ) external override returns (bytes32 orderId_) {
         try
             IERC20Extended(orderParams_.tokenIn).permit(
                 orderParams_.sender,
@@ -162,7 +162,7 @@ contract OrderBook is
                 s_
             )
         {} catch {}
-        return _openOrderFor(orderParams_, orderSignature_);
+        orderId_ = _openOrderFor(orderParams_, orderSignature_);
     }
 
     /// @inheritdoc IOrderBook
@@ -171,7 +171,7 @@ contract OrderBook is
         bytes calldata orderSignature_,
         uint256 deadline_,
         bytes memory permitSignature_
-    ) external override returns (bytes32) {
+    ) external override returns (bytes32 orderId_) {
         try
             IERC20Extended(orderParams_.tokenIn).permit(
                 orderParams_.sender,
@@ -181,16 +181,24 @@ contract OrderBook is
                 permitSignature_
             )
         {} catch {}
-        return _openOrderFor(orderParams_, orderSignature_);
+        orderId_ = _openOrderFor(orderParams_, orderSignature_);
     }
 
-    function _openOrder(address sender_, OrderParams memory orderParams_) internal whenNotPaused returns (bytes32) {
+    function _openOrder(
+        address sender_,
+        OrderParams memory orderParams_
+    ) internal whenNotPaused returns (bytes32 orderId_) {
         // Validate order parameters
         if (uint256(orderParams_.fillDeadline) < block.timestamp) revert InvalidDeadline();
         if (orderParams_.amountIn == 0) revert AmountInZero();
         if (orderParams_.amountOut == 0) revert AmountOutZero();
         if (orderParams_.recipient == bytes32(0)) revert InvalidRecipient();
         if (orderParams_.solver == orderParams_.recipient) revert InvalidSolver();
+
+        // Validate that tokenIn and tokenOut are not the same for same-chain orders
+        uint32 chainId = block.chainid.safe32();
+        if (orderParams_.destChainId == chainId && orderParams_.tokenOut == orderParams_.tokenIn.toBytes32())
+            revert SameTokenOrder();
 
         // Destination chain must either be the current chain or a supported destination
         if (!isDestinationSupported(orderParams_.destChainId)) revert InvalidDestinationChain();
@@ -199,10 +207,10 @@ contract OrderBook is
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         uint64 nonce_ = $.senderNonces[sender_]++;
 
-        bytes32 orderId_ = getOrderId(
+        orderId_ = getOrderId(
             OrderData({
                 version: VERSION, // origin contract version
-                originChainId: block.chainid.safe32(),
+                originChainId: chainId,
                 sender: sender_.toBytes32(),
                 nonce: nonce_,
                 destChainId: orderParams_.destChainId,
@@ -251,14 +259,12 @@ contract OrderBook is
             orderParams_.amountOut,
             orderParams_.solver
         );
-
-        return orderId_;
     }
 
     function _openOrderFor(
         GaslessOrderParams calldata orderParams_,
         bytes calldata signature_
-    ) internal returns (bytes32) {
+    ) internal returns (bytes32 orderId_) {
         // Verify signature
         if (signature_.length == 64) {
             (bytes32 r, bytes32 vs) = abi.decode(signature_, (bytes32, bytes32));
@@ -276,27 +282,29 @@ contract OrderBook is
         if (orderParams_.version != VERSION) revert InvalidOrderVersion();
 
         // Open order on behalf of the sender
-        return
-            _openOrder(
-                orderParams_.sender,
-                OrderParams({
-                    destChainId: orderParams_.destChainId,
-                    tokenIn: orderParams_.tokenIn,
-                    tokenOut: orderParams_.tokenOut,
-                    amountIn: orderParams_.amountIn,
-                    amountOut: orderParams_.amountOut,
-                    recipient: orderParams_.recipient,
-                    fillDeadline: orderParams_.fillDeadline,
-                    solver: orderParams_.solver
-                })
-            );
+        orderId_ = _openOrder(
+            orderParams_.sender,
+            OrderParams({
+                destChainId: orderParams_.destChainId,
+                tokenIn: orderParams_.tokenIn,
+                tokenOut: orderParams_.tokenOut,
+                amountIn: orderParams_.amountIn,
+                amountOut: orderParams_.amountOut,
+                recipient: orderParams_.recipient,
+                fillDeadline: orderParams_.fillDeadline,
+                solver: orderParams_.solver
+            })
+        );
     }
 
     /* ========== Refunding Orders ========== */
 
     /// @inheritdoc IOrderBook
-    function cancelOrder(bytes32 orderId_, OrderData calldata orderData_) external payable override {
-        _cancelOrder(orderId_, orderData_, address(0), new bytes(0));
+    function cancelOrder(
+        bytes32 orderId_,
+        OrderData calldata orderData_
+    ) external payable override returns (bytes32 messageId_) {
+        messageId_ = _cancelOrder(orderId_, orderData_, address(0), new bytes(0));
     }
 
     /// @inheritdoc IOrderBook
@@ -304,8 +312,8 @@ contract OrderBook is
         bytes32 orderId_,
         OrderData calldata orderData_,
         bytes calldata bridgeAdapterArgs_
-    ) external payable override {
-        _cancelOrder(orderId_, orderData_, address(0), bridgeAdapterArgs_);
+    ) external payable override returns (bytes32 messageId_) {
+        messageId_ = _cancelOrder(orderId_, orderData_, address(0), bridgeAdapterArgs_);
     }
 
     /// @inheritdoc IOrderBook
@@ -314,8 +322,8 @@ contract OrderBook is
         OrderData calldata orderData_,
         address bridgeAdapter_,
         bytes calldata bridgeAdapterArgs_
-    ) external payable override {
-        _cancelOrder(orderId_, orderData_, bridgeAdapter_, bridgeAdapterArgs_);
+    ) external payable override returns (bytes32 messageId_) {
+        messageId_ = _cancelOrder(orderId_, orderData_, bridgeAdapter_, bridgeAdapterArgs_);
     }
 
     function _cancelOrder(
@@ -323,7 +331,7 @@ contract OrderBook is
         OrderData calldata orderData_,
         address bridgeAdapter_,
         bytes memory bridgeAdapterArgs_
-    ) internal {
+    ) internal returns (bytes32 messageId_) {
         // Cancellation Authorization:
         // 1. Before deadline:
         //   - Same-chain orders: sender OR recipient
@@ -336,7 +344,7 @@ contract OrderBook is
                 (orderData_.originChainId == block.chainid && orderData_.sender.toAddress() == msg.sender))
         ) revert NotAuthorized();
 
-        _cancel(orderId_, orderData_, bridgeAdapter_, bridgeAdapterArgs_);
+        messageId_ = _cancel(orderId_, orderData_, bridgeAdapter_, bridgeAdapterArgs_);
     }
 
     /// @inheritdoc IOrderBook
@@ -344,8 +352,8 @@ contract OrderBook is
         bytes32 orderId_,
         OrderData calldata orderData_,
         bytes calldata signature_
-    ) external payable override {
-        _cancelOrderFor(orderId_, orderData_, signature_, address(0), new bytes(0));
+    ) external payable override returns (bytes32 messageId_) {
+        messageId_ = _cancelOrderFor(orderId_, orderData_, signature_, address(0), new bytes(0));
     }
 
     /// @inheritdoc IOrderBook
@@ -354,8 +362,8 @@ contract OrderBook is
         OrderData calldata orderData_,
         bytes calldata signature_,
         bytes calldata bridgeAdapterArgs_
-    ) external payable override {
-        _cancelOrderFor(orderId_, orderData_, signature_, address(0), bridgeAdapterArgs_);
+    ) external payable override returns (bytes32 messageId_) {
+        messageId_ = _cancelOrderFor(orderId_, orderData_, signature_, address(0), bridgeAdapterArgs_);
     }
 
     /// @inheritdoc IOrderBook
@@ -365,8 +373,8 @@ contract OrderBook is
         bytes calldata signature_,
         address bridgeAdapter_,
         bytes calldata bridgeAdapterArgs_
-    ) external payable override {
-        _cancelOrderFor(orderId_, orderData_, signature_, bridgeAdapter_, bridgeAdapterArgs_);
+    ) external payable override returns (bytes32 messageId_) {
+        messageId_ = _cancelOrderFor(orderId_, orderData_, signature_, bridgeAdapter_, bridgeAdapterArgs_);
     }
 
     function _cancelOrderFor(
@@ -375,7 +383,7 @@ contract OrderBook is
         bytes calldata signature_,
         address bridgeAdapter_,
         bytes memory bridgeAdapterArgs_
-    ) internal {
+    ) internal returns (bytes32 messageId_) {
         // Verify signature
         if (signature_.length == 64) {
             (bytes32 r, bytes32 vs) = abi.decode(signature_, (bytes32, bytes32));
@@ -393,7 +401,7 @@ contract OrderBook is
             );
         }
 
-        _cancel(orderId_, orderData_, bridgeAdapter_, bridgeAdapterArgs_);
+        messageId_ = _cancel(orderId_, orderData_, bridgeAdapter_, bridgeAdapterArgs_);
     }
 
     function _cancel(
@@ -401,7 +409,7 @@ contract OrderBook is
         OrderData calldata orderData_,
         address bridgeAdapter_,
         bytes memory bridgeAdapterArgs_
-    ) internal whenNotPaused {
+    ) internal whenNotPaused returns (bytes32 messageId_) {
         _revertIfOrderIdMismatch(orderId_, orderData_);
 
         // Can't cancel an order before it's created
@@ -438,7 +446,7 @@ contract OrderBook is
                 amountInToRefund: amountInRemaining_
             });
 
-            bridgeAdapter_ == address(0)
+            messageId_ = bridgeAdapter_ == address(0)
                 ? IPortalV2Like(portal).sendCancelReport{ value: msg.value }(
                     orderData_.originChainId,
                     report_,
@@ -454,7 +462,7 @@ contract OrderBook is
                 );
         }
 
-        emit OrderCancelled(orderId_);
+        emit OrderCancelled(orderId_, messageId_);
     }
 
     /* ========== Filling Orders ========== */
@@ -464,8 +472,8 @@ contract OrderBook is
         bytes32 orderId_,
         OrderData calldata orderData_,
         FillParams calldata fillerParams_
-    ) external payable override {
-        _fillOrder(orderId_, orderData_, fillerParams_, address(0), new bytes(0));
+    ) external payable override returns (bytes32 messageId_) {
+        messageId_ = _fillOrder(orderId_, orderData_, fillerParams_, address(0), new bytes(0));
     }
 
     /// @inheritdoc IOrderBook
@@ -474,8 +482,8 @@ contract OrderBook is
         OrderData calldata orderData_,
         FillParams calldata fillerParams_,
         bytes calldata bridgeAdapterArgs_
-    ) external payable override {
-        _fillOrder(orderId_, orderData_, fillerParams_, address(0), bridgeAdapterArgs_);
+    ) external payable override returns (bytes32 messageId_) {
+        messageId_ = _fillOrder(orderId_, orderData_, fillerParams_, address(0), bridgeAdapterArgs_);
     }
 
     /// @inheritdoc IOrderBook
@@ -485,8 +493,8 @@ contract OrderBook is
         FillParams calldata fillerParams_,
         address bridgeAdapter_,
         bytes calldata bridgeAdapterArgs_
-    ) external payable override {
-        _fillOrder(orderId_, orderData_, fillerParams_, bridgeAdapter_, bridgeAdapterArgs_);
+    ) external payable override returns (bytes32 messageId_) {
+        messageId_ = _fillOrder(orderId_, orderData_, fillerParams_, bridgeAdapter_, bridgeAdapterArgs_);
     }
 
     function _fillOrder(
@@ -495,7 +503,7 @@ contract OrderBook is
         FillParams calldata fillerParams_,
         address bridgeAdapter_,
         bytes memory bridgeAdapterArgs_
-    ) internal whenNotPaused {
+    ) internal whenNotPaused returns (bytes32 messageId_) {
         _revertIfOrderIdMismatch(orderId_, orderData_);
 
         // Validate fill data
@@ -578,7 +586,7 @@ contract OrderBook is
 
             // Send fill report to the origin chain and pass along msg.value
             // to the portal for crosschain message fee
-            bridgeAdapter_ == address(0)
+            messageId_ = bridgeAdapter_ == address(0)
                 ? IPortalV2Like(portal).sendFillReport{ value: msg.value }(
                     orderData_.originChainId, // destinationChainId (of this message)
                     report_, // report
@@ -594,7 +602,7 @@ contract OrderBook is
                 );
         }
 
-        emit OrderFilled(orderId_, msg.sender, amountInToRelease_, amountOutToFill_);
+        emit OrderFilled(orderId_, msg.sender, amountInToRelease_, amountOutToFill_, messageId_);
     }
 
     /* ========== Receiving Crosschain Reports ========== */

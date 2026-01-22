@@ -23,6 +23,8 @@ contract OpenOrderTest is OrderBookTestBase {
     //   [X] it reverts with an InvalidDestinationChain error
     // [X] given the solver is the recipient
     //   [X] it reverts with an InvalidSolver error
+    // [X] given a same-chain order with tokenOut equal to tokenIn
+    //   [X] it reverts with a SameTokenOrder error
     // [X] given the sender has not approved the order book to spend their token in
     //   [X] it reverts with an ERC20 transfer error
     // [X] given the sender has not enough balance of the token in
@@ -81,6 +83,17 @@ contract OpenOrderTest is OrderBookTestBase {
         params.solver = params.recipient;
         vm.prank(users["alice"]);
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidSolver.selector));
+        orderBook.openOrder(params);
+    }
+
+    function test_sameChainOrderWithSameToken_reverts() public {
+        // Set to same-chain order
+        params.destChainId = CHAIN_ID;
+        // Set tokenOut to be the same as tokenIn
+        params.tokenOut = address(tokenIn).toBytes32();
+
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.SameTokenOrder.selector));
         orderBook.openOrder(params);
     }
 
