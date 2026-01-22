@@ -789,9 +789,9 @@ contract OrderBook is
     }
 
     function _revertIfOrderIdMismatch(bytes32 orderId_, OrderData memory orderData_) internal pure {
-        // Ensure the provided order ID matches the computed order ID from the order data.
-        // The orderId_ parameter exists specifically for this check, giving solvers assurance
-        // that the order they intend to fill matches the orderData_ they submit.
+        // Ensures that the specified orderId, used to retrieve the order data from storage,
+        // is bound to the orderData provided as input. This prevents the caller from specifying
+        // inconsistent (malicious) orderData compared to the content of the order fetched from storage.
         if (orderId_ != getOrderId(orderData_)) revert OrderIdMismatch();
     }
 }
