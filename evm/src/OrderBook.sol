@@ -521,14 +521,14 @@ contract OrderBook is
             // Calculate fill amount as the minimum of the filler provided amount and the remaining unfilled amount
             IOrderBook.FilledAmounts storage filledAmounts = $.filledAmounts[orderId_];
 
-            uint128 amountOutRemaining_ = orderData_.amountOut - filledAmounts.amountOutFilled;
-            bool fullFill_ = fillerParams_.amountOutToFill >= amountOutRemaining_;
-            amountOutToFill_ = fullFill_ ? amountOutRemaining_ : fillerParams_.amountOutToFill;
-
-            // Calculate the corresponding amount of token in to release to the filler
-            amountInToRelease_ = fullFill_
-                ? orderData_.amountIn - filledAmounts.amountInReleased // remaining amount
-                : ((uint256(orderData_.amountIn) * amountOutToFill_) / orderData_.amountOut).toUint128();
+            bool fullFill_;
+            (fullFill_, amountInToRelease_, amountOutToFill_) = _calculateFill(
+                orderData_.amountIn,
+                orderData_.amountOut,
+                filledAmounts.amountInReleased,
+                filledAmounts.amountOutFilled,
+                fillerParams_.amountOutToFill
+            );
 
             // Update filled amounts
             filledAmounts.amountOutFilled += amountOutToFill_;
@@ -614,6 +614,22 @@ contract OrderBook is
             revert InvalidOrderStatus();
         if (report_.tokenIn != order.tokenIn.toBytes32()) revert InvalidReport();
         if (sourceChainId_ != order.destChainId) revert InvalidReportSource();
+
+        // Calculate the expected fill amounts based on the reported amount out filled
+        // and make sure they match the reported amounts
+        (, uint128 expectedAmountInToRelease_, uint128 expectedAmountOutFilled_) = _calculateFill(
+            order.amountIn,
+            order.amountOut,
+            $.filledAmounts[report_.orderId].amountInReleased,
+            $.filledAmounts[report_.orderId].amountOutFilled,
+            report_.amountOutFilled
+        );
+
+        // Check the filled amount out matches the expected amount
+        if (expectedAmountOutFilled_ != report_.amountOutFilled) revert InvalidReport();
+        // Check the amount in to release matches the expected amount
+        // This checks that the ratio of token in to token out is correct
+        if (expectedAmountInToRelease_ != report_.amountInToRelease) revert InvalidReport();
 
         // Update the fill amounts for the order
         IOrderBook.FilledAmounts storage filledAmounts = $.filledAmounts[report_.orderId];
@@ -812,5 +828,34 @@ contract OrderBook is
         // is bound to the orderData provided as input. This prevents the caller from specifying
         // inconsistent (malicious) orderData compared to the content of the order fetched from storage.
         if (orderId_ != getOrderId(orderData_)) revert OrderIdMismatch();
+    }
+
+    /// @notice Calculates the fill amounts for an order fill from the provided state and amount out to fill
+    /// @param totalAmountIn_ The total amount of token in for the order
+    /// @param totalAmountOut_ The total amount of token out for the order
+    /// @param amountInReleased_ The amount of token in already released for the order
+    /// @param amountOutFilled_ The amount of token out already filled for the order
+    /// @param amountOutToFill_ The amount of token out the filler wants to fill
+    /// @return fullFill_ Whether the fill is a full fill
+    /// @return amountInToRelease_ The amount of token in to release to the filler
+    /// @return amountOutToFill_ The amount of token out to fill, this is the minimum of the provided amount and the remaining unfilled amount
+    function _calculateFill(
+        uint128 totalAmountIn_,
+        uint128 totalAmountOut_,
+        uint128 amountInReleased_,
+        uint128 amountOutFilled_,
+        uint128 amountOutToFill_
+    ) internal pure returns (bool, uint128, uint128) {
+        // Determine the amount out to fill as the minimum of the filler provided amount and the remaining unfilled amount
+        uint128 amountOutRemaining_ = totalAmountOut_ - amountOutFilled_; // can't underflow bc amountOutFilled_ <= totalAmountOut_
+        bool fullFill_ = amountOutToFill_ >= amountOutRemaining_;
+        amountOutToFill_ = fullFill_ ? amountOutRemaining_ : amountOutToFill_;
+
+        // Calculate the corresponding amount of token in to release to the filler
+        uint128 amountInToRelease_ = fullFill_
+            ? totalAmountIn_ - amountInReleased_ // remaining amount
+            : ((uint256(totalAmountIn_) * amountOutToFill_) / totalAmountOut_).toUint128();
+
+        return (fullFill_, amountInToRelease_, amountOutToFill_);
     }
 }

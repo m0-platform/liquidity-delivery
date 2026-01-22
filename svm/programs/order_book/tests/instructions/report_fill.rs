@@ -1083,3 +1083,232 @@ fn test_report_fill_paused_success() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
+
+// Fill report amount validation tests
+// These tests verify the validation added in commit 88801bb which ensures
+// reported fill amounts match the expected pro-rata calculations
+
+#[test]
+fn test_report_fill_wrong_amount_in_too_high_reverts() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
+
+    // Create a cross-chain native order with 1:1 ratio
+    let order_params = order_book::instructions::open::OrderParams {
+        dest_chain_id: DEST_CHAIN_ID,
+        fill_deadline: test
+            .ctx
+            .svm
+            .get_sysvar::<anchor_lang::prelude::Clock>()
+            .unix_timestamp as u64
+            + 86400,
+        token_out: test.get_mint("token-out-spl-6").to_bytes(),
+        amount_in: 1_000_000,
+        amount_out: 1_000_000,
+        recipient: test.get_user("alice").pubkey().to_bytes(),
+        solver: test.get_user("solver").pubkey().to_bytes(),
+    };
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+    // Create fill report with amount_in_to_release too high
+    // For 50% fill (500,000 out), expected amount_in is 500,000
+    // We report 500,001 which is 1 too high
+    let fill_report = FillReport {
+        order_id,
+        amount_in_to_release: 500_001, // Expected: 500,000
+        amount_out_filled: 500_000,
+        origin_recipient: test.get_user("solver").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
+
+    let portal_authority = test.get_user("portal_authority");
+    let ix = test.create_report_fill_ix(
+        &test.get_user("admin").pubkey(),
+        &portal_authority.pubkey(),
+        order_params.dest_chain_id,
+        &fill_report,
+    )?;
+
+    test.ctx
+        .execute_instruction(ix, &[&test.get_user("admin"), &portal_authority])?
+        .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidFillAmount));
+
+    Ok(())
+}
+
+#[test]
+fn test_report_fill_wrong_amount_in_too_low_reverts() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
+
+    // Create a cross-chain native order with 1:1 ratio
+    let order_params = order_book::instructions::open::OrderParams {
+        dest_chain_id: DEST_CHAIN_ID,
+        fill_deadline: test
+            .ctx
+            .svm
+            .get_sysvar::<anchor_lang::prelude::Clock>()
+            .unix_timestamp as u64
+            + 86400,
+        token_out: test.get_mint("token-out-spl-6").to_bytes(),
+        amount_in: 1_000_000,
+        amount_out: 1_000_000,
+        recipient: test.get_user("alice").pubkey().to_bytes(),
+        solver: test.get_user("solver").pubkey().to_bytes(),
+    };
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+    // Create fill report with amount_in_to_release too low
+    // For 50% fill (500,000 out), expected amount_in is 500,000
+    // We report 499,999 which is 1 too low
+    let fill_report = FillReport {
+        order_id,
+        amount_in_to_release: 499_999, // Expected: 500,000
+        amount_out_filled: 500_000,
+        origin_recipient: test.get_user("solver").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
+
+    let portal_authority = test.get_user("portal_authority");
+    let ix = test.create_report_fill_ix(
+        &test.get_user("admin").pubkey(),
+        &portal_authority.pubkey(),
+        order_params.dest_chain_id,
+        &fill_report,
+    )?;
+
+    test.ctx
+        .execute_instruction(ix, &[&test.get_user("admin"), &portal_authority])?
+        .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidFillAmount));
+
+    Ok(())
+}
+
+#[test]
+fn test_report_fill_amount_out_exceeds_remaining_reverts() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
+
+    // Create a cross-chain native order
+    let order_params = order_book::instructions::open::OrderParams {
+        dest_chain_id: DEST_CHAIN_ID,
+        fill_deadline: test
+            .ctx
+            .svm
+            .get_sysvar::<anchor_lang::prelude::Clock>()
+            .unix_timestamp as u64
+            + 86400,
+        token_out: test.get_mint("token-out-spl-6").to_bytes(),
+        amount_in: 1_000_000,
+        amount_out: 1_000_000,
+        recipient: test.get_user("alice").pubkey().to_bytes(),
+        solver: test.get_user("solver").pubkey().to_bytes(),
+    };
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+    // First fill: report 60% fill
+    let first_fill_report = FillReport {
+        order_id,
+        amount_in_to_release: 600_000,
+        amount_out_filled: 600_000,
+        origin_recipient: test.get_user("solver").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
+    test.report_fill("admin", order_params.dest_chain_id, &first_fill_report)?;
+
+    // Verify first fill was successful
+    let (_, order_data) = test.get_native_order_account(&order_id)?;
+    assert_eq!(order_data.data.amount_out_filled, 600_000);
+
+    // Expire blockhash to avoid AlreadyProcessed error
+    test.ctx.svm.expire_blockhash();
+
+    // Second fill: try to report 500,000 (but only 400,000 remaining)
+    // This should fail because amount_out_filled exceeds remaining
+    let fill_report = FillReport {
+        order_id,
+        amount_in_to_release: 500_000,
+        amount_out_filled: 500_000, // Exceeds remaining 400,000
+        origin_recipient: test.get_user("solver").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
+
+    let portal_authority = test.get_user("portal_authority");
+    let ix = test.create_report_fill_ix(
+        &test.get_user("admin").pubkey(),
+        &portal_authority.pubkey(),
+        order_params.dest_chain_id,
+        &fill_report,
+    )?;
+
+    test.ctx
+        .execute_instruction(ix, &[&test.get_user("admin"), &portal_authority])?
+        .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidFillAmount));
+
+    Ok(())
+}
+
+#[test]
+fn test_report_fill_prorata_different_ratios_success() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
+
+    // Create a cross-chain native order with 1:2 ratio (amount_in=1M, amount_out=2M)
+    let order_params = order_book::instructions::open::OrderParams {
+        dest_chain_id: DEST_CHAIN_ID,
+        fill_deadline: test
+            .ctx
+            .svm
+            .get_sysvar::<anchor_lang::prelude::Clock>()
+            .unix_timestamp as u64
+            + 86400,
+        token_out: test.get_mint("token-out-spl-6").to_bytes(),
+        amount_in: 1_000_000,
+        amount_out: 2_000_000, // 1:2 ratio
+        recipient: test.get_user("alice").pubkey().to_bytes(),
+        solver: test.get_user("solver").pubkey().to_bytes(),
+    };
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+    // Get solver balance before
+    let solver_token_in_ata = test.get_ata("token-in-spl-6", "solver");
+    let solver_balance_before = test.get_token_balance(&solver_token_in_ata)?;
+
+    // Report 25% fill: amount_out=500,000, expected amount_in=250,000 (pro-rata)
+    // Formula: amount_in_to_release = (amount_out_filled / total_amount_out) * total_amount_in
+    // = (500,000 / 2,000,000) * 1,000,000 = 250,000
+    let fill_report = FillReport {
+        order_id,
+        amount_in_to_release: 250_000,
+        amount_out_filled: 500_000,
+        origin_recipient: test.get_user("solver").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
+    test.report_fill("admin", order_params.dest_chain_id, &fill_report)?;
+
+    // Verify state updated correctly
+    let (_, order_data) = test.get_native_order_account(&order_id)?;
+    assert_eq!(
+        order_data.data.amount_out_filled, 500_000,
+        "amount_out_filled should be updated"
+    );
+    assert_eq!(
+        order_data.data.amount_in_released, 250_000,
+        "amount_in_released should match pro-rata calculation"
+    );
+    assert_eq!(
+        order_data.data.status,
+        order_book::state::OrderStatus::Created,
+        "Order should remain Created (partial fill)"
+    );
+
+    // Verify solver received tokens
+    let solver_balance_after = test.get_token_balance(&solver_token_in_ata)?;
+    assert_eq!(
+        solver_balance_after - solver_balance_before,
+        250_000,
+        "Solver should receive pro-rata amount_in"
+    );
+
+    Ok(())
+}
