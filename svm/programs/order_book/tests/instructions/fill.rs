@@ -58,6 +58,7 @@ mod local_orders {
     ) -> order_book::instructions::open::OrderParams {
         order_book::instructions::open::OrderParams {
             dest_chain_id: CHAIN_ID, // local order
+            created_at: test.current_time(),
             fill_deadline: test.ctx.svm.get_sysvar::<Clock>().unix_timestamp as u64 + 86400,
             token_out: test.get_mint("token-out-spl-6").clone().to_bytes(),
             amount_in: 1_000_000,
@@ -1024,6 +1025,173 @@ mod local_orders {
 
         Ok(())
     }
+
+    // Tests for fill amount validation (commit 88801bb)
+    // These tests verify that native order fills release the order's amount_in,
+    // NOT the ATA balance (which could include donations)
+
+    #[test]
+    fn test_fill_native_order_full_fill_releases_order_amount_not_ata_balance(
+    ) -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+        let order_params = default_order_params(&test, "alice");
+        let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+        let solver = test.get_user("solver");
+
+        // Get token account addresses
+        let token_in_mint = test.get_mint("token-in-spl-6");
+        let solver_token_in_ata = test.get_ata("token-in-spl-6", "solver");
+        let alice_token_in_ata = test.get_ata("token-in-spl-6", "alice");
+        let order_account = test
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
+        let order_token_in_ata = get_associated_token_address(&order_account, &token_in_mint);
+
+        // Donate extra tokens to order's ATA (500,000 extra)
+        // After this, order ATA has 1,500,000 tokens (1,000,000 order + 500,000 donation)
+        let alice = test.get_user("alice");
+        let donation_amount = 500_000u64;
+        let ix = anchor_spl::token::spl_token::instruction::transfer(
+            &anchor_spl::token::spl_token::ID,
+            &alice_token_in_ata,
+            &order_token_in_ata,
+            &alice.pubkey(),
+            &[],
+            donation_amount,
+        )?;
+        test.ctx.execute_instruction(ix, &[&alice])?.assert_success();
+
+        // Verify order ATA has original + donation
+        let order_balance_before = test.get_token_balance(&order_token_in_ata)?;
+        assert_eq!(
+            order_balance_before,
+            order_params.amount_in + donation_amount,
+            "Order ATA should have original amount + donation"
+        );
+
+        // Get solver balance before fill
+        let solver_balance_before = test.get_token_balance(&solver_token_in_ata)?;
+
+        // Fill the order completely
+        let full_fill_params = order_book::instructions::fill::FillParams {
+            amount_out_to_fill: order_params.amount_out as u64,
+            origin_recipient: solver.pubkey().to_bytes(),
+        };
+        let ix = test.create_fill_native_order_ix(&solver.pubkey(), order_id, &full_fill_params)?;
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_success();
+
+        // Verify solver received ONLY the order amount, NOT the ATA balance
+        let solver_balance_after = test.get_token_balance(&solver_token_in_ata)?;
+        assert_eq!(
+            solver_balance_after - solver_balance_before,
+            order_params.amount_in, // Should be 1,000,000, NOT 1,500,000
+            "Solver should receive order amount_in, not ATA balance"
+        );
+
+        // Verify donation remains in order ATA
+        let order_balance_after = test.get_token_balance(&order_token_in_ata)?;
+        assert_eq!(
+            order_balance_after, donation_amount,
+            "Donation should remain in order ATA"
+        );
+
+        // Verify order is completed
+        let (_, order_data) = test.get_native_order_account(&order_id)?;
+        assert_eq!(
+            order_data.data.status,
+            order_book::state::OrderStatus::Completed,
+            "Order should be Completed"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_fill_native_order_partial_fill_with_donation_releases_prorata_only(
+    ) -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+        let order_params = default_order_params(&test, "alice");
+        let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+        let solver = test.get_user("solver");
+
+        // Get token account addresses
+        let token_in_mint = test.get_mint("token-in-spl-6");
+        let solver_token_in_ata = test.get_ata("token-in-spl-6", "solver");
+        let alice_token_in_ata = test.get_ata("token-in-spl-6", "alice");
+        let order_account = test
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
+        let order_token_in_ata = get_associated_token_address(&order_account, &token_in_mint);
+
+        // Donate extra tokens to order's ATA
+        let alice = test.get_user("alice");
+        let donation_amount = 500_000u64;
+        let ix = anchor_spl::token::spl_token::instruction::transfer(
+            &anchor_spl::token::spl_token::ID,
+            &alice_token_in_ata,
+            &order_token_in_ata,
+            &alice.pubkey(),
+            &[],
+            donation_amount,
+        )?;
+        test.ctx.execute_instruction(ix, &[&alice])?.assert_success();
+
+        // Get solver balance before fill
+        let solver_balance_before = test.get_token_balance(&solver_token_in_ata)?;
+
+        // Partial fill: 50% (amount_out_to_fill = 500,000)
+        // Expected amount_in_to_release = 500,000 (pro-rata, ignoring donation)
+        let partial_fill_params = order_book::instructions::fill::FillParams {
+            amount_out_to_fill: order_params.amount_out as u64 / 2, // 500,000
+            origin_recipient: solver.pubkey().to_bytes(),
+        };
+        let expected_amount_in_released =
+            (partial_fill_params.amount_out_to_fill as u128 * order_params.amount_in as u128)
+                / order_params.amount_out as u128;
+
+        let ix =
+            test.create_fill_native_order_ix(&solver.pubkey(), order_id, &partial_fill_params)?;
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_success();
+
+        // Verify solver received only pro-rata amount, not influenced by donation
+        let solver_balance_after = test.get_token_balance(&solver_token_in_ata)?;
+        assert_eq!(
+            solver_balance_after - solver_balance_before,
+            expected_amount_in_released as u64,
+            "Solver should receive pro-rata amount_in, ignoring donation"
+        );
+
+        // Verify order ATA has remaining order tokens + donation
+        // Expected: 1,000,000 - 500,000 (released) + 500,000 (donation) = 1,000,000
+        let order_balance_after = test.get_token_balance(&order_token_in_ata)?;
+        let expected_remaining = order_params.amount_in - expected_amount_in_released as u64 + donation_amount;
+        assert_eq!(
+            order_balance_after, expected_remaining,
+            "Order ATA should have remaining order tokens + donation"
+        );
+
+        // Verify order state
+        let (_, order_data) = test.get_native_order_account(&order_id)?;
+        assert_eq!(
+            order_data.data.status,
+            order_book::state::OrderStatus::Created,
+            "Order should remain Created (partial fill)"
+        );
+        assert_eq!(
+            order_data.data.amount_in_released, expected_amount_in_released,
+            "amount_in_released should match pro-rata calculation"
+        );
+
+        Ok(())
+    }
 }
 
 mod xchain_orders {
@@ -1219,6 +1387,7 @@ mod xchain_orders {
         // Create a native order (local order)
         let order_params = order_book::instructions::open::OrderParams {
             dest_chain_id: CHAIN_ID, // local order
+            created_at: test.current_time(),
             fill_deadline: test.ctx.svm.get_sysvar::<Clock>().unix_timestamp as u64 + 86400,
             token_out: test.get_mint("token-out-spl-6").to_bytes(),
             amount_in: 1_000_000,

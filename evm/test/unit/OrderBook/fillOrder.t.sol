@@ -299,7 +299,7 @@ contract FillOrderTest is OrderBookTestBase {
             }),
             IOrderBook.FillParams({
                 amountOutToFill: order.amountOut,
-                originRecipient: params.solver,
+                originRecipient: users["bob"].toBytes32(),
                 refundAddress: bytes32(0)
             })
         );
@@ -352,9 +352,9 @@ contract FillOrderTest is OrderBookTestBase {
         vm.prank(params.solver.toAddress());
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.OrderCompleted(orderId);
-        vm.expectEmit(true, false, false, true);
-        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), order.amountIn, order.amountOut);
-        orderBook.fillOrder(
+        vm.expectEmit(true, true, true, true);
+        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), order.amountIn, order.amountOut, bytes32(0));
+        bytes32 messageId = orderBook.fillOrder(
             orderId,
             IOrderBook.OrderData({
                 version: order.version,
@@ -377,6 +377,9 @@ contract FillOrderTest is OrderBookTestBase {
                 refundAddress: bytes32(0)
             })
         );
+
+        // Check messageId is zero for local orders
+        assertEq(messageId, bytes32(0), "messageId should be zero for local orders");
 
         // Check order status
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
@@ -452,9 +455,9 @@ contract FillOrderTest is OrderBookTestBase {
         vm.prank(params.solver.toAddress());
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.OrderCompleted(orderId);
-        vm.expectEmit(true, false, false, true);
-        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), order.amountIn, order.amountOut);
-        orderBook.fillOrder(
+        vm.expectEmit(true, true, true, true);
+        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), order.amountIn, order.amountOut, bytes32(0));
+        bytes32 messageId = orderBook.fillOrder(
             orderId,
             IOrderBook.OrderData({
                 version: order.version,
@@ -477,6 +480,9 @@ contract FillOrderTest is OrderBookTestBase {
                 refundAddress: bytes32(0)
             })
         );
+
+        // Check messageId is zero for local orders
+        assertEq(messageId, bytes32(0), "messageId should be zero for local orders");
 
         // Check order status
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
@@ -547,9 +553,9 @@ contract FillOrderTest is OrderBookTestBase {
         uint256 orderBookTokenInBefore = tokenIn.balanceOf(address(orderBook));
 
         vm.prank(params.solver.toAddress());
-        vm.expectEmit(true, false, false, true);
-        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), expectedAmountIn, fillAmount);
-        orderBook.fillOrder(
+        vm.expectEmit(true, true, true, true);
+        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), expectedAmountIn, fillAmount, bytes32(0));
+        bytes32 messageId = orderBook.fillOrder(
             orderId,
             IOrderBook.OrderData({
                 version: order.version,
@@ -572,6 +578,9 @@ contract FillOrderTest is OrderBookTestBase {
                 refundAddress: bytes32(0)
             })
         );
+
+        // Check messageId is zero for local orders
+        assertEq(messageId, bytes32(0), "messageId should be zero for local orders");
 
         // Check order status - should still be Created, not Completed
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
@@ -649,10 +658,17 @@ contract FillOrderTest is OrderBookTestBase {
         uint256 recipientTokenOutBefore = tokenOut.balanceOf(users["alice"]);
 
         // Fill the order on the destination chain
+        bytes32 expectedMessageId = keccak256(abi.encodePacked("fill", orderId));
         vm.prank(params.solver.toAddress());
-        vm.expectEmit(true, false, false, true);
-        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), orderData.amountIn, orderData.amountOut);
-        orderBook.fillOrder(
+        vm.expectEmit(true, true, true, true);
+        emit IOrderBook.OrderFilled(
+            orderId,
+            params.solver.toAddress(),
+            orderData.amountIn,
+            orderData.amountOut,
+            expectedMessageId
+        );
+        bytes32 messageId = orderBook.fillOrder(
             orderId,
             orderData,
             IOrderBook.FillParams({
@@ -661,6 +677,9 @@ contract FillOrderTest is OrderBookTestBase {
                 refundAddress: bytes32(0)
             })
         );
+
+        // Check messageId is non-zero for cross-chain orders
+        assertEq(messageId, expectedMessageId, "messageId should match expected value for cross-chain orders");
 
         // Check token transfers on destination chain
         assertEq(
@@ -736,10 +755,17 @@ contract FillOrderTest is OrderBookTestBase {
         uint256 recipientTokenOutBefore = tokenOut.balanceOf(users["alice"]);
 
         // Fill the order on the destination chain
+        bytes32 expectedMessageId = keccak256(abi.encodePacked("fill", orderId));
         vm.prank(params.solver.toAddress());
-        vm.expectEmit(true, false, false, true);
-        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), orderData.amountIn, orderData.amountOut);
-        orderBook.fillOrder(
+        vm.expectEmit(true, true, true, true);
+        emit IOrderBook.OrderFilled(
+            orderId,
+            params.solver.toAddress(),
+            orderData.amountIn,
+            orderData.amountOut,
+            expectedMessageId
+        );
+        bytes32 messageId = orderBook.fillOrder(
             orderId,
             orderData,
             IOrderBook.FillParams({
@@ -748,6 +774,9 @@ contract FillOrderTest is OrderBookTestBase {
                 refundAddress: bytes32(0)
             })
         );
+
+        // Check messageId is non-zero for cross-chain orders
+        assertEq(messageId, expectedMessageId, "messageId should match expected value for cross-chain orders");
 
         // Check token transfers on destination chain
         assertEq(
@@ -815,10 +844,17 @@ contract FillOrderTest is OrderBookTestBase {
         uint256 solverTokenOutBefore = tokenOut.balanceOf(params.solver.toAddress());
         uint256 recipientTokenOutBefore = tokenOut.balanceOf(users["alice"]);
 
+        bytes32 expectedMessageId = keccak256(abi.encodePacked("fill", orderId));
         vm.prank(params.solver.toAddress());
-        vm.expectEmit(true, false, false, true);
-        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), expectedAmountIn, fillAmount);
-        orderBook.fillOrder(
+        vm.expectEmit(true, true, true, true);
+        emit IOrderBook.OrderFilled(
+            orderId,
+            params.solver.toAddress(),
+            expectedAmountIn,
+            fillAmount,
+            expectedMessageId
+        );
+        bytes32 messageId = orderBook.fillOrder(
             orderId,
             orderData,
             IOrderBook.FillParams({
@@ -827,6 +863,9 @@ contract FillOrderTest is OrderBookTestBase {
                 refundAddress: bytes32(0)
             })
         );
+
+        // Check messageId is non-zero for cross-chain orders
+        assertEq(messageId, expectedMessageId, "messageId should match expected value for cross-chain orders");
 
         // Check token transfers on destination chain
         assertEq(
@@ -867,7 +906,7 @@ contract FillOrderTest is OrderBookTestBase {
     }
 
     function test_solverNotSpecified_anyoneCanFill_success(address solver) public {
-        vm.assume(solver != address(orderBook) && solver != users["alice"]);
+        vm.assume(solver != address(0) && solver != address(orderBook) && solver != users["alice"]);
 
         vm.deal(solver, 1 ether);
         tokenOut.mint(solver, MINT_AMOUNT);
@@ -891,11 +930,12 @@ contract FillOrderTest is OrderBookTestBase {
 
         bytes32 orderId = orderBook.getOrderId(orderData);
 
+        bytes32 expectedMessageId = keccak256(abi.encodePacked("fill", orderId));
         vm.startPrank(solver);
         tokenOut.approve(address(orderBook), type(uint256).max);
-        vm.expectEmit(true, false, false, true);
-        emit IOrderBook.OrderFilled(orderId, solver, orderData.amountIn, orderData.amountOut);
-        orderBook.fillOrder(
+        vm.expectEmit(true, true, true, true);
+        emit IOrderBook.OrderFilled(orderId, solver, orderData.amountIn, orderData.amountOut, expectedMessageId);
+        bytes32 messageId = orderBook.fillOrder(
             orderId,
             orderData,
             IOrderBook.FillParams({
@@ -905,6 +945,9 @@ contract FillOrderTest is OrderBookTestBase {
             })
         );
         vm.stopPrank();
+
+        // Check messageId is non-zero for cross-chain orders
+        assertEq(messageId, expectedMessageId, "messageId should match expected value for cross-chain orders");
     }
 
     function _testFuzz_multiPartFill_success(uint128 fillAmount) internal {
@@ -925,9 +968,9 @@ contract FillOrderTest is OrderBookTestBase {
 
         // Submit the initial fill
         vm.prank(params.solver.toAddress());
-        vm.expectEmit(true, false, false, true);
-        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), expectedAmountIn, fillAmount);
-        orderBook.fillOrder(
+        vm.expectEmit(true, true, true, true);
+        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), expectedAmountIn, fillAmount, bytes32(0));
+        bytes32 messageId1 = orderBook.fillOrder(
             orderId,
             IOrderBook.OrderData({
                 version: order.version,
@@ -950,6 +993,9 @@ contract FillOrderTest is OrderBookTestBase {
                 refundAddress: bytes32(0)
             })
         );
+
+        // Check messageId is zero for local orders
+        assertEq(messageId1, bytes32(0), "messageId should be zero for local orders");
 
         // Check balances after the first fill
         assertEq(
@@ -979,9 +1025,15 @@ contract FillOrderTest is OrderBookTestBase {
         vm.prank(params.solver.toAddress());
         vm.expectEmit(true, false, false, true);
         emit IOrderBook.OrderCompleted(orderId);
-        vm.expectEmit(true, false, false, true);
-        emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), remainingAmountIn, remainingAmountOut);
-        orderBook.fillOrder(
+        vm.expectEmit(true, true, true, true);
+        emit IOrderBook.OrderFilled(
+            orderId,
+            params.solver.toAddress(),
+            remainingAmountIn,
+            remainingAmountOut,
+            bytes32(0)
+        );
+        bytes32 messageId2 = orderBook.fillOrder(
             orderId,
             IOrderBook.OrderData({
                 version: order.version,
@@ -1004,6 +1056,9 @@ contract FillOrderTest is OrderBookTestBase {
                 refundAddress: bytes32(0)
             })
         );
+
+        // Check messageId is zero for local orders
+        assertEq(messageId2, bytes32(0), "messageId should be zero for local orders");
 
         // Check final balances
         assertEq(tokenIn.balanceOf(address(orderBook)), 0, "order book should have sent all tokenIn");

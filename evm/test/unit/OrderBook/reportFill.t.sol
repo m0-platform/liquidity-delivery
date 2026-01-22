@@ -33,6 +33,16 @@ contract ReportFillTest is OrderBookTestBase {
     //   [X] given the order is fully filled
     //     [X] it updates the order status to Completed
     //     [X] it emits an OrderCompleted event
+    // [X] given the reported amount in does not match the expected pro-rata amount
+    //   [X] it reverts with an InvalidReport error (too high)
+    //   [X] it reverts with an InvalidReport error (too low)
+    // [X] given there was a prior partial fill
+    //   [X] given the reported amount out would exceed the remaining unfilled amount
+    //     [X] it reverts with an InvalidReport error
+    //   [X] given correct amounts are reported for a second partial fill
+    //     [X] it updates filled amounts and transfers tokens
+    //   [X] given the order is now fully filled after a partial fill
+    //     [X] it marks the order as Completed
 
     function setUp() public override {
         super.setUp();
@@ -296,6 +306,161 @@ contract ReportFillTest is OrderBookTestBase {
                 tokenIn: address(tokenIn).toBytes32()
             })
         );
+    }
+
+    function test_partiallyFilledOrder_overfillRemaining_reverts() public {
+        // Setup: Place order and report a 50% partial fill
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+        uint128 firstFillAmountOut = params.amountOut / 2;
+        uint128 firstFillAmountIn = uint128((uint256(params.amountIn) * firstFillAmountOut) / params.amountOut);
+
+        _reportFill(users["solver"], orderId, firstFillAmountOut, firstFillAmountIn);
+
+        // Try to report another fill that exceeds the remaining 50%
+        uint128 remainingAmountOut = params.amountOut - firstFillAmountOut;
+        uint128 overfillAmountOut = remainingAmountOut + 1;
+        uint128 overfillAmountIn = uint128((uint256(params.amountIn) * overfillAmountOut) / params.amountOut);
+
+        vm.prank(address(portal));
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
+        orderBook.reportFill(
+            params.destChainId,
+            IOrderBook.FillReport({
+                orderId: orderId,
+                amountOutFilled: overfillAmountOut,
+                amountInToRelease: overfillAmountIn,
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
+            })
+        );
+    }
+
+    function test_wrongAmountInRatio_tooHigh_reverts() public {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+
+        // Report partial fill with correct amountOut but amountIn too high
+        uint128 fillAmountOut = params.amountOut / 2;
+        uint128 expectedAmountIn = uint128((uint256(params.amountIn) * fillAmountOut) / params.amountOut);
+        uint128 wrongAmountIn = expectedAmountIn + 1; // Too high
+
+        vm.prank(address(portal));
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
+        orderBook.reportFill(
+            params.destChainId,
+            IOrderBook.FillReport({
+                orderId: orderId,
+                amountOutFilled: fillAmountOut,
+                amountInToRelease: wrongAmountIn,
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
+            })
+        );
+    }
+
+    function test_wrongAmountInRatio_tooLow_reverts() public {
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+
+        // Report partial fill with correct amountOut but amountIn too low
+        uint128 fillAmountOut = params.amountOut / 2;
+        uint128 expectedAmountIn = uint128((uint256(params.amountIn) * fillAmountOut) / params.amountOut);
+        uint128 wrongAmountIn = expectedAmountIn - 1; // Too low
+
+        vm.prank(address(portal));
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
+        orderBook.reportFill(
+            params.destChainId,
+            IOrderBook.FillReport({
+                orderId: orderId,
+                amountOutFilled: fillAmountOut,
+                amountInToRelease: wrongAmountIn,
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
+            })
+        );
+    }
+
+    function test_partiallyFilledOrder_secondPartialFill_success() public {
+        // Setup: Place order and report a 25% partial fill
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+        uint128 firstFillAmountOut = params.amountOut / 4;
+        uint128 firstFillAmountIn = uint128((uint256(params.amountIn) * firstFillAmountOut) / params.amountOut);
+
+        _reportFill(users["solver"], orderId, firstFillAmountOut, firstFillAmountIn);
+
+        // Report another 25% partial fill with correct amounts
+        uint128 secondFillAmountOut = params.amountOut / 4;
+        uint128 secondFillAmountIn = uint128((uint256(params.amountIn) * secondFillAmountOut) / params.amountOut);
+
+        uint256 solverBalanceBefore = tokenIn.balanceOf(users["solver"]);
+        uint256 orderBookBalanceBefore = tokenIn.balanceOf(address(orderBook));
+
+        vm.prank(address(portal));
+        orderBook.reportFill(
+            params.destChainId,
+            IOrderBook.FillReport({
+                orderId: orderId,
+                amountOutFilled: secondFillAmountOut,
+                amountInToRelease: secondFillAmountIn,
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
+            })
+        );
+
+        // Verify balances updated correctly
+        assertEq(
+            tokenIn.balanceOf(users["solver"]),
+            solverBalanceBefore + secondFillAmountIn,
+            "solver should receive second fill amountIn"
+        );
+        assertEq(
+            tokenIn.balanceOf(address(orderBook)),
+            orderBookBalanceBefore - secondFillAmountIn,
+            "orderBook should release second fill amountIn"
+        );
+
+        // Verify order is still Created (not fully filled yet)
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Created), "order should still be Created");
+    }
+
+    function test_partiallyFilledOrder_fullFillRemaining_success() public {
+        // Setup: Place order and report a 50% partial fill
+        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
+        uint128 firstFillAmountOut = params.amountOut / 2;
+        uint128 firstFillAmountIn = uint128((uint256(params.amountIn) * firstFillAmountOut) / params.amountOut);
+
+        _reportFill(users["solver"], orderId, firstFillAmountOut, firstFillAmountIn);
+
+        // Fill the remaining 50% - for full fill, use remaining amounts
+        uint128 remainingAmountOut = params.amountOut - firstFillAmountOut;
+        uint128 remainingAmountIn = params.amountIn - firstFillAmountIn;
+
+        uint256 solverBalanceBefore = tokenIn.balanceOf(users["solver"]);
+
+        vm.prank(address(portal));
+        vm.expectEmit(true, false, false, true);
+        emit IOrderBook.OrderCompleted(orderId);
+        orderBook.reportFill(
+            params.destChainId,
+            IOrderBook.FillReport({
+                orderId: orderId,
+                amountOutFilled: remainingAmountOut,
+                amountInToRelease: remainingAmountIn,
+                originRecipient: users["solver"].toBytes32(),
+                tokenIn: address(tokenIn).toBytes32()
+            })
+        );
+
+        // Verify balance updated correctly
+        assertEq(
+            tokenIn.balanceOf(users["solver"]),
+            solverBalanceBefore + remainingAmountIn,
+            "solver should receive remaining amountIn"
+        );
+
+        // Verify order is now Completed
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Completed), "order should be Completed");
     }
 
     function _test_activeOrderPartialFill_success() internal {

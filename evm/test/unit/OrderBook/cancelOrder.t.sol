@@ -281,9 +281,12 @@ contract CancelOrderTest is OrderBookTestBase {
 
         // Bob (not recipient) can now cancel
         vm.prank(users["bob"]);
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(orderId);
-        orderBook.cancelOrder(orderId, orderData, new bytes(0));
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(orderId, bytes32(0));
+        bytes32 messageId = orderBook.cancelOrder(orderId, orderData, new bytes(0));
+
+        // Check messageId is zero for local orders
+        assertEq(messageId, bytes32(0), "messageId should be zero for local orders");
 
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(
@@ -297,11 +300,16 @@ contract CancelOrderTest is OrderBookTestBase {
         // Warp past fill deadline
         vm.warp(xchainOrderData.fillDeadline + 1);
 
+        bytes32 expectedMessageId = keccak256(abi.encodePacked("cancel", xchainOrderId));
+
         // Bob (not recipient) can now cancel
         vm.prank(users["bob"]);
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(xchainOrderId);
-        orderBook.cancelOrder(xchainOrderId, xchainOrderData, new bytes(0));
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(xchainOrderId, expectedMessageId);
+        bytes32 messageId = orderBook.cancelOrder(xchainOrderId, xchainOrderData, new bytes(0));
+
+        // Check messageId is non-zero for cross-chain orders
+        assertEq(messageId, expectedMessageId, "messageId should match expected value for cross-chain orders");
 
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(xchainOrderId);
         assertEq(
@@ -321,10 +329,15 @@ contract CancelOrderTest is OrderBookTestBase {
         IOrderBook.Order memory order = orderBook.getOrder(xchainOrderId);
         assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.DoesNotExist));
 
+        bytes32 expectedMessageId = keccak256(abi.encodePacked("cancel", xchainOrderId));
+
         vm.prank(users["alice"]);
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(xchainOrderId);
-        orderBook.cancelOrder(xchainOrderId, xchainOrderData, new bytes(0));
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(xchainOrderId, expectedMessageId);
+        bytes32 messageId = orderBook.cancelOrder(xchainOrderId, xchainOrderData, new bytes(0));
+
+        // Check messageId is non-zero for cross-chain orders
+        assertEq(messageId, expectedMessageId, "messageId should match expected value for cross-chain orders");
 
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(xchainOrderId);
         assertEq(
@@ -352,9 +365,12 @@ contract CancelOrderTest is OrderBookTestBase {
         vm.prank(users["alice"]);
         vm.expectEmit(true, true, false, true);
         emit IOrderBook.RefundClaimed(orderId, users["alice"], params.amountIn);
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(orderId);
-        orderBook.cancelOrder(orderId, orderData, new bytes(0));
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(orderId, bytes32(0));
+        bytes32 messageId = orderBook.cancelOrder(orderId, orderData, new bytes(0));
+
+        // Check messageId is zero for local orders
+        assertEq(messageId, bytes32(0), "messageId should be zero for local orders");
 
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(
@@ -419,11 +435,14 @@ contract CancelOrderTest is OrderBookTestBase {
         uint256 aliceStartingBalance = tokenIn.balanceOf(users["alice"]);
 
         vm.prank(users["alice"]);
-        vm.expectEmit(true, false, false, true);
+        vm.expectEmit(true, true, false, true);
         emit IOrderBook.RefundClaimed(orderId, users["alice"], params.amountIn);
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(orderId);
-        orderBook.cancelOrder(orderId, orderData, new bytes(0));
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(orderId, bytes32(0));
+        bytes32 messageId = orderBook.cancelOrder(orderId, orderData, new bytes(0));
+
+        // Check messageId is zero for local orders
+        assertEq(messageId, bytes32(0), "messageId should be zero for local orders");
 
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(
@@ -457,9 +476,12 @@ contract CancelOrderTest is OrderBookTestBase {
         vm.prank(users["alice"]);
         vm.expectEmit(true, true, false, true);
         emit IOrderBook.RefundClaimed(orderId, users["alice"], expectedRefundAmountIn);
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(orderId);
-        orderBook.cancelOrder(orderId, orderData, new bytes(0));
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(orderId, bytes32(0));
+        bytes32 messageId = orderBook.cancelOrder(orderId, orderData, new bytes(0));
+
+        // Check messageId is zero for local orders
+        assertEq(messageId, bytes32(0), "messageId should be zero for local orders");
 
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(orderId);
         assertEq(
@@ -528,10 +550,14 @@ contract CancelOrderTest is OrderBookTestBase {
 
         // Cancel the order and expect refund of remaining amountIn
         uint128 expectedRefundAmountIn = params.amountIn / 2;
+        bytes32 expectedMessageId = keccak256(abi.encodePacked("cancel", xchainOrderId));
         vm.prank(users["alice"]);
-        vm.expectEmit(true, false, false, false);
-        emit IOrderBook.OrderCancelled(xchainOrderId);
-        orderBook.cancelOrder(xchainOrderId, xchainOrderData, new bytes(0));
+        vm.expectEmit(true, true, false, true);
+        emit IOrderBook.OrderCancelled(xchainOrderId, expectedMessageId);
+        bytes32 messageId = orderBook.cancelOrder(xchainOrderId, xchainOrderData, new bytes(0));
+
+        // Check messageId is non-zero for cross-chain orders
+        assertEq(messageId, expectedMessageId, "messageId should match expected value for cross-chain orders");
 
         IOrderBook.Order memory updatedOrder = orderBook.getOrder(xchainOrderId);
         assertEq(

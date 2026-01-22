@@ -18,6 +18,7 @@ use std::ops::Deref;
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct OrderParams {
     pub dest_chain_id: u32,
+    pub created_at: u64,
     pub fill_deadline: u64,
     pub token_out: [u8; 32],
     pub amount_in: u64,
@@ -25,6 +26,8 @@ pub struct OrderParams {
     pub recipient: [u8; 32],
     pub solver: [u8; 32],
 }
+
+const CREATED_AT_WINDOW: u64 = 300; // 300 second (5 minute) window for created_at timestamp
 
 #[event_cpi]
 #[derive(Accounts)]
@@ -79,7 +82,7 @@ pub struct OpenOrder<'info> {
                     nonce: sender_nonce_account.value,
                     origin_chain_id: global_account.chain_id,
                     dest_chain_id: params.dest_chain_id,
-                    created_at: Clock::get()?.unix_timestamp as u64,
+                    created_at: params.created_at,
                     fill_deadline: params.fill_deadline,
                     token_in: token_in_mint.key().to_bytes(),
                     token_out: params.token_out,
@@ -122,16 +125,35 @@ impl OpenOrder<'_> {
                 destination_account.is_supported,
                 OrderBookError::DestinationNotSupported
             );
+        } else {
+            require!(
+                Pubkey::new_from_array(params.token_out) != self.token_in_mint.key(),
+                OrderBookError::InvalidTokenOutMint
+            );
         }
 
         // Validate params
         require!(params.amount_in > 0, OrderBookError::InvalidAmountIn);
         require!(params.amount_out > 0, OrderBookError::InvalidAmountOut);
+        
+        require!(params.recipient != [0u8; 32], OrderBookError::InvalidRecipient);
+
+        // On SVM, we allow the user to specify the created at timestamp to be within a small window from the current time
+        // so that the PDA address can be precomputed off-chain without having to guess the exact slot it will be included in.
+        let current_timestamp = Clock::get()?.unix_timestamp as u64;
         require!(
-            params.fill_deadline >= Clock::get()?.unix_timestamp as u64,
+            params.created_at >= current_timestamp,
+            OrderBookError::InvalidCreatedAtTimestamp
+        );
+        require!(
+            params.created_at <= current_timestamp + CREATED_AT_WINDOW,
+            OrderBookError::InvalidCreatedAtTimestamp
+        );
+        // The fill deadline must be after the created at timestamp
+        require!(
+            params.fill_deadline > params.created_at,
             OrderBookError::InvalidFillDeadline
         );
-        require!(params.recipient != [0u8; 32], OrderBookError::InvalidRecipient);
 
         // Recipient != Solver to avoid issues with token transfers from one to the other
         require!(
@@ -146,8 +168,6 @@ impl OpenOrder<'_> {
     pub fn handler(ctx: Context<Self>, params: OrderParams) -> Result<()> {
         let sender: Pubkey = (&ctx.accounts.sender_token_in_account).owner;
 
-        let created_at = Clock::get()?.unix_timestamp as u64;
-
         // Populate the order data
         ctx.accounts.order.set_inner(Order {
             order_type: OrderType::Native,
@@ -159,7 +179,7 @@ impl OpenOrder<'_> {
                 payer: ctx.accounts.payer.key(),
                 nonce: ctx.accounts.sender_nonce_account.value,
                 dest_chain_id: params.dest_chain_id,
-                created_at,
+                created_at: params.created_at,
                 fill_deadline: params.fill_deadline,
                 token_in: ctx.accounts.token_in_mint.key(),
                 token_out: params.token_out,
@@ -179,7 +199,7 @@ impl OpenOrder<'_> {
             nonce: ctx.accounts.sender_nonce_account.value,
             origin_chain_id: ctx.accounts.global_account.chain_id,
             dest_chain_id: params.dest_chain_id,
-            created_at,
+            created_at: params.created_at,
             fill_deadline: params.fill_deadline,
             token_in: ctx.accounts.token_in_mint.key().to_bytes(),
             token_out: params.token_out,

@@ -22,6 +22,8 @@ mod local_orders {
     //   [X] it reverts with a "insufficient funds" error
     // [X] given the recipient is the same as the solver
     //   [X] it reverts with an InvalidRecipient error
+    // [X] given the token_out is the same as token_in
+    //   [X] it reverts with an InvalidTokenOutMint error
     // [X] given all the above conditions are satisfied
     //   [X] given the sender signs the instruction
     //     [X] it successfully opens the order
@@ -38,6 +40,7 @@ mod local_orders {
     ) -> order_book::instructions::open::OrderParams {
         order_book::instructions::open::OrderParams {
             dest_chain_id: CHAIN_ID, // local order
+            created_at: test.current_time(),
             fill_deadline: test.ctx.svm.get_sysvar::<Clock>().unix_timestamp as u64 + 86400,
             token_out: test.mints.get("token-out-spl-6").unwrap().to_bytes(),
             amount_in: 1_000_000,
@@ -135,6 +138,119 @@ mod local_orders {
         test.ctx
             .execute_instruction(ix, &[alice])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidFillDeadline));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_local_order_created_at_in_past_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Warp time forward so we can test past timestamps
+        test.warp_forward(100);
+
+        let alice = test.users.get("alice").unwrap();
+        let token_in_mint = test.mints.get("token-in-spl-6").unwrap();
+        let sender_token_in_account = test.atas.get(&("token-in-spl-6", "alice")).unwrap();
+
+        // Prepare order parameters with created_at in the past
+        let mut order_params = default_order_params(&test, "alice");
+        order_params.created_at = test.current_time() - 1; // 1 second in the past
+
+        let (_, ix) = test.create_open_order_ix(
+            &alice.pubkey(),
+            &token_in_mint,
+            &sender_token_in_account,
+            None,
+            &order_params,
+        )?;
+
+        test.ctx
+            .execute_instruction(ix, &[alice])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidCreatedAtTimestamp));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_local_order_created_at_too_far_in_future_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        let alice = test.users.get("alice").unwrap();
+        let token_in_mint = test.mints.get("token-in-spl-6").unwrap();
+        let sender_token_in_account = test.atas.get(&("token-in-spl-6", "alice")).unwrap();
+
+        // Prepare order parameters with created_at beyond the 5-minute window
+        let mut order_params = default_order_params(&test, "alice");
+        order_params.created_at = test.current_time() + 301; // 301 seconds (> 5 min window)
+        order_params.fill_deadline = order_params.created_at + 86400; // Must be after created_at
+
+        let (_, ix) = test.create_open_order_ix(
+            &alice.pubkey(),
+            &token_in_mint,
+            &sender_token_in_account,
+            None,
+            &order_params,
+        )?;
+
+        test.ctx
+            .execute_instruction(ix, &[alice])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidCreatedAtTimestamp));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_local_order_created_at_at_current_time_succeeds() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        let alice = test.users.get("alice").unwrap();
+        let token_in_mint = test.mints.get("token-in-spl-6").unwrap();
+        let sender_token_in_account = test.atas.get(&("token-in-spl-6", "alice")).unwrap();
+
+        // Prepare order parameters with created_at exactly at current time
+        let mut order_params = default_order_params(&test, "alice");
+        order_params.created_at = test.current_time(); // Exactly at current time
+
+        let (_, ix) = test.create_open_order_ix(
+            &alice.pubkey(),
+            &token_in_mint,
+            &sender_token_in_account,
+            None,
+            &order_params,
+        )?;
+
+        test.ctx.execute_instruction(ix, &[alice])?.assert_success();
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_local_order_created_at_at_upper_bound_succeeds() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        let alice = test.users.get("alice").unwrap();
+        let token_in_mint = test.mints.get("token-in-spl-6").unwrap();
+        let sender_token_in_account = test.atas.get(&("token-in-spl-6", "alice")).unwrap();
+
+        // Prepare order parameters with created_at at the upper boundary (5 min)
+        let mut order_params = default_order_params(&test, "alice");
+        order_params.created_at = test.current_time() + 300; // Exactly at 5 min boundary
+        order_params.fill_deadline = order_params.created_at + 86400; // Must be after created_at
+
+        let (_, ix) = test.create_open_order_ix(
+            &alice.pubkey(),
+            &token_in_mint,
+            &sender_token_in_account,
+            None,
+            &order_params,
+        )?;
+
+        test.ctx.execute_instruction(ix, &[alice])?.assert_success();
 
         Ok(())
     }
@@ -275,6 +391,35 @@ mod local_orders {
         test.ctx
             .execute_instruction(ix, &[sender])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidRecipient));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_local_order_token_out_same_as_token_in_reverts() -> Result<(), Box<dyn Error>> {
+        // Setup test environment
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        let sender = test.users.get("alice").unwrap();
+        let token_in_mint = test.mints.get("token-in-spl-6").unwrap();
+        let sender_token_in_account = test.atas.get(&("token-in-spl-6", "alice")).unwrap();
+
+        // Prepare order parameters with token_out same as token_in
+        let mut order_params = default_order_params(&test, "alice");
+        order_params.token_out = token_in_mint.to_bytes();
+
+        let (_, ix) = test.create_open_order_ix(
+            &sender.pubkey(),
+            &token_in_mint,
+            &sender_token_in_account,
+            None,
+            &order_params,
+        )?;
+
+        test.ctx
+            .execute_instruction(ix, &[sender])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidTokenOutMint));
 
         Ok(())
     }
@@ -461,6 +606,7 @@ mod xchain_orders {
     ) -> order_book::instructions::open::OrderParams {
         order_book::instructions::open::OrderParams {
             dest_chain_id: DEST_CHAIN_ID, // xchain order
+            created_at: test.current_time(),
             fill_deadline: test.ctx.svm.get_sysvar::<Clock>().unix_timestamp as u64 + 86400,
             token_out: test.mints.get("token-out-spl-6").unwrap().to_bytes(),
             amount_in: 1_000_000,
@@ -838,7 +984,7 @@ mod xchain_orders {
         // Set recipient to zero address
         order_params.recipient = [0u8; 32];
 
-        let (order_id, ix) = test.create_open_order_ix(
+        let (_, ix) = test.create_open_order_ix(
             &sender.pubkey(),
             &token_in_mint,
             &sender_token_in_account,
