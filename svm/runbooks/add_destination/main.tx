@@ -7,6 +7,22 @@ variable "orderbook_program" {
     value = svm::get_program_from_anchor_project("order_book")
 }
 
+variable "destination_chain_id" {
+    description = "The destination chain id"
+    value = 1
+    editable = true
+}
+
+variable "destination_chain_id_hex" {
+    description = "The destination chain id (big-endian hex encoded)"
+    value = "0x00000001"
+    editable = true
+}
+
+variable "destination_account" {
+    value = svm::find_pda("MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK", ["destination", variable.destination_chain_id_hex])
+}
+
 action "configure_destination" "svm::process_instructions" {
     description = "Adds a destination chain"
     signers = [signer.caller]
@@ -17,8 +33,8 @@ action "configure_destination" "svm::process_instructions" {
             public_key = signer.caller.public_key
         }
         destination_account {
-            public_key = "9xjWHcEqYYmCqCHrTU6sGHBWrHUYQcZ8yCEtaejgj8Me"
+            public_key = variable.destination_account.pda
         }
-        instruction_args = [input.destination_chain_id]
+        instruction_args = [variable.destination_chain_id]
     }
 }
