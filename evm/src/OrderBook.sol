@@ -826,7 +826,7 @@ contract OrderBook is
         uint128 amountInReleased_,
         uint128 amountOutFilled_,
         uint128 amountOutToFill_
-    ) internal returns (bool, uint128, uint128) {
+    ) internal pure returns (bool, uint128, uint128) {
         // Determine the amount out to fill as the minimum of the filler provided amount and the remaining unfilled amount
         uint128 amountOutRemaining_ = totalAmountOut_ - amountOutFilled_; // can't underflow bc amountOutFilled_ <= totalAmountOut_
         bool fullFill_ = amountOutToFill_ >= amountOutRemaining_;
