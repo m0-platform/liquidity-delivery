@@ -663,7 +663,7 @@ impl OrderBookTest {
             nonce: sender_nonce_data.value,
             origin_chain_id: global_data.chain_id,
             dest_chain_id: order_params.dest_chain_id,
-            created_at: self.current_time(),
+            created_at: order_params.created_at,
             fill_deadline: order_params.fill_deadline,
             token_in: token_in_mint.to_bytes(),
             token_out: order_params.token_out,

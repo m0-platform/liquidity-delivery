@@ -51,7 +51,7 @@ pub fn transfer_exact_tokens_from_program<'info>(
     // Reload the account to get the updated balance
     to.reload()?;
 
-    // Check that the expected amount was actually transferred, i.e. no fee on transfer occured
+    // Check that the expected amount was actually transferred, i.e. no fee on transfer occurred
     require!(
         to_start_balance + amount <= to.amount,
         OrderBookError::TransferExactFailed
@@ -100,7 +100,7 @@ pub fn transfer_exact_tokens<'info>(
     // Reload the account to get the updated balance
     to.reload()?;
 
-    // Check that the expected amount was actually transferred, i.e. no fee on transfer occured
+    // Check that the expected amount was actually transferred, i.e. no fee on transfer occurred
     require!(
         to_start_balance + amount <= to.amount,
         OrderBookError::TransferExactFailed

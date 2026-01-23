@@ -4,12 +4,13 @@ pragma solidity >=0.8.33;
 import { IPortalV2Like, IOrderBook } from "../../src/interfaces/IPortalV2Like.sol";
 
 contract MockPortalV2 is IPortalV2Like {
-    event FillReportSent(uint32 destinationChainId, IOrderBook.FillReport report);
+    event FillReportSent(uint32 destinationChainId, IOrderBook.FillReport report, bytes32 refundAddress);
     event CancelReportSent(uint32 destinationChainId, IOrderBook.CancelReport report);
 
     address public orderBook;
 
     mapping(bytes32 => IOrderBook.FillReport) public fillReports;
+    mapping(bytes32 => bytes32) public fillReportRefundAddresses;
     mapping(bytes32 => bool) public cancelReports;
     mapping(bytes32 => uint256) public cancelReportValues;
 
@@ -24,7 +25,9 @@ contract MockPortalV2 is IPortalV2Like {
         bytes calldata message
     ) external payable override returns (bytes32 messageId) {
         fillReports[report.orderId] = report;
-        emit FillReportSent(destinationChainId, report);
+        fillReportRefundAddresses[report.orderId] = refundAddress;
+        emit FillReportSent(destinationChainId, report, refundAddress);
+        messageId = keccak256(abi.encodePacked("fill", report.orderId));
     }
 
     function sendFillReport(
@@ -35,7 +38,9 @@ contract MockPortalV2 is IPortalV2Like {
         bytes calldata bridgeAdapterArgs
     ) external payable override returns (bytes32 messageId) {
         fillReports[report.orderId] = report;
-        emit FillReportSent(destinationChainId, report);
+        fillReportRefundAddresses[report.orderId] = refundAddress;
+        emit FillReportSent(destinationChainId, report, refundAddress);
+        messageId = keccak256(abi.encodePacked("fill", report.orderId));
     }
 
     function sendCancelReport(
@@ -47,6 +52,7 @@ contract MockPortalV2 is IPortalV2Like {
         cancelReports[report.orderId] = true;
         cancelReportValues[report.orderId] = msg.value;
         emit CancelReportSent(destinationChainId, report);
+        messageId = keccak256(abi.encodePacked("cancel", report.orderId));
     }
 
     function sendCancelReport(
@@ -59,6 +65,7 @@ contract MockPortalV2 is IPortalV2Like {
         cancelReports[report.orderId] = true;
         cancelReportValues[report.orderId] = msg.value;
         emit CancelReportSent(destinationChainId, report);
+        messageId = keccak256(abi.encodePacked("cancel", report.orderId));
     }
 
     function receiveFillReport(uint32 sourceChainId, IOrderBook.FillReport calldata report) external {
