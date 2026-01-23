@@ -2,10 +2,8 @@
 evm/cache/
 evm/out/
 
-# Ignores development broadcast logs
-!/evm/broadcast
-evm/broadcast/*/31337/
-evm/broadcast/**/dry-run/
+# Ignores broadcast logs
+evm/broadcast/
 
 # Coverage files
 coverage/

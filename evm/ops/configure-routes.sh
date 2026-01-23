@@ -138,8 +138,8 @@ configure_route() {
         bash -c "FOUNDRY_PROFILE=production forge script script/config/ConfigureDestination.s.sol \
             --rpc-url $source_rpc \
             --broadcast \
-            --sig 'run(address,uint32)' \
-            $orderbook $dest_chain_id \
+            --sig 'run(address,uint32,bool)' \
+            $orderbook $dest_chain_id true \
             -vvv"
 
     log_info "Route $source_name -> $dest_name configured"

@@ -12,7 +12,7 @@ contract Deploy is ScriptBase, DeployHelpers {
 
     function run() external {
         // TODO update to use foundry keystore
-        address deployer_ = vm.rememberKey(vm.envUint("PRIVATE_KEY"));
+        address deployer_ = vm.rememberKey(vm.envUint("DEPLOYER_PRIVATE_KEY"));
 
         vm.startBroadcast(deployer_);
 
@@ -20,6 +20,7 @@ contract Deploy is ScriptBase, DeployHelpers {
         (, address orderBook_) = _deployOrderBook(
             deployer_,
             vm.envAddress("ADMIN_ADDRESS"),
+            vm.envAddress("PAUSER_ADDRESS"),
             vm.envAddress("PORTAL_ADDRESS")
         );
 
@@ -37,6 +38,7 @@ contract Deploy is ScriptBase, DeployHelpers {
     function _deployOrderBook(
         address deployer_,
         address admin_,
+        address pauser_,
         address portal_
     ) internal returns (address implementation_, address proxy_) {
         implementation_ = address(new OrderBook(portal_));
@@ -44,7 +46,7 @@ contract Deploy is ScriptBase, DeployHelpers {
         proxy_ = _deployCreate3TransparentProxy(
             implementation_,
             admin_,
-            abi.encodeWithSelector(OrderBook.initialize.selector, admin_),
+            abi.encodeWithSelector(OrderBook.initialize.selector, admin_, pauser_),
             _computeSalt(deployer_, _ORDER_BOOK_CONTRACT_NAME)
         );
     }

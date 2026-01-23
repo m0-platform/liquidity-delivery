@@ -16,7 +16,8 @@ contract Upgrade is ScriptBase {
     /// @dev Reads deployment from deployments/{chainId}.json, deploys new implementation,
     ///      and calls ProxyAdmin.upgradeAndCall
     function run() external {
-        address deployer_ = vm.rememberKey(vm.envUint("PRIVATE_KEY"));
+        address deployer_ = vm.rememberKey(vm.envUint("DEPLOYER_PRIVATE_KEY"));
+        address portal_ = vm.envAddress("PORTAL_ADDRESS");
 
         // Read existing deployment
         address proxy_ = _readDeployment(block.chainid);
@@ -27,14 +28,10 @@ contract Upgrade is ScriptBase {
         vm.startBroadcast(deployer_);
 
         // Deploy new implementation
-        address newImplementation_ = address(new OrderBook(_PORTAL));
+        address newImplementation_ = address(new OrderBook(portal_));
 
         // Upgrade via ProxyAdmin (empty data = no initialization call)
-        ProxyAdmin(proxyAdmin_).upgradeAndCall(
-            ITransparentUpgradeableProxy(proxy_),
-            newImplementation_,
-            bytes("")
-        );
+        ProxyAdmin(proxyAdmin_).upgradeAndCall(ITransparentUpgradeableProxy(proxy_), newImplementation_, bytes(""));
 
         vm.stopBroadcast();
 
@@ -45,7 +42,7 @@ contract Upgrade is ScriptBase {
     /// @notice Upgrade to a specific implementation address (for testing or custom implementations)
     /// @param newImplementation_ The new implementation address to upgrade to
     function run(address newImplementation_) external {
-        address deployer_ = vm.rememberKey(vm.envUint("PRIVATE_KEY"));
+        address deployer_ = vm.rememberKey(vm.envUint("DEPLOYER_PRIVATE_KEY"));
 
         // Read existing deployment
         address proxy_ = _readDeployment(block.chainid);
@@ -56,11 +53,7 @@ contract Upgrade is ScriptBase {
         vm.startBroadcast(deployer_);
 
         // Upgrade via ProxyAdmin
-        ProxyAdmin(proxyAdmin_).upgradeAndCall(
-            ITransparentUpgradeableProxy(proxy_),
-            newImplementation_,
-            bytes("")
-        );
+        ProxyAdmin(proxyAdmin_).upgradeAndCall(ITransparentUpgradeableProxy(proxy_), newImplementation_, bytes(""));
 
         vm.stopBroadcast();
 
