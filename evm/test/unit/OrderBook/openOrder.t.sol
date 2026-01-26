@@ -129,6 +129,7 @@ contract OpenOrderTest is OrderBookTestBase {
         emit IOrderBook.OrderOpened(
             expOrderId,
             users["alice"],
+            users["alice"],
             params.tokenIn,
             params.amountIn,
             params.destChainId,

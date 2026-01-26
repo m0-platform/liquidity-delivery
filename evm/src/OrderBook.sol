@@ -185,7 +185,7 @@ contract OrderBook is
     }
 
     function _openOrder(
-        address sender_,
+        address funder_,
         OrderParams memory orderParams_
     ) internal whenNotPaused returns (bytes32 orderId_) {
         // Validate order parameters
@@ -194,6 +194,7 @@ contract OrderBook is
         if (orderParams_.amountOut == 0) revert AmountOutZero();
         if (orderParams_.recipient == bytes32(0)) revert InvalidRecipient();
         if (orderParams_.solver == orderParams_.recipient) revert InvalidSolver();
+        if (orderParams_.sender == address(0)) revert ZeroSender();
 
         // Validate that tokenIn and tokenOut are not the same for same-chain orders
         uint32 chainId = block.chainid.safe32();
@@ -205,13 +206,13 @@ contract OrderBook is
 
         // Create order
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-        uint64 nonce_ = $.senderNonces[sender_]++;
+        uint64 nonce_ = $.senderNonces[orderParams_.sender]++;
 
         orderId_ = getOrderId(
             OrderData({
                 version: VERSION, // origin contract version
                 originChainId: chainId,
-                sender: sender_.toBytes32(),
+                sender: orderParams_.sender.toBytes32(),
                 nonce: nonce_,
                 destChainId: orderParams_.destChainId,
                 createdAt: uint64(block.timestamp),
@@ -239,19 +240,21 @@ contract OrderBook is
             nonce: nonce_,
             tokenIn: orderParams_.tokenIn,
             tokenOut: orderParams_.tokenOut,
-            sender: sender_,
+            sender: orderParams_.sender,
             recipient: orderParams_.recipient,
             amountIn: orderParams_.amountIn,
             amountOut: orderParams_.amountOut,
             solver: orderParams_.solver
         });
 
-        // Transfer tokens in from the sender, ensuring the required amount is received
-        IERC20(orderParams_.tokenIn).safeTransferExactFrom(sender_, address(this), uint256(orderParams_.amountIn));
+        // Transfer tokens in from the funder, ensuring the required amount is received
+        // Note: sender_ is the order owner (for cancellation/refunds), funder_ provides the tokens
+        IERC20(orderParams_.tokenIn).safeTransferExactFrom(funder_, address(this), uint256(orderParams_.amountIn));
 
         emit OrderOpened(
             orderId_,
-            sender_,
+            funder_,
+            orderParams_.sender,
             orderParams_.tokenIn,
             orderParams_.amountIn,
             orderParams_.destChainId,
@@ -281,7 +284,7 @@ contract OrderBook is
         // Verify version matches the current version
         if (orderParams_.version != VERSION) revert InvalidOrderVersion();
 
-        // Open order on behalf of the sender
+        // Open order on behalf of the sender (who is also the funder in gasless flow)
         orderId_ = _openOrder(
             orderParams_.sender,
             OrderParams({
@@ -292,7 +295,8 @@ contract OrderBook is
                 amountOut: orderParams_.amountOut,
                 recipient: orderParams_.recipient,
                 fillDeadline: orderParams_.fillDeadline,
-                solver: orderParams_.solver
+                solver: orderParams_.solver,
+                sender: orderParams_.sender
             })
         );
     }

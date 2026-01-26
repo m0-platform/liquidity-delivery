@@ -98,7 +98,8 @@ contract OpenOrderForTest is OrderBookTestBase {
                     amountIn: params_.amountIn,
                     amountOut: params_.amountOut,
                     recipient: params_.recipient,
-                    solver: params_.solver
+                    solver: params_.solver,
+                    sender: params_.sender
                 })
             );
     }
@@ -145,9 +146,12 @@ contract OpenOrderForTest is OrderBookTestBase {
     }
 
     function test_invalidNonce2_reverts() public {
-        // Create a normal order from the sender
+        // Create a normal order from the sender to increment their nonce
+        IOrderBook.OrderParams memory localParams = params;
+        localParams.sender = sender.addr;
+
         vm.prank(sender.addr);
-        orderBook.openOrder(params);
+        orderBook.openOrder(localParams);
 
         // Try to use the same nonce for a gasless order
         bytes memory signature = _signStandardECDSA(sender, gaslessParams);
@@ -188,6 +192,7 @@ contract OpenOrderForTest is OrderBookTestBase {
         vm.expectEmit(true, true, true, true);
         emit IOrderBook.OrderOpened(
             expOrderId,
+            sender.addr,
             sender.addr,
             gaslessParams.tokenIn,
             gaslessParams.amountIn,
@@ -232,6 +237,7 @@ contract OpenOrderForTest is OrderBookTestBase {
         vm.expectEmit(true, true, true, true);
         emit IOrderBook.OrderOpened(
             expOrderId,
+            sender.addr,
             sender.addr,
             gaslessParams.tokenIn,
             gaslessParams.amountIn,

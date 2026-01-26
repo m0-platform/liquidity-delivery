@@ -74,7 +74,8 @@ contract MEarnerYieldAccrualTest is Test {
             amountOut: AMOUNT_OUT,
             recipient: alice.toBytes32(),
             fillDeadline: uint32(block.timestamp) + FILL_DURATION,
-            solver: solver.toBytes32()
+            solver: solver.toBytes32(),
+            sender: alice
         });
     }
 

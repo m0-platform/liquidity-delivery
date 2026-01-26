@@ -18,6 +18,7 @@ interface IOrderBook {
      */
     event OrderOpened(
         bytes32 indexed orderId,
+        address funder,
         address sender,
         address tokenIn,
         uint128 amountIn,
@@ -122,6 +123,7 @@ interface IOrderBook {
     error ZeroAdmin();
     error ZeroPauser();
     error ZeroPortal();
+    error ZeroSender();
 
     /* ========== Structs and Enums ========== */
 
@@ -136,6 +138,7 @@ interface IOrderBook {
      * @param amountOut Amount of output token expected
      * @param recipient Address to receive the funds on the destination chain
      * @param solver Address of the solver that will fill the order, or zero address if any solver can fill
+     * @param sender Address that will own the order (for cancellation rights and refunds). Tokens are pulled from msg.sender.
      */
     struct OrderParams {
         uint32 destChainId;
@@ -146,6 +149,7 @@ interface IOrderBook {
         uint128 amountOut;
         bytes32 recipient;
         bytes32 solver;
+        address sender;
     }
 
     /**
