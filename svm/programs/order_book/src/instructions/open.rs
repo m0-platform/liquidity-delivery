@@ -231,6 +231,7 @@ impl OpenOrder<'_> {
         // Emit the event
         emit_cpi!(OrderOpened {
             order_id,
+            funder: ctx.accounts.sender_token_in_account.deref().owner,
             sender,
             token_in: ctx.accounts.token_in_mint.key(),
             amount_in: params.amount_in,
@@ -247,6 +248,7 @@ impl OpenOrder<'_> {
 #[event]
 pub struct OrderOpened {
     pub order_id: [u8; 32],
+    pub funder: Pubkey,
     pub sender: Pubkey,
     pub token_in: Pubkey,
     pub amount_in: u64,
