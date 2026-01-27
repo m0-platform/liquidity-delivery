@@ -64,8 +64,8 @@ contract OrderBook is
     bytes32 public constant CANCEL_ORDER_TYPEHASH = 0x6919f4958bcd1b5b4e13b800c6d41c4792cfc2a12d0bd9ad19da6e0bfe8ac04f;
 
     /// @notice the portal contract used for cross-chain communication
-    /// @dev sends crosschain messages to report fills on this chain to other chains
-    ///      receive crosschain messages to report fills on other chains to this chain
+    /// @dev sends crosschain messages to report fills and cancels on this chain to other chains
+    ///      receives crosschain messages reporting fills and cancels on other chains to this chain
     address public immutable portal;
 
     /* ========== Construct and Initialize ========== */
