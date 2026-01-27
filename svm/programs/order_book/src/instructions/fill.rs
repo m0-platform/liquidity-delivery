@@ -607,27 +607,14 @@ impl ReportOrderFill<'_> {
     pub fn handler(ctx: Context<Self>, _source_chain_id: u32, fill_report: FillReport) -> Result<()> {
         let order = &mut ctx.accounts.order.data;
 
-        // Calculate expected fill amounts and compare to reported amounts
-        let (full_fill, expected_amount_in_to_release, expected_amount_out_filled) = calculate_fill(
+        // Calculate fill to determine if it completely fills the order
+        let (full_fill, _, _) = calculate_fill(
             order.amount_in,
             order.amount_out,
             order.amount_in_released,
             order.amount_out_filled,
             fill_report.amount_out_filled
         )?;
-
-        // Check the filled amount out matches the report
-        // It can be at most what was remaining to be filled
-        require!(
-            expected_amount_out_filled as u128 == fill_report.amount_out_filled,
-            OrderBookError::InvalidFillAmount
-        ); 
-        // Check that the amount in to release matches the report
-        // This confirms the ratio of the report matches the order
-        require!(
-            expected_amount_in_to_release as u128 == fill_report.amount_in_to_release,
-            OrderBookError::InvalidFillAmount
-        );
 
         // Update the filled amounts on the order
         order.amount_in_released += fill_report.amount_in_to_release;

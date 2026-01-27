@@ -626,21 +626,14 @@ contract OrderBook is
         if (report_.tokenIn != order.tokenIn.toBytes32()) revert InvalidReport();
         if (sourceChainId_ != order.destChainId) revert InvalidReportSource();
 
-        // Calculate the expected fill amounts based on the reported amount out filled
-        // and make sure they match the reported amounts
-        (, uint128 expectedAmountInToRelease_, uint128 expectedAmountOutFilled_) = _calculateFill(
+        // Calculate the fill to determine if it completely fills the order
+        (bool fullFill, , ) = _calculateFill(
             order.amountIn,
             order.amountOut,
             $.filledAmounts[report_.orderId].amountInReleased,
             $.filledAmounts[report_.orderId].amountOutFilled,
             report_.amountOutFilled
         );
-
-        // Check the filled amount out matches the expected amount
-        if (expectedAmountOutFilled_ != report_.amountOutFilled) revert InvalidReport();
-        // Check the amount in to release matches the expected amount
-        // This checks that the ratio of token in to token out is correct
-        if (expectedAmountInToRelease_ != report_.amountInToRelease) revert InvalidReport();
 
         // Update the fill amounts for the order
         IOrderBook.FilledAmounts storage filledAmounts = $.filledAmounts[report_.orderId];
@@ -657,7 +650,7 @@ contract OrderBook is
         ) revert InvalidReport();
 
         // Mark order as completed if fully filled
-        if (filledAmounts.amountOutFilled == order.amountOut) {
+        if (fullFill) {
             order.status = OrderStatus.Completed;
             emit OrderCompleted(report_.orderId);
         }

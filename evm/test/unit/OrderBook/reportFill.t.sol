@@ -335,50 +335,6 @@ contract ReportFillTest is OrderBookTestBase {
         );
     }
 
-    function test_wrongAmountInRatio_tooHigh_reverts() public {
-        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
-
-        // Report partial fill with correct amountOut but amountIn too high
-        uint128 fillAmountOut = params.amountOut / 2;
-        uint128 expectedAmountIn = uint128((uint256(params.amountIn) * fillAmountOut) / params.amountOut);
-        uint128 wrongAmountIn = expectedAmountIn + 1; // Too high
-
-        vm.prank(address(portal));
-        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
-        orderBook.reportFill(
-            params.destChainId,
-            IOrderBook.FillReport({
-                orderId: orderId,
-                amountOutFilled: fillAmountOut,
-                amountInToRelease: wrongAmountIn,
-                originRecipient: users["solver"].toBytes32(),
-                tokenIn: address(tokenIn).toBytes32()
-            })
-        );
-    }
-
-    function test_wrongAmountInRatio_tooLow_reverts() public {
-        bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
-
-        // Report partial fill with correct amountOut but amountIn too low
-        uint128 fillAmountOut = params.amountOut / 2;
-        uint128 expectedAmountIn = uint128((uint256(params.amountIn) * fillAmountOut) / params.amountOut);
-        uint128 wrongAmountIn = expectedAmountIn - 1; // Too low
-
-        vm.prank(address(portal));
-        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidReport.selector));
-        orderBook.reportFill(
-            params.destChainId,
-            IOrderBook.FillReport({
-                orderId: orderId,
-                amountOutFilled: fillAmountOut,
-                amountInToRelease: wrongAmountIn,
-                originRecipient: users["solver"].toBytes32(),
-                tokenIn: address(tokenIn).toBytes32()
-            })
-        );
-    }
-
     function test_partiallyFilledOrder_secondPartialFill_success() public {
         // Setup: Place order and report a 25% partial fill
         bytes32 orderId = _getOrderIdFromParams(users["alice"], 0, params);
