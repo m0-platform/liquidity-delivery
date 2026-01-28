@@ -29,17 +29,18 @@ async fn svm_orderbook_initailized(ctx: &SvmChainTestSuite) {
 #[test_context(SvmChainTestSuite)]
 #[tokio::test]
 async fn test_order_from_svm(ctx: &SvmChainTestSuite) {
-    ctx.create_svm_order(
-        &ctx.svm_mint.unwrap(),
-        ctx.chains[0].tokens[0].address.clone(),
-        ctx.chains[0].chain_id,
-        1000000,
-        1000000,
-    )
-    .await;
+    let order_id = ctx
+        .create_svm_order(
+            &ctx.svm_mint.unwrap(),
+            ctx.chains[0].tokens[0].address.clone(),
+            ctx.chains[0].chain_id,
+            1000000,
+            1000000,
+        )
+        .await;
 
     ctx.contains_order_lifecycle(
-        "f81a9a207245f34d858cdf121227f366c1269988c0ab66b26082b88405283c02",
+        &order_id,
         &[
             "OrderCreated",
             "HoldSuccessful",

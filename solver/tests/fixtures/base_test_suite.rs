@@ -650,7 +650,7 @@ impl BaseTestSuite {
         dest_chain_id: u32,
         amount_in: u64,
         amount_out: u64,
-    ) -> Signature {
+    ) -> String {
         let client = Client::new(
             Cluster::from_str(&self.surfpool_endpoint()).unwrap(),
             self.svm_user.clone(),
