@@ -79,8 +79,13 @@ impl CloseOrderTokenAccount<'_> {
         let order = &self.order.data;
 
         // Verify order is in a finalized state (Completed or Cancelled)
+        // For cancelled orders, we need to ensure all funds have been released/refunded
+        // so that amounts reserved for fills that have not yet been reported cannot
+        // be swept as dust.
         require!(
-            order.status == OrderStatus::Completed || order.status == OrderStatus::Cancelled,
+            order.status == OrderStatus::Completed || (
+                order.status == OrderStatus::Cancelled && order.amount_in_released + order.amount_in_refunded == order.amount_in
+            ),
             OrderBookError::InvalidOrderStatus
         );
 
