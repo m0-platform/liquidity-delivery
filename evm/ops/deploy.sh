@@ -118,6 +118,8 @@ deploy_chain() {
     forge_cmd="$forge_cmd --rpc-url $rpc_alias"
     forge_cmd="$forge_cmd --broadcast"
     forge_cmd="$forge_cmd -vvv"
+    # Ignore assembly NatSpec memory-safe deprecation warnings from forge-std
+    forge_cmd="$forge_cmd --ignored-error-codes 2424"
 
     if [[ "$verify" == "true" ]]; then
         forge_cmd="$forge_cmd --verify"
