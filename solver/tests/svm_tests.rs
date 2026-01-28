@@ -39,7 +39,7 @@ async fn test_order_from_svm(ctx: &SvmChainTestSuite) {
     .await;
 
     ctx.contains_order_lifecycle(
-        "2a3893b20dd58564b1a5063b5003a1d9a0a4901392a5feadffe47186cebbd728",
+        "f81a9a207245f34d858cdf121227f366c1269988c0ab66b26082b88405283c02",
         &[
             "OrderCreated",
             "HoldSuccessful",
