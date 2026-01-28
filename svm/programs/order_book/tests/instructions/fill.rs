@@ -15,6 +15,8 @@ mod local_orders {
     //   [X] it reverts with an InvalidDestChainId error
     // [X] given the token out on the order does not match the token out mint account
     //   [X] it reverts with an InvalidTokenOutMint error
+    // [X] given the token in on the order does not match the token in mint account
+    //   [X] it reverts with an InvalidTokenMint error
     // [X] given the order recipient does not match the recipient account
     //   [X] it reverts with an InvalidRecipient error
     // [X] given order type is not Native
@@ -38,6 +40,8 @@ mod local_orders {
     //     [X] it transfers amount_out_to_fill of token_out to the recipient
     //     [X] it transfers the proportional amount_in of token_in from the order book to the solver
     //     [X] it updates amount_out_filled and amount_in_released on the order
+    // [X] given the program is paused
+    //   [X] it reverts with a ProgramPaused error
 
     use anchor_litesvm::Pubkey;
     use order_book::{OrderData, ORDER_SEED_PREFIX};
@@ -54,6 +58,7 @@ mod local_orders {
     ) -> order_book::instructions::open::OrderParams {
         order_book::instructions::open::OrderParams {
             dest_chain_id: CHAIN_ID, // local order
+            created_at: test.current_time(),
             fill_deadline: test.ctx.svm.get_sysvar::<Clock>().unix_timestamp as u64 + 86400,
             token_out: test.get_mint("token-out-spl-6").clone().to_bytes(),
             amount_in: 1_000_000,
@@ -100,6 +105,7 @@ mod local_orders {
             nonce: 0,
             origin_chain_id: CHAIN_ID,
             dest_chain_id: order_params.dest_chain_id,
+            created_at: test.current_time(),
             fill_deadline: order_params.fill_deadline,
             token_in: token_in_mint.to_bytes(),
             token_out: order_params.token_out,
@@ -134,7 +140,7 @@ mod local_orders {
             .accounts(accounts)
             .args(order_book::instruction::FillNativeOrder {
                 order_id,
-                order_data,
+                order_data: Box::new(order_data),
                 fill_params: fill_params.clone(),
             })
             .instruction()?;
@@ -196,7 +202,7 @@ mod local_orders {
             .accounts(accounts)
             .args(order_book::instruction::FillNativeOrder {
                 order_id,
-                order_data,
+                order_data: Box::new(order_data),
                 fill_params,
             })
             .instruction()?;
@@ -206,6 +212,53 @@ mod local_orders {
         test.ctx
             .execute_instruction(ix, &[&solver])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidTokenOutMint));
+
+        Ok(())
+    }
+
+    #[test]
+    fn fill_native_order_token_in_account_mismatch_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+        let order_params = default_order_params(&test, "alice");
+        let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+        let solver = test.get_user("solver");
+        let fill_params = default_fill_params(&test);
+
+        // Get the order account to derive the order data
+        let (order_account, native_order) = test.get_native_order_account(&order_id)?;
+        let order_data = OrderData::new_from_native_order(native_order.data, CHAIN_ID);
+
+        // Get the accounts for the instruction and change the token_in mint to the wrong one
+        let mut accounts = test.build_fill_native_order_accounts(&solver.pubkey(), order_id)?;
+        let wrong_token_in = *test.mints.get("token-in-spl-9").unwrap();
+        accounts.token_in_mint = wrong_token_in;
+        // Also adjust the token accounts to match the wrong token in to avoid other false positive errors
+        accounts.solver_token_in_account =
+            get_associated_token_address(&solver.pubkey(), &wrong_token_in);
+        
+        // Create the order's ATA for the wrong token to avoid AccountNotInitialized error
+        let order_wrong_token_in_ata = test.create_associated_token_account(&wrong_token_in, &order_account)?;
+        accounts.order_token_in_ata = order_wrong_token_in_ata;
+        // Token Program is already the same
+
+        // Construct the ix with the modified accounts
+        let ix = test
+            .ctx
+            .program()
+            .accounts(accounts)
+            .args(order_book::instruction::FillNativeOrder {
+                order_id,
+                order_data: Box::new(order_data),
+                fill_params,
+            })
+            .instruction()?;
+
+        // Execute the instruction
+        // Expect it to revert with an InvalidTokenMint error
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidTokenMint));
 
         Ok(())
     }
@@ -238,7 +291,7 @@ mod local_orders {
             .accounts(accounts)
             .args(order_book::instruction::FillNativeOrder {
                 order_id,
-                order_data,
+                order_data: Box::new(order_data),
                 fill_params,
             })
             .instruction()?;
@@ -269,6 +322,7 @@ mod local_orders {
             nonce: 0,
             origin_chain_id: DEST_CHAIN_ID,
             dest_chain_id: CHAIN_ID,
+            created_at: test.current_time(),
             fill_deadline: order_params.fill_deadline,
             token_in: token_in_mint.to_bytes(),
             token_out: order_params.token_out,
@@ -291,7 +345,7 @@ mod local_orders {
             .accounts(accounts)
             .args(order_book::instruction::FillNativeOrder {
                 order_id,
-                order_data,
+                order_data: Box::new(order_data),
                 fill_params,
             })
             .instruction()?;
@@ -321,6 +375,7 @@ mod local_orders {
             nonce: 0,
             origin_chain_id: DEST_CHAIN_ID,
             dest_chain_id: CHAIN_ID,
+            created_at: test.current_time(),
             fill_deadline: order_params.fill_deadline,
             token_in: token_in_mint.to_bytes(),
             token_out: order_params.token_out,
@@ -346,7 +401,7 @@ mod local_orders {
             .accounts(accounts)
             .args(order_book::instruction::FillNativeOrder {
                 order_id,
-                order_data,
+                order_data: Box::new(order_data),
                 fill_params,
             })
             .instruction()?;
@@ -380,7 +435,7 @@ mod local_orders {
             .accounts(accounts)
             .args(order_book::instruction::FillNativeOrder {
                 order_id,
-                order_data,
+                order_data: Box::new(order_data),
                 fill_params,
             })
             .instruction()?;
@@ -415,7 +470,7 @@ mod local_orders {
             .accounts(accounts)
             .args(order_book::instruction::FillNativeOrder {
                 order_id,
-                order_data,
+                order_data: Box::new(order_data),
                 fill_params,
             })
             .instruction()?;
@@ -885,6 +940,258 @@ mod local_orders {
 
         Ok(())
     }
+
+    #[test]
+    fn fill_native_order_expired_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Create order with short deadline
+        let mut order_params = default_order_params(&test, "alice");
+        order_params.fill_deadline = test.current_time() + 100;
+        let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+        let solver = test.get_user("solver");
+        let fill_params = default_fill_params(&test);
+
+        // Warp time past the deadline
+        test.warp_forward(200);
+
+        let ix = test.create_fill_native_order_ix(&solver.pubkey(), order_id, &fill_params)?;
+
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::OrderExpired));
+
+        Ok(())
+    }
+
+    #[test]
+    fn fill_native_order_created_at_future_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+        let order_params = default_order_params(&test, "alice");
+        let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+        let solver = test.get_user("solver");
+        let fill_params = default_fill_params(&test);
+
+        // Get the native order and build order_data with a future created_at
+        let (_, native_order) = test.get_native_order_account(&order_id)?;
+        let mut order_data = OrderData::new_from_native_order(native_order.data, CHAIN_ID);
+        order_data.created_at = test.current_time() + 1000; // In the future
+
+        let accounts = test.build_fill_native_order_accounts(&solver.pubkey(), order_id)?;
+
+        let ix = test
+            .ctx
+            .program()
+            .accounts(accounts)
+            .args(order_book::instruction::FillNativeOrder {
+                order_id,
+                order_data: Box::new(order_data),
+                fill_params,
+            })
+            .instruction()?;
+
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_anchor_error("InvalidOrderId"); // order_id won't match because created_at changed
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_fill_native_order_paused_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Create an order before pausing
+        let order_params = default_order_params(&test, "alice");
+        let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+        // Pause the program
+        test.pause()?;
+
+        // Try to fill the order
+        let solver = test.get_user("solver");
+        let fill_params = order_book::instructions::FillParams {
+            amount_out_to_fill: 500_000,
+            origin_recipient: solver.pubkey().to_bytes(),
+        };
+        let ix = test.create_fill_native_order_ix(&solver.pubkey(), order_id, &fill_params)?;
+
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::ProgramPaused));
+
+        Ok(())
+    }
+
+    // Tests for fill amount validation (commit 88801bb)
+    // These tests verify that native order fills release the order's amount_in,
+    // NOT the ATA balance (which could include donations)
+
+    #[test]
+    fn test_fill_native_order_full_fill_releases_order_amount_not_ata_balance(
+    ) -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+        let order_params = default_order_params(&test, "alice");
+        let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+        let solver = test.get_user("solver");
+
+        // Get token account addresses
+        let token_in_mint = test.get_mint("token-in-spl-6");
+        let solver_token_in_ata = test.get_ata("token-in-spl-6", "solver");
+        let alice_token_in_ata = test.get_ata("token-in-spl-6", "alice");
+        let order_account = test
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
+        let order_token_in_ata = get_associated_token_address(&order_account, &token_in_mint);
+
+        // Donate extra tokens to order's ATA (500,000 extra)
+        // After this, order ATA has 1,500,000 tokens (1,000,000 order + 500,000 donation)
+        let alice = test.get_user("alice");
+        let donation_amount = 500_000u64;
+        let ix = anchor_spl::token::spl_token::instruction::transfer(
+            &anchor_spl::token::spl_token::ID,
+            &alice_token_in_ata,
+            &order_token_in_ata,
+            &alice.pubkey(),
+            &[],
+            donation_amount,
+        )?;
+        test.ctx.execute_instruction(ix, &[&alice])?.assert_success();
+
+        // Verify order ATA has original + donation
+        let order_balance_before = test.get_token_balance(&order_token_in_ata)?;
+        assert_eq!(
+            order_balance_before,
+            order_params.amount_in + donation_amount,
+            "Order ATA should have original amount + donation"
+        );
+
+        // Get solver balance before fill
+        let solver_balance_before = test.get_token_balance(&solver_token_in_ata)?;
+
+        // Fill the order completely
+        let full_fill_params = order_book::instructions::fill::FillParams {
+            amount_out_to_fill: order_params.amount_out as u64,
+            origin_recipient: solver.pubkey().to_bytes(),
+        };
+        let ix = test.create_fill_native_order_ix(&solver.pubkey(), order_id, &full_fill_params)?;
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_success();
+
+        // Verify solver received ONLY the order amount, NOT the ATA balance
+        let solver_balance_after = test.get_token_balance(&solver_token_in_ata)?;
+        assert_eq!(
+            solver_balance_after - solver_balance_before,
+            order_params.amount_in, // Should be 1,000,000, NOT 1,500,000
+            "Solver should receive order amount_in, not ATA balance"
+        );
+
+        // Verify donation remains in order ATA
+        let order_balance_after = test.get_token_balance(&order_token_in_ata)?;
+        assert_eq!(
+            order_balance_after, donation_amount,
+            "Donation should remain in order ATA"
+        );
+
+        // Verify order is completed
+        let (_, order_data) = test.get_native_order_account(&order_id)?;
+        assert_eq!(
+            order_data.data.status,
+            order_book::state::OrderStatus::Completed,
+            "Order should be Completed"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_fill_native_order_partial_fill_with_donation_releases_prorata_only(
+    ) -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+        let order_params = default_order_params(&test, "alice");
+        let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+        let solver = test.get_user("solver");
+
+        // Get token account addresses
+        let token_in_mint = test.get_mint("token-in-spl-6");
+        let solver_token_in_ata = test.get_ata("token-in-spl-6", "solver");
+        let alice_token_in_ata = test.get_ata("token-in-spl-6", "alice");
+        let order_account = test
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
+        let order_token_in_ata = get_associated_token_address(&order_account, &token_in_mint);
+
+        // Donate extra tokens to order's ATA
+        let alice = test.get_user("alice");
+        let donation_amount = 500_000u64;
+        let ix = anchor_spl::token::spl_token::instruction::transfer(
+            &anchor_spl::token::spl_token::ID,
+            &alice_token_in_ata,
+            &order_token_in_ata,
+            &alice.pubkey(),
+            &[],
+            donation_amount,
+        )?;
+        test.ctx.execute_instruction(ix, &[&alice])?.assert_success();
+
+        // Get solver balance before fill
+        let solver_balance_before = test.get_token_balance(&solver_token_in_ata)?;
+
+        // Partial fill: 50% (amount_out_to_fill = 500,000)
+        // Expected amount_in_to_release = 500,000 (pro-rata, ignoring donation)
+        let partial_fill_params = order_book::instructions::fill::FillParams {
+            amount_out_to_fill: order_params.amount_out as u64 / 2, // 500,000
+            origin_recipient: solver.pubkey().to_bytes(),
+        };
+        let expected_amount_in_released =
+            (partial_fill_params.amount_out_to_fill as u128 * order_params.amount_in as u128)
+                / order_params.amount_out as u128;
+
+        let ix =
+            test.create_fill_native_order_ix(&solver.pubkey(), order_id, &partial_fill_params)?;
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_success();
+
+        // Verify solver received only pro-rata amount, not influenced by donation
+        let solver_balance_after = test.get_token_balance(&solver_token_in_ata)?;
+        assert_eq!(
+            solver_balance_after - solver_balance_before,
+            expected_amount_in_released as u64,
+            "Solver should receive pro-rata amount_in, ignoring donation"
+        );
+
+        // Verify order ATA has remaining order tokens + donation
+        // Expected: 1,000,000 - 500,000 (released) + 500,000 (donation) = 1,000,000
+        let order_balance_after = test.get_token_balance(&order_token_in_ata)?;
+        let expected_remaining = order_params.amount_in - expected_amount_in_released as u64 + donation_amount;
+        assert_eq!(
+            order_balance_after, expected_remaining,
+            "Order ATA should have remaining order tokens + donation"
+        );
+
+        // Verify order state
+        let (_, order_data) = test.get_native_order_account(&order_id)?;
+        assert_eq!(
+            order_data.data.status,
+            order_book::state::OrderStatus::Created,
+            "Order should remain Created (partial fill)"
+        );
+        assert_eq!(
+            order_data.data.amount_in_released, expected_amount_in_released,
+            "amount_in_released should match pro-rata calculation"
+        );
+
+        Ok(())
+    }
 }
 
 mod xchain_orders {
@@ -911,7 +1218,7 @@ mod xchain_orders {
     //     [X] it transfers amount_out_to_fill of token_out to the recipient
     //     [X] it does NOT transfer any token_in (stays on origin chain)
     //     [X] it updates amount_out_filled and amount_in_released on the order
-    //     [X] it sends a fill report message via the messenger program
+    //     [X] it sends a fill report message via the portal program
     //   [X] given the amount_out_to_fill is greater than or equal to the amount out of the order
     //     [X] it creates the order account
     //     [X] it fully fills the order in one transaction
@@ -925,6 +1232,8 @@ mod xchain_orders {
     //     [X] it transfers the remaining amount_out to the recipient
     //     [X] it completes the order (amount_out_filled == amount_out)
     //     [X] it updates amounts to final values
+    // [X] given the program is paused
+    //   [X] it reverts with a ProgramPaused error
 
     // fill_native_order tests
     // [ ] given the order originates on another chain (not native)
@@ -941,6 +1250,7 @@ mod xchain_orders {
             nonce: 0,
             origin_chain_id: DEST_CHAIN_ID, // Foreign order originates on another chain
             dest_chain_id: CHAIN_ID,        // Settles on current chain
+            created_at: test.current_time(),
             fill_deadline: test.ctx.svm.get_sysvar::<Clock>().unix_timestamp as u64 + 86400,
             token_in: test.get_mint("token-in-spl-6").to_bytes(),
             token_out: test.get_mint("token-out-spl-6").to_bytes(),
@@ -972,6 +1282,24 @@ mod xchain_orders {
         test.ctx
             .execute_instruction(ix, &[&solver])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidDestChainId));
+
+        Ok(())
+    }
+
+    #[test]
+    fn fill_foreign_order_invalid_origin_chain_id_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+        let mut order_data = default_foreign_order_data(&test, "alice");
+        order_data.origin_chain_id = CHAIN_ID; // Wrong chain - foreign order should not be CHAIN_ID
+        let solver = test.get_user("solver");
+        let fill_params = default_fill_params(&test);
+
+        let ix = test.create_fill_foreign_order_ix(&solver.pubkey(), &order_data, &fill_params)?;
+
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidOriginChainId));
 
         Ok(())
     }
@@ -1059,6 +1387,7 @@ mod xchain_orders {
         // Create a native order (local order)
         let order_params = order_book::instructions::open::OrderParams {
             dest_chain_id: CHAIN_ID, // local order
+            created_at: test.current_time(),
             fill_deadline: test.ctx.svm.get_sysvar::<Clock>().unix_timestamp as u64 + 86400,
             token_out: test.get_mint("token-out-spl-6").to_bytes(),
             amount_in: 1_000_000,
@@ -1549,7 +1878,7 @@ mod xchain_orders {
             .accounts(accounts)
             .args(order_book::instruction::FillNativeOrder {
                 order_id,
-                order_data,
+                order_data: Box::new(order_data),
                 fill_params,
             })
             .instruction()?;
@@ -1584,7 +1913,7 @@ mod xchain_orders {
             .accounts(accounts)
             .args(order_book::instruction::FillNativeOrder {
                 order_id,
-                order_data,
+                order_data: Box::new(order_data),
                 fill_params,
             })
             .instruction()?;
@@ -1592,6 +1921,75 @@ mod xchain_orders {
         test.ctx
             .execute_instruction(ix, &[&solver])?
             .assert_anchor_error("AccountDidNotDeserialize");
+
+        Ok(())
+    }
+
+    #[test]
+    fn fill_foreign_order_expired_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Create order data with short deadline
+        let mut order_data = default_foreign_order_data(&test, "alice");
+        order_data.fill_deadline = test.current_time() + 100;
+
+        let solver = test.get_user("solver");
+        let fill_params = default_fill_params(&test);
+
+        // Warp time past the deadline
+        test.warp_forward(200);
+
+        let ix = test.create_fill_foreign_order_ix(&solver.pubkey(), &order_data, &fill_params)?;
+
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::OrderExpired));
+
+        Ok(())
+    }
+
+    #[test]
+    fn fill_foreign_order_created_at_future_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Create order data with future created_at
+        let mut order_data = default_foreign_order_data(&test, "alice");
+        order_data.created_at = test.current_time() + 1000; // In the future
+
+        let solver = test.get_user("solver");
+        let fill_params = default_fill_params(&test);
+
+        let ix = test.create_fill_foreign_order_ix(&solver.pubkey(), &order_data, &fill_params)?;
+
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidCreatedAtTimestamp));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_fill_foreign_order_paused_reverts() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Pause the program
+        test.pause()?;
+
+        // Try to fill a foreign order
+        let solver = test.get_user("solver");
+        let order_data = default_foreign_order_data(&test, "alice");
+        let fill_params = order_book::instructions::FillParams {
+            amount_out_to_fill: 500_000,
+            origin_recipient: solver.pubkey().to_bytes(),
+        };
+        let ix = test.create_fill_foreign_order_ix(&solver.pubkey(), &order_data, &fill_params)?;
+
+        test.ctx
+            .execute_instruction(ix, &[&solver])?
+            .assert_anchor_error(&format!("{:?}", OrderBookError::ProgramPaused));
 
         Ok(())
     }

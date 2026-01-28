@@ -34,25 +34,30 @@ pub mod order_book {
     pub fn initialize(
         ctx: Context<Initialize>,
         chain_id: u32,
-        messenger_authority: Pubkey,
+        portal_authority: Pubkey,
     ) -> Result<()> {
-        Initialize::handler(ctx, chain_id, messenger_authority)
+        Initialize::handler(ctx, chain_id, portal_authority)
     }
 
-    pub fn configure_destination(
-        ctx: Context<ConfigureDestination>,
+    pub fn add_destination(
+        ctx: Context<AddDestination>,
         dest_chain_id: u32,
-        is_supported: bool,
-        finality_buffer: Option<u64>,
     ) -> Result<()> {
-        ConfigureDestination::handler(ctx, dest_chain_id, is_supported, finality_buffer)
+        AddDestination::handler(ctx, dest_chain_id)
     }
 
-    pub fn set_messenger_authority(
-        ctx: Context<AdminInstruction>,
-        messenger_authority: Pubkey,
+    pub fn remove_destination(
+        ctx: Context<RemoveDestination>,
+        dest_chain_id: u32,
     ) -> Result<()> {
-        AdminInstruction::set_messenger_authority(ctx, messenger_authority)
+        RemoveDestination::handler(ctx, dest_chain_id)
+    }
+
+    pub fn set_portal_authority(
+        ctx: Context<AdminInstruction>,
+        portal_authority: Pubkey,
+    ) -> Result<()> {
+        AdminInstruction::set_portal_authority(ctx, portal_authority)
     }
 
     pub fn set_new_admin(
@@ -74,21 +79,37 @@ pub mod order_book {
         AcceptAdminRole::handler(ctx)
     }
 
+    pub fn pause(
+        ctx: Context<AdminInstruction>,
+    ) -> Result<()> {
+        AdminInstruction::pause(ctx)
+    }
+
+    pub fn unpause(
+        ctx: Context<AdminInstruction>,
+    ) -> Result<()> {
+        AdminInstruction::unpause(ctx)
+    }
+
     // User actions
 
     pub fn open_order(ctx: Context<OpenOrder>, params: OrderParams) -> Result<()> {
         OpenOrder::handler(ctx, params)
     }
 
-    pub fn request_cancel_order(
-        ctx: Context<RequestCancelOrder>,
+    pub fn cancel_native_order(
+        ctx: Context<CancelNativeOrder>,
         order_id: [u8; 32],
     ) -> Result<()> {
-        RequestCancelOrder::handler(ctx, order_id)
+        CancelNativeOrder::handler(ctx, order_id)
     }
 
-    pub fn claim_refund(ctx: Context<ClaimRefund>, order_id: [u8; 32]) -> Result<()> {
-        ClaimRefund::handler(ctx, order_id)
+    pub fn cancel_foreign_order<'info>(
+        ctx: Context<'_, '_, 'info, 'info, CancelForeignOrder<'info>>,
+        order_id: [u8; 32],
+        order_data: OrderData,
+    ) -> Result<()> {
+        CancelForeignOrder::handler(ctx, order_id, order_data)
     }
 
     // Solver actions
@@ -96,7 +117,7 @@ pub mod order_book {
     pub fn fill_native_order(
         ctx: Context<FillNativeOrder>,
         order_id: [u8; 32],
-        order_data: OrderData,
+        order_data: Box<OrderData>,
         fill_params: FillParams,
     ) -> Result<()> {
         FillNativeOrder::handler(ctx, order_id, order_data, fill_params)
@@ -111,11 +132,23 @@ pub mod order_book {
         FillForeignOrder::handler(ctx, order_id, order_data, fill_params)
     }
 
+    pub fn close_order_token_account(
+        ctx: Context<CloseOrderTokenAccount>,
+        order_id: [u8; 32],
+    ) -> Result<()> {
+        CloseOrderTokenAccount::handler(ctx, order_id)
+    }
+
     // Crosschain messaging actions
 
-    pub fn report_order_fill(ctx: Context<ReportOrderFill>, fill_report: FillReport) -> Result<()> {
-        ReportOrderFill::handler(ctx, fill_report)
-    }  
+    pub fn report_order_fill(ctx: Context<ReportOrderFill>, source_chain_id: u32, fill_report: FillReport) -> Result<()> {
+        ReportOrderFill::handler(ctx, source_chain_id, fill_report)
+    }
+
+    pub fn report_order_cancel(ctx: Context<ReportOrderCancel>, source_chain_id: u32, cancel_report: CancelReport) -> Result<()> {
+        ReportOrderCancel::handler(ctx, source_chain_id, cancel_report)
+    } 
+
 
     // Dummy IDL instruction
     // Included to ensure the order types are included in the IDL build

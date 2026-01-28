@@ -19,11 +19,15 @@ pub struct AdminInstruction<'info> {
 
 impl AdminInstruction<'_> {
 
-    pub fn set_messenger_authority(
+    pub fn set_portal_authority(
         ctx: Context<Self>,
-        new_messenger_authority: Pubkey,
+        new_portal_authority: Pubkey,
     ) -> Result<()> {
-        ctx.accounts.global_account.messenger_authority = new_messenger_authority;
+        require!(
+            new_portal_authority != Pubkey::default(),
+            OrderBookError::InvalidPortalAuthority
+        );
+        ctx.accounts.global_account.portal_authority = new_portal_authority;
         Ok(())
     }
 
@@ -39,6 +43,20 @@ impl AdminInstruction<'_> {
         ctx: Context<Self>,
     ) -> Result<()> {
         ctx.accounts.global_account.new_admin = None;
+        Ok(())
+    }
+
+    pub fn pause(
+        ctx: Context<Self>,
+    ) -> Result<()> {
+        ctx.accounts.global_account.paused = true;
+        Ok(())
+    }
+
+    pub fn unpause(
+        ctx: Context<Self>,
+    ) -> Result<()> {
+        ctx.accounts.global_account.paused = false;
         Ok(())
     }
 }

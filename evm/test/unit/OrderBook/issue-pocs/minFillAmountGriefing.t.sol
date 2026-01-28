@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { TypeConverter } from "../../../../lib/common/src/libs/TypeConverter.sol";
 
@@ -46,6 +46,7 @@ contract RoundingEdgeCaseTest is OrderBookTestBase {
                 sender: order.sender.toBytes32(),
                 nonce: order.nonce,
                 destChainId: order.destChainId,
+                createdAt: uint64(order.createdAt),
                 fillDeadline: order.fillDeadline,
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
@@ -54,7 +55,11 @@ contract RoundingEdgeCaseTest is OrderBookTestBase {
                 recipient: order.recipient,
                 solver: order.solver
             }),
-            IOrderBook.FillParams({ amountOutToFill: dustFillAmount, originRecipient: users["solver"].toBytes32() })
+            IOrderBook.FillParams({
+                amountOutToFill: dustFillAmount,
+                originRecipient: users["solver"].toBytes32(),
+                refundAddress: bytes32(0)
+            })
         );
         vm.stopPrank();
 

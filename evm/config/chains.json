@@ -1,0 +1,29 @@
+{
+  "portal": "0x50D65829Eae411B655bAA92539E4F8c46D20638C",
+  "chains": {
+    "sepolia": {
+      "chainId": 11155111,
+      "name": "Sepolia",
+      "rpcAlias": "sepolia",
+      "explorerAlias": "sepolia"
+    },
+    "arbitrum_sepolia": {
+      "chainId": 421614,
+      "name": "Arbitrum Sepolia",
+      "rpcAlias": "arbitrum_sepolia",
+      "explorerAlias": "arbitrum_sepolia"
+    },
+    "base_sepolia": {
+      "chainId": 84532,
+      "name": "Base Sepolia",
+      "rpcAlias": "base_sepolia",
+      "explorerAlias": "base_sepolia"
+    },
+    "solana_devnet": {
+      "chainId": 1399811150,
+      "name": "Solana Devnet",
+      "rpcAlias": "solana_devnet",
+      "explorerAlias": "solana_devnet"
+    }
+  }
+}

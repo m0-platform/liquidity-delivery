@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { Test } from "../../../../lib/forge-std/src/Test.sol";
 import { ERC1967Proxy } from "../../../../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { TypeConverter } from "../../../../lib/common/src/libs/TypeConverter.sol";
+import { UIntMath } from "../../../../lib/common/src/libs/UIntMath.sol";
 
 import { OrderBook, IOrderBook } from "../../../../src/OrderBook.sol";
-import { MockMessenger } from "../../../mock/MockMessenger.t.sol";
+import { MockPortalV2 } from "../../../mock/MockPortalV2.t.sol";
 import { MockERC20 } from "../../../mock/MockERC20.t.sol";
 import { MockPausableToken } from "../../../mock/issue-pocs/MockPausableToken.t.sol";
 
@@ -14,13 +15,14 @@ import { MockPausableToken } from "../../../mock/issue-pocs/MockPausableToken.t.
 /// @dev Demonstrates delayed double-spend when token is paused during reportFill
 contract PausableTokenTest is Test {
     using TypeConverter for *;
+    using UIntMath for uint256;
 
     OrderBook internal orderBook;
-    MockMessenger internal messenger;
+    MockPortalV2 internal portal;
     MockPausableToken internal pausableToken;
     MockERC20 internal tokenOut;
 
-    uint32 internal constant CHAIN_ID = 1;
+    uint32 internal CHAIN_ID = block.chainid.safe32();
     uint32 internal constant DEST_CHAIN_ID = 2;
     uint256 internal constant MINT_AMOUNT = 1000e6;
     uint128 internal constant AMOUNT_IN = 100e6;
@@ -49,17 +51,19 @@ contract PausableTokenTest is Test {
         tokenOut.mint(solver, MINT_AMOUNT);
 
         // Deploy OrderBook
-        messenger = new MockMessenger();
+        portal = new MockPortalV2();
         vm.deal(admin, 1 ether);
-        address implementation = address(new OrderBook(CHAIN_ID, address(messenger)));
+        address implementation = address(new OrderBook(address(portal)));
         orderBook = OrderBook(
-            address(new ERC1967Proxy(implementation, abi.encodeWithSelector(OrderBook.initialize.selector, admin)))
+            address(
+                new ERC1967Proxy(implementation, abi.encodeWithSelector(OrderBook.initialize.selector, admin, admin))
+            )
         );
 
         // Configure
-        messenger.setOrderBook(address(orderBook));
+        portal.setOrderBook(address(orderBook));
         vm.prank(admin);
-        orderBook.setDestinationConfig(DEST_CHAIN_ID, true, FINALITY_BUFFER);
+        orderBook.setDestinationSupported(DEST_CHAIN_ID, true);
 
         // Setup order params
         params = IOrderBook.OrderParams({
@@ -101,9 +105,10 @@ contract PausableTokenTest is Test {
         pausableToken.pause();
 
         // 4. reportFill arrives but reverts because token is paused
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         vm.expectRevert(abi.encodeWithSelector(MockPausableToken.EnforcedPause.selector));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: AMOUNT_OUT,
@@ -121,19 +126,28 @@ contract PausableTokenTest is Test {
         vm.warp(block.timestamp + 1 days);
         pausableToken.unpause();
 
-        // 6. Alice claims refund after fill deadline passes
-        vm.warp(order.fillDeadline + FINALITY_BUFFER + 1);
+        // 6. Simulate cancel report arriving from destination chain
+        //    With the new design, cancellation originates on destination and sends
+        //    a CancelReport to origin which triggers the refund
+        //   However, this refund will be report as zero because the fill already happened on destination
+        //   and the amounts were recorded there.
 
         uint256 aliceBalanceBefore = pausableToken.balanceOf(alice);
-        orderBook.claimRefund(orderId);
+        vm.prank(address(portal));
+        orderBook.reportCancel(
+            DEST_CHAIN_ID,
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: alice.toBytes32(),
+                tokenIn: params.tokenIn.toBytes32(),
+                amountInToRefund: 0
+            })
+        );
         uint256 aliceBalanceAfter = pausableToken.balanceOf(alice);
 
         // Alice got her tokenIn back!
-        assertEq(aliceBalanceAfter - aliceBalanceBefore, AMOUNT_IN, "alice got full refund");
+        assertEq(aliceBalanceAfter - aliceBalanceBefore, 0, "alice didn't get a refund of tokenIn");
 
-        // RESULT: Alice received BOTH:
-        // - tokenOut on destination chain (from solver's fill)
-        // - tokenIn refund on origin chain (after unpause)
-        // This is a delayed double-spend - solver loses funds
+        // Reporting the refund amount in the cancel report avoids this double spend.
     }
 }
