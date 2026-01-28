@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tokio::sync::{oneshot, RwLock};
 use tokio::time::{interval, Duration};
 
+use crate::components::ComponentParams;
 use crate::error::Result;
 use crate::events::{EventHandler, SolverEvent};
 
@@ -17,11 +18,11 @@ pub struct OrderTimer {
 }
 
 impl OrderTimer {
-    pub fn new(logger: Logger) -> Self {
+    pub fn new(params: &ComponentParams) -> Self {
         Self {
             active_orders: Arc::new(RwLock::new(HashMap::new())),
             shutdown: Arc::new(RwLock::new(None)),
-            logger,
+            logger: params.logger.new(slog::o!("component" => "OrderTimer")),
         }
     }
 

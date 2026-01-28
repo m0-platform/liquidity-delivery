@@ -3,12 +3,55 @@ use order_book::OrderData;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct QuoteRequest {
+    pub input_token: String,
+    pub input_chain_id: u32,
+    pub output_token: String,
+    pub output_chain_id: u32,
+    pub amount_in: u64,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct QuoteResponse {
+    pub quote_id: String,
+    pub fee_bps: u32,
+    pub output_amount: u64,
+    pub est_fill_time_seconds: u64,
+    pub expires_at: String,
+    pub rejected: bool,
+    pub reject_reason: Option<String>,
+    pub solver_address: String,
+    pub requires_exclusivity: bool,
+}
+
+impl Default for QuoteResponse {
+    fn default() -> Self {
+        use chrono::{SecondsFormat, TimeDelta, Utc};
+        Self {
+            rejected: true,
+            fee_bps: 0,
+            quote_id: nanoid::nanoid!(),
+            output_amount: 0,
+            expires_at: Utc::now()
+                .checked_add_signed(TimeDelta::minutes(10))
+                .unwrap()
+                .to_rfc3339_opts(SecondsFormat::Secs, true),
+            est_fill_time_seconds: 10,
+            reject_reason: None,
+            solver_address: String::new(),
+            requires_exclusivity: false,
+        }
+    }
+}
+
 /// Unified event enum
 #[derive(Debug, Clone)]
 pub enum SolverEvent {
     // System Events
     Start,
     Stop,
+    Heartbeat(u128),
 
     // Order events
     OrderCreated(OrderCreatedEvent),
@@ -82,7 +125,6 @@ impl OrderCreatedEvent {
 #[derive(Debug, Clone)]
 pub struct OrderFillEvent {
     pub order_id: String,
-    pub timestamp: u64,
     pub amount: u128,
     pub transaction_hash: String,
 }
@@ -101,20 +143,12 @@ impl OrderFillEvent {
 #[derive(Debug, Clone)]
 pub struct OrderRejectEvent {
     pub order_id: String,
-    pub timestamp: u64,
     pub reason: String,
 }
 
 impl OrderRejectEvent {
     pub fn new(order_id: String, reason: String) -> Self {
-        Self {
-            order_id,
-            reason,
-            timestamp: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-        }
+        Self { order_id, reason }
     }
 }
 
@@ -140,7 +174,6 @@ impl OrderCancelRequestEvent {
 #[derive(Debug, Clone)]
 pub struct OrderRefundClaimedEvent {
     pub order_id: String,
-    pub timestamp: u64,
     pub sender: String,
     pub amount_refunded: u128,
     pub transaction_hash: String,
@@ -183,11 +216,10 @@ impl OrderCompletedEvent {
     }
 }
 
-/// Event: Request inventory rebalance
+/// Event: Request hold or rebalance on asset
 #[derive(Debug, Clone)]
-pub struct RequestRebalance {
-    pub target_order_id: String,
-    pub timestamp: u64,
+pub struct RequestHoldEvent {
+    pub order_id: String,
     pub asset: Asset,
     pub amount: u128,
     pub allow_partial_hold: bool,

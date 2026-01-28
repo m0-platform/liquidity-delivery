@@ -1,8 +1,9 @@
 mod components;
 pub mod config;
+mod contracts;
 mod error;
 mod events;
-mod providers;
+pub mod providers;
 mod stores;
 pub mod utils;
 
@@ -18,7 +19,10 @@ use tokio::{
 };
 
 use crate::{
-    components::{ApiServer, ComponentParams, EvmWriter, OrderProcessor, QuoterClient, SvmEventListener, SvmWriter},
+    components::{
+        ApiServer, ComponentParams, EvmWriter, OrderProcessor, QuoterClient, SvmEventListener,
+        SvmWriter,
+    },
     error::SolverError,
     events::{EventHandler, SolverEvent},
 };
@@ -47,11 +51,17 @@ pub async fn run_solver(
     let (shutdown_tx, _) = broadcast::channel::<()>(1);
 
     // Initialize global provider manager
-    let provider_manager = Arc::new(ProviderManager::new(
-        config.rate_limit.max_requests_per_second,
-        config.rate_limit.burst_size,
-    ));
-    provider_manager.initialize(&config.chains).await?;
+    let provider_manager = Arc::new(ProviderManager::new(&config));
+    provider_manager
+        .initialize(&config.chains, &config.signers)
+        .await?;
+
+    let params = ComponentParams {
+        event_bus: event_bus.clone(),
+        config: config.clone(),
+        logger: logger.clone(),
+        provider_manager: provider_manager.clone(),
+    };
 
     // Initialize components
     let evm_listener = Arc::new(EvmEventListener::new(&params));
@@ -67,6 +77,7 @@ pub async fn run_solver(
 
     // Initialize all components
     evm_listener.initialize().await?;
+    evm_writer.initialize().await?;
     svm_listener.initialize().await?;
     svm_writer.initialize().await?;
     order_processor.initialize().await?;
@@ -88,11 +99,12 @@ pub async fn run_solver(
     register_component(&quoter_client, &event_bus, &shutdown_tx, &logger);
     register_component(&api_server, &event_bus, &shutdown_tx, &logger);
 
-    // Give spawned tasks time to subscribe before publishing Start event
-    sleep(Duration::from_millis(100)).await;
+    // Let everything get started
     info!(logger, "All components registered");
-
     let _ = event_bus.publish(SolverEvent::Start).await;
+    sleep(Duration::from_millis(100)).await;
+
+    event_bus.start_heartbeat();
 
     Ok(shutdown_tx)
 }
@@ -102,6 +114,7 @@ fn register_component<T>(
     component: &Arc<T>,
     event_bus: &Arc<EventBus>,
     shutdown_tx: &broadcast::Sender<()>,
+    logger: &Logger,
 ) where
     T: EventHandler + 'static,
 {
@@ -110,6 +123,7 @@ fn register_component<T>(
         component.name(),
         event_bus.clone(),
         shutdown_tx.subscribe(),
+        logger.clone(),
         move |event| {
             let c = component_clone.clone();
             async move { c.handle_event(event).await }
@@ -118,16 +132,18 @@ fn register_component<T>(
 }
 
 fn spawn_event_handler<F, Fut>(
-    _component_name: &'static str,
+    component_name: &'static str,
     event_bus: Arc<EventBus>,
     mut shutdown_rx: Receiver<()>,
+    logger: Logger,
     handler: F,
 ) where
     F: Fn(SolverEvent) -> Fut + Send + 'static,
     Fut: Future<Output = Result<Vec<SolverEvent>, SolverError>> + Send + 'static,
 {
+    let mut receiver = event_bus.subscribe();
+
     tokio::spawn(async move {
-        let mut receiver = event_bus.subscribe();
         loop {
             tokio::select! {
                 _ = shutdown_rx.recv() => {
@@ -138,24 +154,35 @@ fn spawn_event_handler<F, Fut>(
                     // Early continue on receive error
                     let event = match result {
                         Ok(event) => event,
-                        Err(_e) => {
+                        Err(e) => {
+                            slog::error!(logger, "Error receiving event"; "component" => component_name, "error" => ?e);
                             continue;
                         }
                     };
 
                     // Handle event and get new events
+                    let start = std::time::Instant::now();
                     let new_events = match handler(event).await {
                         Ok(events) => events,
-                        Err(_e) => {
+                        Err(e) => {
+                            slog::error!(logger, "Error handling event"; "component" => component_name, "error" => ?e);
                             continue;
                         }
                     };
+                    let elapsed = start.elapsed();
+                    if elapsed.as_secs() > 10 {
+                        slog::warn!(logger, "Event handler took too long"; "component" => component_name, "duration_secs" => elapsed.as_secs_f64());
+                    }
 
                     // Publish new events
                     for new_event in new_events {
                         let _ = event_bus.publish(new_event).await;
                     }
                 }
+            }
+
+            if receiver.len() > 3 {
+                slog::warn!(logger, "Event handler is falling behind"; "component" => component_name, "pending_events" => receiver.len());
             }
         }
     });

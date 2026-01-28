@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use slog::{info, Logger};
 
+use crate::components::ComponentParams;
 use crate::error::Result;
 use crate::events::{EventHandler, SolverEvent};
 
@@ -9,7 +10,8 @@ pub struct EventLogger {
 }
 
 impl EventLogger {
-    pub fn new(logger: Logger) -> Self {
+    pub fn new(params: &ComponentParams) -> Self {
+        let logger = params.logger.new(slog::o!("component" => "EventLogger"));
         Self { logger }
     }
 }
@@ -39,18 +41,11 @@ impl EventHandler for EventLogger {
                     "transaction_hash" => %e.transaction_hash,
                 );
             }
-            SolverEvent::Start => {
-                info!(self.logger, "Start");
-            }
-            SolverEvent::Stop => {
-                info!(self.logger, "Stop");
-            }
             SolverEvent::OrderFill(e) => {
                 info!(
                     self.logger,
                     "OrderFill";
                     "order_id" => %e.order_id,
-                    "timestamp" => e.timestamp,
                     "amount" => %e.amount,
                     "transaction_hash" => %e.transaction_hash,
                 );
@@ -60,7 +55,6 @@ impl EventHandler for EventLogger {
                     self.logger,
                     "OrderRejected";
                     "order_id" => %e.order_id,
-                    "timestamp" => e.timestamp,
                     "reason" => %e.reason,
                 );
             }
@@ -78,7 +72,6 @@ impl EventHandler for EventLogger {
                     self.logger,
                     "OrderRefundClaimed";
                     "order_id" => %e.order_id,
-                    "timestamp" => e.timestamp,
                     "sender" => %e.sender,
                     "amount_refunded" => %e.amount_refunded,
                     "transaction_hash" => %e.transaction_hash,
@@ -92,16 +85,55 @@ impl EventHandler for EventLogger {
                     "transaction_hash" => %e.transaction_hash,
                 );
             }
-            SolverEvent::RequestRebalance(e) => {
+            SolverEvent::RequestHold(e) => {
                 info!(
                     self.logger,
-                    "RequestRebalance";
-                    "target_order_id" => %e.target_order_id,
-                    "timestamp" => e.timestamp,
+                    "RequestHold";
+                    "order_id" => %e.order_id,
                     "asset" => ?e.asset,
                     "amount" => %e.amount,
                 );
             }
+            SolverEvent::HoldSuccessful(e) => {
+                info!(
+                    self.logger,
+                    "HoldSuccessful";
+                    "order_id" => %e.order_id,
+                );
+            }
+            SolverEvent::RequestFillOrder(e) => {
+                info!(
+                    self.logger,
+                    "RequestFillOrder";
+                    "order_id" => %e.order_id,
+                    "fill_amount" => %e.amount,
+                );
+            }
+            SolverEvent::FillOrderSuccessful(e) => {
+                info!(
+                    self.logger,
+                    "FillOrderSuccessful";
+                    "order_id" => %e.order_id,
+                );
+            }
+            SolverEvent::RequestSwap(e) => {
+                info!(
+                    self.logger,
+                    "RequestSwap";
+                    "order_id" => %e.order_id,
+                    "from_token" => %e.token_in.symbol,
+                    "to_asset" => %e.token_out.symbol,
+                    "amount" => %e.amount_in,
+                );
+            }
+            SolverEvent::SwapSuccessful(e) => {
+                info!(
+                    self.logger,
+                    "SwapSuccessful";
+                    "order_id" => %e.order_id,
+                );
+            }
+            _ => {}
         }
 
         Ok(vec![])

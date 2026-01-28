@@ -1,17 +1,16 @@
-use alloy::signers::local::PrivateKeySigner;
-use anchor_client::solana_sdk::{signature::Keypair, signer::Signer};
-use m0_liquidity_sdk::types::Chain;
+use anchor_client::solana_sdk::signature::Keypair;
+use m0_liquidity_sdk::types::{Asset, Chain};
 use serde::{Deserialize, Serialize};
-use spl_token::solana_program::pubkey::Pubkey;
-use std::{env, sync::Arc};
+use std::{fs, sync::Arc};
 use thiserror::Error;
 
-use crate::utils::{chain_from_id, chain_id, supported_chains};
+use crate::{providers::Signers, utils::chain_from_id};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Environment {
     Development,
     Production,
+    Local,
 }
 
 impl Environment {
@@ -19,8 +18,23 @@ impl Environment {
         match s.to_lowercase().as_str() {
             "development" | "dev" => Ok(Environment::Development),
             "production" | "prod" => Ok(Environment::Production),
+            "local" | "localnet" => Ok(Environment::Local),
             _ => Err(ConfigError::InvalidEnvironment(s.to_string())),
         }
+    }
+
+    pub fn to_str(&self) -> String {
+        match self {
+            Environment::Development => "development".to_string(),
+            Environment::Production => "production".to_string(),
+            Environment::Local => "local".to_string(),
+        }
+    }
+}
+
+impl Default for Environment {
+    fn default() -> Self {
+        Environment::Development
     }
 }
 
@@ -100,10 +114,40 @@ struct ChainConfigFile {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct RateLimitConfig {
-    /// Maximum sustained requests per second across all chains
     pub max_requests_per_second: u32,
-    /// Maximum burst capacity (tokens that can accumulate)
     pub burst_size: u32,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct SupportedAssets {
+    pub third_party_whitelist: Vec<String>,
+    pub first_party_blacklist: Vec<String>,
+}
+
+impl SupportedAssets {
+    pub fn is_asset_supported(&self, asset: &Asset) -> bool {
+        let address_lower = asset.address.to_lowercase();
+        if asset.m0_extension {
+            return !self
+                .first_party_blacklist
+                .iter()
+                .any(|a| a.to_lowercase() == address_lower);
+        } else {
+            return self
+                .third_party_whitelist
+                .iter()
+                .any(|a| a.to_lowercase() == address_lower);
+        }
+    }
+}
+
+impl Default for SupportedAssets {
+    fn default() -> Self {
+        SupportedAssets {
+            third_party_whitelist: Vec::new(),
+            first_party_blacklist: Vec::new(),
+        }
+    }
 }
 
 impl Default for Config {
@@ -130,24 +174,23 @@ impl Default for Config {
 impl Default for RateLimitConfig {
     fn default() -> Self {
         RateLimitConfig {
-            max_requests_per_second: 100,
-            burst_size: 50,
+            max_requests_per_second: 10,
+            burst_size: 15,
         }
     }
 }
 
 impl Config {
-    pub fn from_env() -> Result<Self, ConfigError> {
-        let environment = env::var("ENV")
-            .map(|s| Environment::from_str(&s))
-            .unwrap()?;
+    pub fn from_file(path: &String) -> Result<Self, ConfigError> {
+        let contents = fs::read_to_string(path).map_err(|e| {
+            ConfigError::InvalidConfig(format!("Failed to read config file {}: {}", path, e))
+        })?;
 
-        let network = env::var("NETWORK")
-            .map(|s| Network::from_str(&s))
-            .unwrap()?;
+        let config_file: ConfigFile = serde_yaml::from_str(&contents)
+            .map_err(|e| ConfigError::InvalidConfig(format!("Failed to parse YAML: {}", e)))?;
 
-        let liquidity_api_url =
-            env::var("LIQUIDITY_API_URL").expect("LIQUIDITY_API_URL must be set");
+        let environment = Environment::from_str(&config_file.environment)?;
+        let network = Network::from_str(&config_file.network)?;
 
         // Filter enabled chains and convert to ChainConfig
         let chains: Vec<ChainConfig> = config_file
@@ -171,7 +214,15 @@ impl Config {
             ));
         }
 
-        Ok(Config {
+        // Parse signers
+        let evm_private_key = config_file
+            .evm_private_key
+            .parse()
+            .map_err(|_| ConfigError::InvalidConfig("Invalid EVM_PRIVATE_KEY".to_string()))?;
+
+        let svm_private_key = Arc::new(Keypair::from_base58_string(&config_file.svm_private_key));
+
+        let mut config = Config {
             environment,
             network,
             chains,
@@ -220,56 +271,6 @@ pub struct ChainConfig {
     pub bridge_adapter: Option<String>,
 }
 
-#[derive(Clone)]
-pub struct Signers {
-    evm_private_key: PrivateKeySigner,
-    svm_private_key: Arc<Keypair>,
-}
-
-impl Signers {
-    pub fn new(evm_private_key: PrivateKeySigner, svm_private_key: Arc<Keypair>) -> Self {
-        Signers {
-            evm_private_key,
-            svm_private_key,
-        }
-    }
-
-    pub fn from_env() -> Result<Self, ConfigError> {
-        let evm_private_key = env::var("EVM_PRIVATE_KEY")
-            .map_err(|_| ConfigError::InvalidChainConfig("Missing EVM_PRIVATE_KEY".to_string()))?
-            .parse()
-            .map_err(|_| ConfigError::InvalidChainConfig("Invalid EVM_PRIVATE_KEY".to_string()))?;
-
-        let svm_private_key = Arc::new(Keypair::from_base58_string(
-            &env::var("SVM_PRIVATE_KEY").map_err(|_| {
-                ConfigError::InvalidChainConfig("Missing SVM_PRIVATE_KEY".to_string())
-            })?,
-        ));
-
-        Ok(Signers {
-            evm_private_key,
-            svm_private_key,
-        })
-    }
-
-    pub fn svm_address(&self) -> Pubkey {
-        self.svm_private_key.pubkey()
-    }
-
-    pub fn evm_address(&self) -> String {
-        self.evm_private_key.address().to_string()
-    }
-}
-
-impl Default for Signers {
-    fn default() -> Self {
-        Signers {
-            evm_private_key: PrivateKeySigner::random(),
-            svm_private_key: Arc::new(Keypair::new()),
-        }
-    }
-}
-
 #[derive(Error, Debug)]
 pub enum ConfigError {
     #[error("Invalid environment value: {0}. Expected 'development' or 'production'")]
@@ -279,5 +280,5 @@ pub enum ConfigError {
     InvalidNetwork(String),
 
     #[error("Invalid chain configuration: {0}")]
-    InvalidChainConfig(String),
+    InvalidConfig(String),
 }

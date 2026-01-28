@@ -15,7 +15,9 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tokio::time::interval;
 
+use crate::components::ComponentParams;
 use crate::config::{ChainConfig, Network};
+use crate::contracts::evm::IOrderBook;
 use crate::error::{Result, SolverError};
 use crate::events::{
     CancelRequested, EventBus, EventHandler, EventProcessor, OrderCancelRequestEvent,
@@ -28,7 +30,7 @@ use crate::utils::{chain_runtime, decode_evm_address, unix_timestamp_secs};
 /// Component that listens to new orders created on multiple EVM chains
 pub struct EvmEventListener {
     event_bus: Arc<EventBus>,
-    order_store: Arc<RwLock<OrderStore>>,
+    order_store: Arc<OrderStore>,
     chains: Vec<ChainConfig>,
     task_handles: Arc<RwLock<Vec<JoinHandle<()>>>>,
     logger: Logger,
@@ -48,8 +50,7 @@ impl EventHandler for EvmEventListener {
     }
 
     async fn handle_event(&self, event: SolverEvent) -> Result<Vec<SolverEvent>> {
-        let store = self.order_store.read().await;
-        let _ = store.handle_event(event.clone()).await;
+        let _ = self.order_store.handle_event(event.clone()).await;
 
         match event {
             SolverEvent::Start => {
@@ -78,24 +79,21 @@ impl EventHandler for EvmEventListener {
 }
 
 impl EvmEventListener {
-    pub fn new(
-        event_bus: Arc<EventBus>,
-        chains: Vec<ChainConfig>,
-        logger: Logger,
-        network: Network,
-    ) -> Self {
+    pub fn new(params: &ComponentParams) -> Self {
         Self {
             task_handles: Arc::new(RwLock::new(Vec::new())),
-            order_store: Arc::new(RwLock::new(OrderStore::new())),
-            chains,
-            event_bus,
-            logger,
+            order_store: Arc::new(OrderStore::new()),
+            chains: params.config.chains.clone(),
+            event_bus: params.event_bus.clone(),
+            logger: params
+                .logger
+                .new(slog::o!("component" => "EvmEventListener")),
             seen_logs: Arc::new(RwLock::new(HashSet::new())),
             last_polled_block: Arc::new(RwLock::new(HashMap::new())),
-            polling_interval: if network == Network::Local {
+            polling_interval: if params.config.network == Network::Local {
                 Duration::from_millis(1000)
             } else {
-                Duration::from_millis(5000)
+                Duration::from_millis(10_000)
             },
         }
     }
@@ -139,18 +137,20 @@ impl EvmEventListener {
         let mut stream = sub.into_stream();
         let event_bus = self.event_bus.clone();
         let logger = self.logger.clone();
+        let provider_clone = provider.clone();
 
         // Keep the provider alive by moving it into the task
         let ws_handle = tokio::spawn(async move {
             let _provider = provider; // Keep provider alive
             loop {
                 if let Some(log) = stream.next().await {
-                    match Self::process_log(chain_id, &log) {
+                    match Self::process_log(chain_id, &log, contract_address, &provider_clone).await
+                    {
                         Ok(Some(event)) => {
                             if let Err(e) = event_bus.publish(event).await {
                                 error!(
                                     logger,
-                                    "Failed to publish event on chain";
+                                    "Failed to publish event";
                                     "chain_id" => %chain_id,
                                     "error" => %e,
                                 );
@@ -160,7 +160,7 @@ impl EvmEventListener {
                         Err(e) => {
                             error!(
                                 logger,
-                                "Error processing log on chain";
+                                "Error processing log";
                                 "chain_id" => %chain_id,
                                 "error" => %e,
                             );
@@ -180,6 +180,7 @@ impl EvmEventListener {
             handles.push(ws_handle);
             handles.push(poll_handle);
         });
+
         info!(
             self.logger,
             "Started event listener for chain";
@@ -285,14 +286,16 @@ impl EvmEventListener {
             ))
         })?;
 
-        info!(
-            logger,
-            "Fetched historical logs";
-            "count" => logs.len(),
-            "chain_id" => chain_id,
-            "from_block" => from_block,
-            "to_block" => to_block
-        );
+        if logs.len() > 0 {
+            info!(
+                logger,
+                "Fetched historical logs";
+                "count" => logs.len(),
+                "chain_id" => chain_id,
+                "from_block" => from_block,
+                "to_block" => to_block
+            );
+        }
 
         for log in logs {
             let block_number = log.block_number.unwrap();
@@ -308,7 +311,7 @@ impl EvmEventListener {
             let mut seen = seen_logs.write().await;
             seen.insert((chain_id, block_number, log_index as u64));
 
-            match Self::process_log(chain_id, &log) {
+            match Self::process_log(chain_id, &log, contract_address, provider).await {
                 Ok(Some(event)) => {
                     if let Err(e) = event_bus.publish(event).await {
                         error!(
@@ -330,7 +333,12 @@ impl EvmEventListener {
         Ok(())
     }
 
-    fn process_log(chain_id: u32, log: &alloy::rpc::types::Log) -> Result<Option<SolverEvent>> {
+    async fn process_log<P: Provider>(
+        chain_id: u32,
+        log: &alloy::rpc::types::Log,
+        contract_address: Address,
+        provider: &P,
+    ) -> Result<Option<SolverEvent>> {
         let topics = &log.topics();
 
         if topics.is_empty() {
@@ -397,16 +405,26 @@ impl EvmEventListener {
         let event = OrderOpened::decode_log(log)
             .map_err(|e| SolverError::Component(format!("Failed to decode OrderOpen: {}", e)))?;
 
+        let order_id = event.orderId;
+
+        // Create contract instance and call getOrder
+        let contract = IOrderBook::new(contract_address, provider);
+        let order_result = contract
+            .getOrder(order_id)
+            .call()
+            .await
+            .map_err(|e| SolverError::Component(format!("Failed to call getOrder: {}", e)))?;
+
         let order = OrderData {
-            version: 0, // TODO: Get from contract or config
+            version: order_result.version,
             origin_chain_id: chain_id,
-            sender: [0u8; 32], // TODO: Extract from event
-            nonce: 0,          // TODO: Extract from event
+            sender: decode_evm_address(event.sender),
+            nonce: order_result.nonce,
             dest_chain_id: event.destChainId,
-            fill_deadline: 0, // TODO: Extract from event
+            fill_deadline: order_result.fillDeadline as u64,
             token_in: decode_evm_address(event.tokenIn),
             token_out: event.tokenOut.into(),
-            recipient: event.solver.into(),
+            recipient: order_result.recipient.into(),
             amount_in: event.amountIn,
             amount_out: event.amountOut,
             solver: event.solver.into(),

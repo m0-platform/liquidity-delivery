@@ -41,6 +41,7 @@ solana-client = "2.2.4"
 solana-transaction-status-client-types = "2.2.4"
 axum = "0.7"
 tower-http = { version = "0.6", features = ["cors"] }
+serde_yaml = "0.9.34"
 
 [build-dependencies]
 tonic-build = "0.12"

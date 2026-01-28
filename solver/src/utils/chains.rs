@@ -1,4 +1,7 @@
+use std::str::FromStr;
+
 use alloy::primitives::Address;
+use anchor_client::solana_sdk::pubkey::Pubkey;
 use m0_liquidity_sdk::types::{Chain, ChainRuntime};
 
 // non-evm chains don't have standard chain ids
@@ -8,7 +11,7 @@ const SOLANA_CHAIN_ID_DEVNET: u32 = 1399811150;
 pub fn chain_id(chain: Chain) -> u32 {
     match chain {
         Chain::Ethereum => 1,
-        Chain::Solana => 4294967295,
+        Chain::Solana => SOLANA_CHAIN_ID,
         Chain::Arbitrum => 42161,
         Chain::Optimism => 10,
         Chain::Base => 8453,
@@ -26,7 +29,7 @@ pub fn chain_id(chain: Chain) -> u32 {
 pub fn chain_from_id(chain_id: u32) -> Chain {
     match chain_id {
         1 => Chain::Ethereum,
-        4294967295 => Chain::Solana,
+        SOLANA_CHAIN_ID => Chain::Solana,
         42161 => Chain::Arbitrum,
         10 => Chain::Optimism,
         8453 => Chain::Base,
@@ -81,4 +84,20 @@ pub fn decode_evm_address(address: Address) -> [u8; 32] {
 
 pub fn encode_evm_address(bytes: &[u8; 32]) -> Address {
     Address::from_slice(&bytes[12..32])
+}
+
+pub fn format_address(bytes: &[u8; 32]) -> String {
+    let (padding, evm_bytes) = bytes.split_at(12);
+
+    if padding.iter().all(|&b| b == 0) {
+        Address::from_slice(evm_bytes).to_string()
+    } else {
+        Pubkey::new_from_array(*bytes).to_string()
+    }
+}
+
+pub fn decode_order_id(order_id: &String) -> [u8; 32] {
+    let mut arr = [0u8; 32];
+    arr.copy_from_slice(&hex::decode(order_id).unwrap());
+    arr
 }

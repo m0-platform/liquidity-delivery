@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -8,54 +9,56 @@ use anchor_client::solana_account_decoder::UiAccountData;
 use anchor_client::solana_sdk::pubkey::Pubkey;
 use async_trait::async_trait;
 use futures_util::future::join_all;
-use m0_liquidity_sdk::types::{Asset, ChainRuntime};
+use m0_liquidity_sdk::types::{Asset, Chain, ChainRuntime};
 use slog::{debug, error, info, warn, Logger};
 use solana_client::rpc_request::TokenAccountsFilter;
 use tokio::sync::Mutex;
 
-use crate::config::{ChainConfig, Signers};
+use crate::components::ComponentParams;
+use crate::config::ChainConfig;
+use crate::contracts::IERC20;
 use crate::error::{Result, SolverError};
 use crate::events::{
     EventHandler, EventProcessor, HoldSuccessfulEvent, InventoryUpdateEvent, RequestSwapEvent,
     SolverEvent,
 };
 use crate::providers::ProviderManager;
-use crate::stores::AssetStore;
-use crate::utils::chain_runtime;
-use crate::Config;
-
-// Define ERC20 interface for balance checking
-sol! {
-    #[sol(rpc)]
-    interface IERC20 {
-        function balanceOf(address account) external view returns (uint256);
-        function decimals() external view returns (uint8);
-    }
-}
+use crate::stores::{AssetStore, OrderStore};
+use crate::utils::{chain_from_id, chain_runtime, format_address};
 
 pub struct InventoryManager {
-    signers: Signers,
-    asset_store: Arc<RwLock<AssetStore>>,
+    asset_store: Arc<AssetStore>,
+    order_store: Arc<OrderStore>,
     chains: Vec<ChainConfig>,
-    balances: Arc<RwLock<HashMap<Asset, u128>>>,
+    balances: Arc<Mutex<HashMap<Asset, u128>>>,
+    holds: Arc<Mutex<HashMap<Chain, HashMap<String, u128>>>>,
+    order_holds: Arc<Mutex<HashMap<String, u128>>>,
+    auto_rebalance: bool,
     provider_manager: Arc<ProviderManager>,
     logger: Logger,
 }
 
 impl InventoryManager {
-    pub fn new(cfg: Config, provider_manager: Arc<ProviderManager>, logger: Logger) -> Self {
+    pub fn new(params: &ComponentParams) -> Self {
+        let logger = params
+            .logger
+            .new(slog::o!("component" => "InventoryManager"));
+
         Self {
-            signers: cfg.signers,
-            asset_store: Arc::new(RwLock::new(AssetStore::new(cfg.liquidity_api_url))),
-            chains: cfg.chains,
-            balances: Arc::new(RwLock::new(HashMap::new())),
-            provider_manager,
+            asset_store: Arc::new(AssetStore::new(params.config.liquidity_api_url.clone())),
+            order_store: Arc::new(OrderStore::new()),
+            chains: params.config.chains.clone(),
+            balances: Arc::new(Mutex::new(HashMap::new())),
+            holds: Arc::new(Mutex::new(HashMap::new())),
+            order_holds: Arc::new(Mutex::new(HashMap::new())),
+            auto_rebalance: params.config.auto_rebalance,
+            provider_manager: params.provider_manager.clone(),
             logger,
         }
     }
 
     async fn load_svm_balances(&self) -> Result<()> {
-        let address = self.signers.svm_address();
+        let address = self.provider_manager.svm_address;
 
         // Get all SVM chains
         let svm_chains: Vec<_> = self
@@ -65,12 +68,7 @@ impl InventoryManager {
             .collect();
 
         for chain in svm_chains {
-            let assets = self
-                .asset_store
-                .read()
-                .await
-                .get_assets_for_chain(chain.chain_id)
-                .await?;
+            let assets = self.asset_store.get_assets_for_chain(chain.chain_id).await;
 
             debug!(
                 self.logger,
@@ -145,12 +143,12 @@ impl InventoryManager {
             }
 
             // Also get native SOL balance
-            let sol_balance_result = client.get_balance(&address);
+            let sol_balance_result = client.get_balance(&address).await;
 
             match sol_balance_result {
                 Ok(lamports) => {
                     self.balances
-                        .write()
+                        .lock()
                         .await
                         .insert(AssetStore::get_native(chain.chain), lamports.into());
                 }
@@ -169,9 +167,7 @@ impl InventoryManager {
     }
 
     async fn load_evm_balances(&self) -> Result<()> {
-        let address_str = self.signers.evm_address();
-        let address = Address::from_str(&address_str)
-            .map_err(|e| SolverError::Component(format!("Invalid EVM address: {}", e)))?;
+        let address = self.provider_manager.evm_address;
 
         // Get all EVM chains
         let evm_chains: Vec<_> = self
@@ -181,12 +177,7 @@ impl InventoryManager {
             .collect();
 
         for chain in evm_chains {
-            let assets = self
-                .asset_store
-                .read()
-                .await
-                .get_assets_for_chain(chain.chain_id)
-                .await?;
+            let assets = self.asset_store.get_assets_for_chain(chain.chain_id).await;
 
             debug!(
                 self.logger,
@@ -242,7 +233,7 @@ impl InventoryManager {
             match eth_balance_result {
                 Ok(balance) => {
                     self.balances
-                        .write()
+                        .lock()
                         .await
                         .insert(AssetStore::get_native(chain.chain), balance.to());
                 }
@@ -261,7 +252,7 @@ impl InventoryManager {
     }
 
     async fn log_balances(&self) {
-        let balances = self.balances.read().await;
+        let balances = self.balances.lock().await;
 
         let balance_info: Vec<String> = balances
             .iter()
@@ -297,7 +288,8 @@ impl EventHandler for InventoryManager {
     }
 
     async fn initialize(&self) -> Result<()> {
-        self.asset_store.write().await.initialize().await?;
+        self.asset_store.initialize().await?;
+        self.order_store.initialize().await?;
 
         // Load balances before starting
         self.load_svm_balances().await?;

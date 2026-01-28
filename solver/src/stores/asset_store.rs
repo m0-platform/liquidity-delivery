@@ -12,7 +12,6 @@ use crate::error::{Result, SolverError};
 use crate::events::{EventProcessor, SolverEvent};
 use crate::utils::{self, chain_id, chain_runtime, decode_evm_address};
 
-/// Event store for tracking order status
 pub struct AssetStore {
     assets: Arc<RwLock<HashMap<AssetKey, Asset>>>,
     liquidity_api_url: String,
@@ -32,18 +31,18 @@ impl AssetStore {
         }
     }
 
-    pub async fn get_asset(&self, address: [u8; 32], chain_id: u32) -> Result<Option<Asset>> {
+    pub async fn get_asset(&self, address: [u8; 32], chain_id: u32) -> Option<Asset> {
         let assets = self.assets.read().await;
-        Ok(assets.get(&AssetKey { address, chain_id }).cloned())
+        assets.get(&AssetKey { address, chain_id }).cloned()
     }
 
-    pub async fn get_assets_for_chain(&self, chain_id: u32) -> Result<Vec<Asset>> {
+    pub async fn get_assets_for_chain(&self, chain_id: u32) -> Vec<Asset> {
         let assets = self.assets.read().await;
-        Ok(assets
+        assets
             .iter()
             .filter(|(key, _)| key.chain_id == chain_id)
             .map(|(_, asset)| asset.clone())
-            .collect())
+            .collect()
     }
 
     pub fn get_native(chain: Chain) -> Asset {
@@ -111,7 +110,6 @@ impl EventProcessor for AssetStore {
             );
         }
 
-        // Loaded assets
         Ok(())
     }
 

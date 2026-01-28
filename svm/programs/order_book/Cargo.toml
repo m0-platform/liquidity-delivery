@@ -22,6 +22,6 @@ anchor-spl = "0.31.1"
 solana-security-txt = "1.1.1"
 
 [dev-dependencies]
-alloy = { version = "1.0.41", features = ["sol-types"] }
+alloy = { version = "1.0.38", features = ["sol-types"] }
 anchor-litesvm = "0.2"
 litesvm = "0.8.1"

@@ -1,7 +1,9 @@
-use anchor_client::solana_sdk::pubkey::Pubkey;
-use anchor_client::solana_sdk::signature::Keypair;
-use anchor_client::{Client, Cluster};
+use anchor_client::{
+    anchor_lang::{AnchorDeserialize, Discriminator},
+    solana_sdk::{bs58, commitment_config::CommitmentConfig, pubkey::Pubkey, signature::Signature},
+};
 use async_trait::async_trait;
+use futures_util::StreamExt;
 use m0_liquidity_sdk::types::ChainRuntime;
 use order_book::{
     CancelRequested, FillReported, NativeOrder, Order, OrderCompleted, OrderData, OrderFilled,
@@ -41,27 +43,26 @@ enum OrderBookEvent {
 
 pub struct SvmEventListener {
     event_bus: Arc<EventBus>,
-    order_store: Arc<RwLock<OrderStore>>,
+    order_store: Arc<OrderStore>,
     chains: Vec<ChainConfig>,
-    cluster: config::Network,
     task_handles: Arc<RwLock<Vec<JoinHandle<()>>>>,
     logger: Logger,
+    provider_manager: Arc<ProviderManager>,
 }
 
 impl SvmEventListener {
-    pub fn new(
-        event_bus: Arc<EventBus>,
-        chains: Vec<ChainConfig>,
-        cluster: config::Network,
-        logger: Logger,
-    ) -> Self {
+    pub fn new(params: &ComponentParams) -> Self {
+        let logger = params
+            .logger
+            .new(slog::o!("component" => "SvmEventListener"));
+
         Self {
             task_handles: Arc::new(RwLock::new(Vec::new())),
-            order_store: Arc::new(RwLock::new(OrderStore::new())),
-            chains,
-            cluster,
-            event_bus,
+            order_store: Arc::new(OrderStore::new()),
+            chains: params.config.chains.clone(),
+            event_bus: params.event_bus.clone(),
             logger,
+            provider_manager: params.provider_manager.clone(),
         }
     }
 }
@@ -77,8 +78,7 @@ impl EventHandler for SvmEventListener {
     }
 
     async fn handle_event(&self, event: SolverEvent) -> Result<Vec<SolverEvent>> {
-        let store = self.order_store.read().await;
-        let _ = store.handle_event(event.clone()).await;
+        let _ = self.order_store.handle_event(event.clone()).await;
 
         match event {
             SolverEvent::Start => {
@@ -223,20 +223,43 @@ impl SvmEventListener {
             return;
         }
 
-        let cluster = self.cluster.clone();
+        info!(
+            self.logger,
+            "Starting event listener for chain";
+            "chain_id" => %chain.chain_id,
+        );
+
         let event_bus = self.event_bus.clone();
-        let chain_id = chain.chain_id.clone();
+        let chain_id = chain.chain_id;
         let order_book_address = chain.order_book_address.clone();
         let logger = self.logger.clone();
+        let providers = self.provider_manager.clone();
 
         let handle = tokio::spawn(async move {
-            let c = Cluster::from_str(&cluster.to_string()).unwrap();
-            let client = Client::new(c, Arc::new(Keypair::new()));
-            let chain_id_clone = chain_id.clone();
+            let provider = providers.get_svm_provider(chain_id).await.unwrap();
+            let pubsub_client = provider.pubsub_client.clone();
+            let program_id = Pubkey::from_str(&order_book_address).unwrap();
 
-            let program = client
-                .program(Pubkey::from_str(&order_book_address).unwrap())
-                .unwrap();
+            let (mut log_stream, _unsub) = match pubsub_client
+                .logs_subscribe(
+                    RpcTransactionLogsFilter::Mentions(vec![program_id.to_string()]),
+                    RpcTransactionLogsConfig {
+                        commitment: Some(CommitmentConfig::confirmed()),
+                    },
+                )
+                .await
+            {
+                Ok(subscription) => subscription,
+                Err(e) => {
+                    error!(
+                        logger,
+                        "Failed to subscribe to program logs";
+                        "chain_id" => %chain_id,
+                        "error" => %e,
+                    );
+                    return;
+                }
+            };
 
             while let Some(log_update) = log_stream.next().await {
                 let signature_str = log_update.value.signature;
