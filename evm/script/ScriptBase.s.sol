@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { Script } from "../lib/forge-std/src/Script.sol";
 
@@ -7,9 +7,6 @@ contract ScriptBase is Script {
     struct Deployment {
         address orderBook;
     }
-
-    // Same address for all EVM chains
-    address internal constant _PORTAL = 0xD925C84b55E4e44a53749fF5F2a5A13F63D128fd;
 
     function _deployOutputPath(uint256 chainId_) internal view returns (string memory) {
         return string.concat(vm.projectRoot(), "/deployments/", vm.toString(chainId_), ".json");

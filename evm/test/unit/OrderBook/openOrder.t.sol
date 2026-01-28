@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
+import { PausableUpgradeable } from "../../../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol";
 
 import { OrderBookTestBase } from "./OrderBookTestBase.t.sol";
 import { IOrderBook } from "../../../src/interfaces/IOrderBook.sol";
@@ -10,6 +11,8 @@ contract OpenOrderTest is OrderBookTestBase {
     using TypeConverter for *;
 
     // Test cases
+    // [X] given the contract is paused
+    //    [X] it reverts with an EnforcedPause error
     // [X] given the fill deadline is before the current block timestamp
     //    [X] it reverts with an InvalidDeadline error
     // [X] given the amount in is zero
@@ -18,6 +21,10 @@ contract OpenOrderTest is OrderBookTestBase {
     //    [X] it reverts with an AmountOutZero error
     // [X] given the destination chain is invalid
     //   [X] it reverts with an InvalidDestinationChain error
+    // [X] given the solver is the recipient
+    //   [X] it reverts with an InvalidSolver error
+    // [X] given a same-chain order with tokenOut equal to tokenIn
+    //   [X] it reverts with a SameTokenOrder error
     // [X] given the sender has not approved the order book to spend their token in
     //   [X] it reverts with an ERC20 transfer error
     // [X] given the sender has not enough balance of the token in
@@ -69,6 +76,24 @@ contract OpenOrderTest is OrderBookTestBase {
         params.destChainId = 100;
         vm.prank(users["alice"]);
         vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidDestinationChain.selector));
+        orderBook.openOrder(params);
+    }
+
+    function test_solverIsRecipient_reverts() public {
+        params.solver = params.recipient;
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidSolver.selector));
+        orderBook.openOrder(params);
+    }
+
+    function test_sameChainOrderWithSameToken_reverts() public {
+        // Set to same-chain order
+        params.destChainId = CHAIN_ID;
+        // Set tokenOut to be the same as tokenIn
+        params.tokenOut = address(tokenIn).toBytes32();
+
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.SameTokenOrder.selector));
         orderBook.openOrder(params);
     }
 
@@ -161,5 +186,26 @@ contract OpenOrderTest is OrderBookTestBase {
         givenTokenOutDecimals(18)
     {
         _test_success();
+    }
+
+    function test_whenPaused_reverts() public {
+        vm.prank(users["alice"]);
+        tokenIn.approve(address(orderBook), params.amountIn);
+
+        vm.prank(pauser);
+        orderBook.pause();
+
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(PausableUpgradeable.EnforcedPause.selector));
+        orderBook.openOrder(params);
+    }
+
+    function test_openOrderWithPermit_whenPaused_reverts() public {
+        vm.prank(pauser);
+        orderBook.pause();
+
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(PausableUpgradeable.EnforcedPause.selector));
+        orderBook.openOrderWithPermit(params, block.timestamp + 1 hours, 0, bytes32(0), bytes32(0));
     }
 }

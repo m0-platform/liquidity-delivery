@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { Test } from "../../../../lib/forge-std/src/Test.sol";
 import { ERC1967Proxy } from "../../../../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { TypeConverter } from "../../../../lib/common/src/libs/TypeConverter.sol";
+import { UIntMath } from "../../../../lib/common/src/libs/UIntMath.sol";
 
 import { OrderBook, IOrderBook } from "../../../../src/OrderBook.sol";
-import { MockMessenger } from "../../../mock/MockMessenger.t.sol";
+import { MockPortalV2 } from "../../../mock/MockPortalV2.t.sol";
 import { MockERC20 } from "../../../mock/MockERC20.t.sol";
 import { MockMEarnerToken } from "../../../mock/issue-pocs/MockMEarnerToken.t.sol";
 
@@ -14,13 +15,14 @@ import { MockMEarnerToken } from "../../../mock/issue-pocs/MockMEarnerToken.t.so
 /// @dev Demonstrates that yield accrues to OrderBook during order lifetime and gets stuck
 contract MEarnerYieldAccrualTest is Test {
     using TypeConverter for *;
+    using UIntMath for uint256;
 
     OrderBook internal orderBook;
-    MockMessenger internal messenger;
+    MockPortalV2 internal portal;
     MockMEarnerToken internal mToken;
     MockERC20 internal tokenOut;
 
-    uint32 internal constant CHAIN_ID = 1;
+    uint32 internal CHAIN_ID = block.chainid.safe32();
     uint32 internal constant DEST_CHAIN_ID = 2;
     uint256 internal constant MINT_AMOUNT = 1000e6;
     uint128 internal constant AMOUNT_IN = 100e6;
@@ -49,17 +51,19 @@ contract MEarnerYieldAccrualTest is Test {
         tokenOut.mint(solver, MINT_AMOUNT);
 
         // Deploy OrderBook
-        messenger = new MockMessenger();
+        portal = new MockPortalV2();
         vm.deal(admin, 1 ether);
-        address implementation = address(new OrderBook(CHAIN_ID, address(messenger)));
+        address implementation = address(new OrderBook(address(portal)));
         orderBook = OrderBook(
-            address(new ERC1967Proxy(implementation, abi.encodeWithSelector(OrderBook.initialize.selector, admin)))
+            address(
+                new ERC1967Proxy(implementation, abi.encodeWithSelector(OrderBook.initialize.selector, admin, admin))
+            )
         );
 
         // Configure
-        messenger.setOrderBook(address(orderBook));
+        portal.setOrderBook(address(orderBook));
         vm.prank(admin);
-        orderBook.setDestinationConfig(DEST_CHAIN_ID, true, FINALITY_BUFFER);
+        orderBook.setDestinationSupported(DEST_CHAIN_ID, true);
 
         // Setup order params
         params = IOrderBook.OrderParams({
@@ -105,8 +109,9 @@ contract MEarnerYieldAccrualTest is Test {
         // 4. Solver fills order, reportFill transfers 100e6 to solver
         uint256 solverBalanceBefore = mToken.balanceOf(solver);
 
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: AMOUNT_OUT,
@@ -131,9 +136,9 @@ contract MEarnerYieldAccrualTest is Test {
         // There's no mechanism to recover these funds
     }
 
-    /// @notice Demonstrates yield getting stuck after refund
-    /// @dev Same issue occurs with claimRefund - user only gets original amount back
-    function test_yieldAccrual_claimRefund_yieldStuckInOrderBook() public {
+    /// @notice Demonstrates yield getting stuck after reportCancel refund
+    /// @dev Same issue occurs with reportCancel - user only gets original amount back
+    function test_yieldAccrual_reportCancel_yieldStuckInOrderBook() public {
         // 1. Alice creates order
         vm.startPrank(alice);
         mToken.approve(address(orderBook), AMOUNT_IN);
@@ -146,13 +151,20 @@ contract MEarnerYieldAccrualTest is Test {
         // OrderBook balance increased
         assertEq(mToken.balanceOf(address(orderBook)), 110e6);
 
-        // 3. Warp past fill deadline
-        IOrderBook.Order memory order = orderBook.getOrder(orderId);
-        vm.warp(order.fillDeadline + FINALITY_BUFFER + 1);
-
-        // 4. Alice claims refund - only gets original 100e6 back
+        // 3. Simulate cancel report arriving from destination chain
+        //    With the new design, cancellation originates on destination and sends
+        //    a CancelReport to origin which triggers the refund
         uint256 aliceBalanceBefore = mToken.balanceOf(alice);
-        orderBook.claimRefund(orderId);
+        vm.prank(address(portal));
+        orderBook.reportCancel(
+            DEST_CHAIN_ID,
+            IOrderBook.CancelReport({
+                orderId: orderId,
+                orderSender: alice.toBytes32(),
+                tokenIn: params.tokenIn.toBytes32(),
+                amountInToRefund: params.amountIn
+            })
+        );
         uint256 aliceBalanceAfter = mToken.balanceOf(alice);
 
         // Alice only received ~100e6 (the recorded amountIn), not 110e6
@@ -161,7 +173,7 @@ contract MEarnerYieldAccrualTest is Test {
         assertApproxEqAbs(aliceReceived, AMOUNT_IN, 2, "alice only gets ~original amount");
         assertLt(aliceReceived, 110e6, "alice should NOT receive the yield");
 
-        // 5. Yield is stuck in OrderBook
+        // 4. Yield is stuck in OrderBook
         uint256 orderBookBalanceAfterRefund = mToken.balanceOf(address(orderBook));
         assertGt(orderBookBalanceAfterRefund, 0, "yield should be stuck in OrderBook");
 
@@ -205,8 +217,9 @@ contract MEarnerYieldAccrualTest is Test {
         assertGt(yieldToTreasury, 9e6, "treasury should receive yield");
 
         // 4. Now fill the order
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         orderBook.reportFill(
+            params.destChainId,
             IOrderBook.FillReport({
                 orderId: orderId,
                 amountOutFilled: AMOUNT_OUT,

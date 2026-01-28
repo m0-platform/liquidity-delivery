@@ -1,17 +1,11 @@
 mod instructions;
 
-use anchor_lang::{
-    prelude::declare_program,
-    solana_program::instruction::Instruction,
-};
+use anchor_lang::{prelude::declare_program, solana_program::instruction::Instruction};
 use anchor_litesvm::{
     get_anchor_account, AnchorContext, AnchorLiteSVM, Keypair, Pubkey, Signer, TestHelpers,
 };
-use anchor_spl::{
-    associated_token::get_associated_token_address,
-    token::TokenAccount,
-};
-use order_book::{GLOBAL_SEED, ORDER_SEED_PREFIX, OrderData};
+use anchor_spl::{associated_token::get_associated_token_address, token::TokenAccount};
+use order_book::{OrderData, GLOBAL_SEED, ORDER_SEED_PREFIX};
 use std::{collections::HashMap, error::Error};
 
 declare_program!(portal);
@@ -52,7 +46,7 @@ impl OrderBookTest {
         users.insert("carol", ctx.svm.create_funded_account(INITIAL_FUNDS)?);
         users.insert("solver", ctx.svm.create_funded_account(INITIAL_FUNDS)?);
         users.insert(
-            "messenger_authority",
+            "portal_authority",
             ctx.svm.create_funded_account(INITIAL_FUNDS)?,
         );
 
@@ -111,7 +105,7 @@ impl OrderBookTest {
 
     fn initialize(&mut self) -> Result<(), Box<dyn Error>> {
         let admin = self.users.get("admin").unwrap();
-        let messenger_authority = self.users.get("messenger_authority").unwrap();
+        let portal_authority = self.users.get("portal_authority").unwrap();
 
         // Initialize the order book global account
         let ix = self
@@ -127,7 +121,7 @@ impl OrderBookTest {
             })
             .args(order_book::instruction::Initialize {
                 chain_id: CHAIN_ID,
-                messenger_authority: messenger_authority.pubkey(),
+                portal_authority: portal_authority.pubkey(),
             })
             .instruction()?;
 
@@ -137,7 +131,7 @@ impl OrderBookTest {
         let ix = self
             .ctx
             .program()
-            .accounts(order_book::accounts::ConfigureDestination {
+            .accounts(order_book::accounts::AddDestination {
                 program: order_book::ID,
                 event_authority: self.get_event_authority()?,
                 admin: admin.pubkey(),
@@ -154,10 +148,8 @@ impl OrderBookTest {
                 ),
                 system_program: anchor_lang::solana_program::system_program::ID,
             })
-            .args(order_book::instruction::ConfigureDestination {
+            .args(order_book::instruction::AddDestination {
                 dest_chain_id: DEST_CHAIN_ID,
-                is_supported: true,
-                finality_buffer: Some(15 * 60), // 15 minutes
             })
             .instruction()?;
 
@@ -359,6 +351,19 @@ impl OrderBookTest {
         Ok(ata)
     }
 
+    /// Mint tokens to any ATA (used for simulating dust/griefing donations)
+    fn mint_to_ata(
+        &mut self,
+        token_name: &str,
+        ata: &Pubkey,
+        amount: u64,
+    ) -> Result<(), Box<dyn Error>> {
+        let admin = self.get_user("admin");
+        let mint = self.get_mint(token_name);
+        self.ctx.svm.mint_to(&mint, ata, &admin, amount)?;
+        Ok(())
+    }
+
     // Helpers to construct account objects to pass to instructions
     fn build_fill_native_order_accounts(
         &self,
@@ -465,73 +470,35 @@ impl OrderBookTest {
             system_program: anchor_lang::solana_program::system_program::ID,
             order: order_account,
             portal_program: portal::ID, // the following accounts are not checked by the mock
-            portal_global: self.ctx.svm.get_pda(
-                &[GLOBAL_SEED],
-                &portal::ID,
-            ),
-            portal_authority: self.ctx.svm.get_pda(
-                &[b"authority"],
-                &portal::ID,
-            ),
-            bridge_adapter: self.ctx.svm.get_pda(
-                &[b"bridge_adapter"],
-                &portal::ID,
-            )
+            portal_global: self.ctx.svm.get_pda(&[GLOBAL_SEED], &portal::ID),
+            portal_authority: self.ctx.svm.get_pda(&[b"authority"], &portal::ID),
+            bridge_adapter: self.ctx.svm.get_pda(&[b"bridge_adapter"], &portal::ID),
         })
     }
 
-    fn build_request_cancel_accounts(
+    fn build_cancel_native_order_accounts(
         &self,
+        signer: &Pubkey,
         sender: &Pubkey,
         order_id: [u8; 32],
-    ) -> Result<order_book::accounts::RequestCancelOrder, Box<dyn Error>> {
-        let order_account = self
-            .ctx
-            .svm
-            .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
-
-        Ok(order_book::accounts::RequestCancelOrder {
-            program: order_book::ID,
-            event_authority: self.get_event_authority()?,
-            sender: *sender,
-            order: order_account,
-        })
-    }
-
-    fn build_claim_refund_accounts(
-        &self,
-        sender: &Pubkey,
-        order_id: [u8; 32],
-    ) -> Result<order_book::accounts::ClaimRefund, Box<dyn Error>> {
-        let (global_account, global_data) = self.get_global_account()?;
+    ) -> Result<order_book::accounts::CancelNativeOrder, Box<dyn Error>> {
+        let (global_account, _) = self.get_global_account()?;
         let order_account = self
             .ctx
             .svm
             .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
         let (_, native_order_data) = self.get_native_order_account(&order_id)?;
 
-        let destination_account = if native_order_data.data.dest_chain_id != global_data.chain_id {
-            Some(self.ctx.svm.get_pda(
-                &[
-                    order_book::state::DESTINATION_SEED_PREFIX,
-                    &native_order_data.data.dest_chain_id.to_be_bytes(),
-                ],
-                &order_book::ID,
-            ))
-        } else {
-            None
-        };
-
         let token_in_mint = native_order_data.data.token_in;
         let sender_token_in_ata = get_associated_token_address(sender, &token_in_mint);
         let order_token_in_ata = get_associated_token_address(&order_account, &token_in_mint);
 
-        Ok(order_book::accounts::ClaimRefund {
+        Ok(order_book::accounts::CancelNativeOrder {
             program: order_book::ID,
             event_authority: self.get_event_authority()?,
+            signer: *signer,
             sender: *sender,
             global_account,
-            destination_account,
             order: order_account,
             token_in_mint,
             sender_token_in_ata,
@@ -540,10 +507,71 @@ impl OrderBookTest {
         })
     }
 
+    fn build_cancel_foreign_order_accounts(
+        &self,
+        signer: &Pubkey,
+        order_data: &OrderData,
+    ) -> Result<order_book::accounts::CancelForeignOrder, Box<dyn Error>> {
+        let (global_account, _) = self.get_global_account()?;
+        let order_id = order_data.compute_order_id();
+        let order_account = self
+            .ctx
+            .svm
+            .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
+
+        Ok(order_book::accounts::CancelForeignOrder {
+            program: order_book::ID,
+            event_authority: self.get_event_authority()?,
+            signer: *signer,
+            global_account,
+            order: order_account,
+            portal_program: portal::ID,
+            portal_global: self.ctx.svm.get_pda(&[GLOBAL_SEED], &portal::ID),
+            portal_authority: self.ctx.svm.get_pda(&[b"authority"], &portal::ID),
+            bridge_adapter: self.ctx.svm.get_pda(&[b"bridge_adapter"], &portal::ID),
+            system_program: anchor_lang::solana_program::system_program::ID,
+        })
+    }
+
+    fn build_report_cancel_accounts(
+        &self,
+        relayer: &Pubkey,
+        portal_authority: &Pubkey,
+        cancel_report: &order_book::instructions::CancelReport,
+    ) -> Result<order_book::accounts::ReportOrderCancel, Box<dyn Error>> {
+        let (global_account, _) = self.get_global_account()?;
+        let order_account = self.ctx.svm.get_pda(
+            &[ORDER_SEED_PREFIX, &cancel_report.order_id],
+            &order_book::ID,
+        );
+        let (_, native_order_data) = self.get_native_order_account(&cancel_report.order_id)?;
+
+        let token_in_mint = native_order_data.data.token_in;
+        let order_sender = native_order_data.data.sender;
+        let sender_token_in_ata = get_associated_token_address(&order_sender, &token_in_mint);
+        let order_token_in_ata = get_associated_token_address(&order_account, &token_in_mint);
+
+        Ok(order_book::accounts::ReportOrderCancel {
+            program: order_book::ID,
+            event_authority: self.get_event_authority()?,
+            relayer: *relayer,
+            portal_authority: *portal_authority,
+            global_account,
+            order: order_account,
+            token_in_mint,
+            order_sender,
+            sender_token_in_ata,
+            order_token_in_ata,
+            token_in_program: anchor_spl::token::ID,
+            associated_token_program: anchor_spl::associated_token::ID,
+            system_program: anchor_lang::solana_program::system_program::ID,
+        })
+    }
+
     fn build_report_fill_accounts(
         &self,
         relayer: &Pubkey,
-        messenger_authority: &Pubkey,
+        portal_authority: &Pubkey,
         fill_report: &order_book::instructions::FillReport,
     ) -> Result<order_book::accounts::ReportOrderFill, Box<dyn Error>> {
         let (global_account, _) = self.get_global_account()?;
@@ -563,7 +591,7 @@ impl OrderBookTest {
             program: order_book::ID,
             event_authority: self.get_event_authority()?,
             relayer: *relayer,
-            messenger_authority: *messenger_authority,
+            portal_authority: *portal_authority,
             global_account,
             order: order_account,
             token_in_mint,
@@ -581,7 +609,7 @@ impl OrderBookTest {
         &self,
         admin: &Pubkey,
         chain_id: u32,
-        messenger_authority: &Pubkey,
+        portal_authority: &Pubkey,
     ) -> Result<Instruction, Box<dyn Error>> {
         let global_account = self
             .ctx
@@ -598,7 +626,7 @@ impl OrderBookTest {
             })
             .args(order_book::instruction::Initialize {
                 chain_id,
-                messenger_authority: *messenger_authority,
+                portal_authority: *portal_authority,
             })
             .instruction()?;
 
@@ -635,6 +663,7 @@ impl OrderBookTest {
             nonce: sender_nonce_data.value,
             origin_chain_id: global_data.chain_id,
             dest_chain_id: order_params.dest_chain_id,
+            created_at: order_params.created_at,
             fill_deadline: order_params.fill_deadline,
             token_in: token_in_mint.to_bytes(),
             token_out: order_params.token_out,
@@ -676,12 +705,10 @@ impl OrderBookTest {
         Ok((order_id, ix))
     }
 
-    fn create_configure_destination_ix(
+    fn create_add_destination_ix(
         &self,
         admin: &Pubkey,
         dest_chain_id: u32,
-        is_supported: bool,
-        finality_buffer: Option<u64>,
     ) -> Result<Instruction, Box<dyn Error>> {
         let global_account = self
             .ctx
@@ -698,7 +725,7 @@ impl OrderBookTest {
         let ix = self
             .ctx
             .program()
-            .accounts(order_book::accounts::ConfigureDestination {
+            .accounts(order_book::accounts::AddDestination {
                 program: order_book::ID,
                 event_authority: self.get_event_authority()?,
                 admin: *admin,
@@ -706,11 +733,41 @@ impl OrderBookTest {
                 destination_account,
                 system_program: anchor_lang::solana_program::system_program::ID,
             })
-            .args(order_book::instruction::ConfigureDestination {
-                dest_chain_id,
-                is_supported,
-                finality_buffer,
+            .args(order_book::instruction::AddDestination { dest_chain_id })
+            .instruction()?;
+
+        Ok(ix)
+    }
+
+    fn create_remove_destination_ix(
+        &self,
+        admin: &Pubkey,
+        dest_chain_id: u32,
+    ) -> Result<Instruction, Box<dyn Error>> {
+        let global_account = self
+            .ctx
+            .svm
+            .get_pda(&[order_book::state::GLOBAL_SEED], &order_book::ID);
+        let destination_account = self.ctx.svm.get_pda(
+            &[
+                order_book::state::DESTINATION_SEED_PREFIX,
+                &dest_chain_id.to_be_bytes(),
+            ],
+            &order_book::ID,
+        );
+
+        let ix = self
+            .ctx
+            .program()
+            .accounts(order_book::accounts::RemoveDestination {
+                program: order_book::ID,
+                event_authority: self.get_event_authority()?,
+                admin: *admin,
+                global_account,
+                destination_account,
+                system_program: anchor_lang::solana_program::system_program::ID,
             })
+            .args(order_book::instruction::RemoveDestination { dest_chain_id })
             .instruction()?;
 
         Ok(ix)
@@ -736,7 +793,7 @@ impl OrderBookTest {
             .accounts(accounts)
             .args(order_book::instruction::FillNativeOrder {
                 order_id,
-                order_data,
+                order_data: Box::new(order_data),
                 fill_params: fill_params.clone(),
             })
             .instruction()?;
@@ -768,65 +825,97 @@ impl OrderBookTest {
         Ok(ix)
     }
 
-    fn create_request_cancel_ix(
+    fn create_cancel_native_order_ix(
         &self,
+        signer: &Pubkey,
         sender: &Pubkey,
         order_id: [u8; 32],
     ) -> Result<Instruction, Box<dyn Error>> {
-        let accounts = self.build_request_cancel_accounts(sender, order_id)?;
+        let accounts = self.build_cancel_native_order_accounts(signer, sender, order_id)?;
 
         let ix = self
             .ctx
             .program()
             .accounts(accounts)
-            .args(order_book::instruction::RequestCancelOrder { order_id })
+            .args(order_book::instruction::CancelNativeOrder { order_id })
             .instruction()?;
 
         Ok(ix)
     }
 
-    fn create_request_cancel_ix_with_custom_accounts(
+    fn create_cancel_native_order_ix_with_custom_accounts(
         &self,
-        accounts: order_book::accounts::RequestCancelOrder,
+        accounts: order_book::accounts::CancelNativeOrder,
         order_id: [u8; 32],
     ) -> Result<Instruction, Box<dyn Error>> {
         let ix = self
             .ctx
             .program()
             .accounts(accounts)
-            .args(order_book::instruction::RequestCancelOrder { order_id })
+            .args(order_book::instruction::CancelNativeOrder { order_id })
             .instruction()?;
 
         Ok(ix)
     }
 
-    fn create_claim_refund_ix(
+    fn create_cancel_foreign_order_ix(
         &self,
-        sender: &Pubkey,
-        order_id: [u8; 32],
+        signer: &Pubkey,
+        order_data: &OrderData,
     ) -> Result<Instruction, Box<dyn Error>> {
-        let accounts = self.build_claim_refund_accounts(sender, order_id)?;
+        let accounts = self.build_cancel_foreign_order_accounts(signer, order_data)?;
+        let order_id = order_data.compute_order_id();
 
         let ix = self
             .ctx
             .program()
             .accounts(accounts)
-            .args(order_book::instruction::ClaimRefund { order_id })
+            .args(order_book::instruction::CancelForeignOrder {
+                order_id,
+                order_data: order_data.clone(),
+            })
             .instruction()?;
 
         Ok(ix)
     }
 
-    fn create_claim_refund_ix_with_custom_accounts(
+    fn create_cancel_foreign_order_ix_with_custom_accounts(
         &self,
-        accounts: order_book::accounts::ClaimRefund,
+        accounts: order_book::accounts::CancelForeignOrder,
         order_id: [u8; 32],
+        order_data: OrderData,
     ) -> Result<Instruction, Box<dyn Error>> {
         let ix = self
             .ctx
             .program()
             .accounts(accounts)
-            .args(order_book::instruction::ClaimRefund { order_id })
+            .args(order_book::instruction::CancelForeignOrder {
+                order_id,
+                order_data,
+            })
+            .instruction()?;
+
+        Ok(ix)
+    }
+
+    fn create_report_cancel_ix(
+        &self,
+        relayer: &Pubkey,
+        portal_authority: &Pubkey,
+        source_chain_id: u32,
+        cancel_report: &order_book::instructions::CancelReport,
+    ) -> Result<Instruction, Box<dyn Error>> {
+        let accounts =
+            self.build_report_cancel_accounts(relayer, portal_authority, cancel_report)?;
+
+        let ix = self
+            .ctx
+            .program()
+            .accounts(accounts)
+            .args(order_book::instruction::ReportOrderCancel {
+                source_chain_id,
+                cancel_report: cancel_report.clone(),
+            })
             .instruction()?;
 
         Ok(ix)
@@ -835,17 +924,18 @@ impl OrderBookTest {
     fn create_report_fill_ix(
         &self,
         relayer: &Pubkey,
-        messenger_authority: &Pubkey,
+        portal_authority: &Pubkey,
+        source_chain_id: u32,
         fill_report: &order_book::instructions::FillReport,
     ) -> Result<Instruction, Box<dyn Error>> {
-        let accounts =
-            self.build_report_fill_accounts(relayer, messenger_authority, fill_report)?;
+        let accounts = self.build_report_fill_accounts(relayer, portal_authority, fill_report)?;
 
         let ix = self
             .ctx
             .program()
             .accounts(accounts)
             .args(order_book::instruction::ReportOrderFill {
+                source_chain_id,
                 fill_report: fill_report.clone(),
             })
             .instruction()?;
@@ -873,28 +963,32 @@ impl OrderBookTest {
             order_params,
         )?;
 
-        self.ctx.execute_instruction(ix, &[sender_keypair])?
+        self.ctx
+            .execute_instruction(ix, &[sender_keypair])?
             .assert_success();
 
         Ok(order_id)
     }
 
-    fn configure_destination(
-        &mut self,
-        dest_chain_id: u32,
-        is_supported: bool,
-        finality_buffer: Option<u64>,
-    ) -> Result<(), Box<dyn Error>> {
+    fn add_destination(&mut self, dest_chain_id: u32) -> Result<(), Box<dyn Error>> {
         let admin_keypair = self.users.get("admin").unwrap();
 
-        let ix = self.create_configure_destination_ix(
-            &admin_keypair.pubkey(),
-            dest_chain_id,
-            is_supported,
-            finality_buffer,
-        )?;
+        let ix = self.create_add_destination_ix(&admin_keypair.pubkey(), dest_chain_id)?;
 
-        self.ctx.execute_instruction(ix, &[admin_keypair])?
+        self.ctx
+            .execute_instruction(ix, &[admin_keypair])?
+            .assert_success();
+
+        Ok(())
+    }
+
+    fn remove_destination(&mut self, dest_chain_id: u32) -> Result<(), Box<dyn Error>> {
+        let admin_keypair = self.users.get("admin").unwrap();
+
+        let ix = self.create_remove_destination_ix(&admin_keypair.pubkey(), dest_chain_id)?;
+
+        self.ctx
+            .execute_instruction(ix, &[admin_keypair])?
             .assert_success();
 
         Ok(())
@@ -916,7 +1010,8 @@ impl OrderBookTest {
         let ix =
             self.create_fill_native_order_ix(&solver_keypair.pubkey(), order_id, &fill_params)?;
 
-        self.ctx.execute_instruction(ix, &[solver_keypair])?
+        self.ctx
+            .execute_instruction(ix, &[solver_keypair])?
             .assert_success();
 
         Ok(())
@@ -938,7 +1033,8 @@ impl OrderBookTest {
         let ix =
             self.create_fill_foreign_order_ix(&solver_keypair.pubkey(), order_data, &fill_params)?;
 
-        self.ctx.execute_instruction(ix, &[solver_keypair])?
+        self.ctx
+            .execute_instruction(ix, &[solver_keypair])?
             .assert_success();
 
         Ok(())
@@ -947,43 +1043,165 @@ impl OrderBookTest {
     fn report_fill(
         &mut self,
         relayer: &str,
+        source_chain_id: u32,
         fill_report: &order_book::instructions::FillReport,
     ) -> Result<(), Box<dyn Error>> {
         let relayer_keypair = self.users.get(relayer).unwrap();
-        let messenger_authority = self.users.get("messenger_authority").unwrap();
+        let portal_authority = self.users.get("portal_authority").unwrap();
 
         let ix = self.create_report_fill_ix(
             &relayer_keypair.pubkey(),
-            &messenger_authority.pubkey(),
+            &portal_authority.pubkey(),
+            source_chain_id,
             fill_report,
         )?;
 
         self.ctx
-            .execute_instruction(ix, &[relayer_keypair, messenger_authority])?
+            .execute_instruction(ix, &[relayer_keypair, portal_authority])?
             .assert_success();
         Ok(())
     }
 
-    fn request_cancel(&mut self, sender: &str, order_id: [u8; 32]) -> Result<(), Box<dyn Error>> {
+    fn cancel_native_order(
+        &mut self,
+        signer: &str,
+        sender: &str,
+        order_id: [u8; 32],
+    ) -> Result<(), Box<dyn Error>> {
+        let signer_keypair = self.users.get(signer).unwrap();
         let sender_keypair = self.users.get(sender).unwrap();
 
-        let ix = self.create_request_cancel_ix(&sender_keypair.pubkey(), order_id)?;
+        let ix = self.create_cancel_native_order_ix(
+            &signer_keypair.pubkey(),
+            &sender_keypair.pubkey(),
+            order_id,
+        )?;
 
-        self.ctx.execute_instruction(ix, &[sender_keypair])?
+        self.ctx
+            .execute_instruction(ix, &[signer_keypair])?
             .assert_success();
 
         Ok(())
     }
 
-    fn claim_refund(&mut self, sender: &str, order_id: [u8; 32]) -> Result<(), Box<dyn Error>> {
-        let sender_keypair = self.users.get(sender).unwrap();
+    fn cancel_foreign_order(
+        &mut self,
+        signer: &str,
+        order_data: &OrderData,
+    ) -> Result<(), Box<dyn Error>> {
+        let signer_keypair = self.users.get(signer).unwrap();
 
-        let ix = self.create_claim_refund_ix(&sender_keypair.pubkey(), order_id)?;
+        let ix = self.create_cancel_foreign_order_ix(&signer_keypair.pubkey(), order_data)?;
 
-        self.ctx.execute_instruction(ix, &[sender_keypair])?
+        self.ctx
+            .execute_instruction(ix, &[signer_keypair])?
             .assert_success();
 
         Ok(())
+    }
+
+    fn report_cancel(
+        &mut self,
+        relayer: &str,
+        source_chain_id: u32,
+        cancel_report: &order_book::instructions::CancelReport,
+    ) -> Result<(), Box<dyn Error>> {
+        let relayer_keypair = self.users.get(relayer).unwrap();
+        let portal_authority = self.users.get("portal_authority").unwrap();
+
+        let ix = self.create_report_cancel_ix(
+            &relayer_keypair.pubkey(),
+            &portal_authority.pubkey(),
+            source_chain_id,
+            cancel_report,
+        )?;
+
+        self.ctx
+            .execute_instruction(ix, &[relayer_keypair, portal_authority])?
+            .assert_success();
+
+        Ok(())
+    }
+
+    fn create_close_order_token_account_ix(
+        &self,
+        payer: &Pubkey,
+        order_id: [u8; 32],
+    ) -> Result<Instruction, Box<dyn Error>> {
+        let (order_account, native_order_data) = self.get_native_order_account(&order_id)?;
+        let token_in_mint = native_order_data.data.token_in;
+        let order_token_in_ata = get_associated_token_address(&order_account, &token_in_mint);
+        let sender_token_ata =
+            get_associated_token_address(&native_order_data.data.sender, &token_in_mint);
+
+        let ix = self
+            .ctx
+            .program()
+            .accounts(order_book::accounts::CloseOrderTokenAccount {
+                sender: native_order_data.data.sender.into(),
+                payer: *payer,
+                order: order_account,
+                token_in_mint,
+                recipient_token_account: Some(sender_token_ata),
+                order_token_in_ata,
+                token_in_program: anchor_spl::token::ID,
+            })
+            .args(order_book::instruction::CloseOrderTokenAccount { order_id })
+            .instruction()?;
+
+        Ok(ix)
+    }
+
+    fn close_order_token_account(
+        &mut self,
+        payer_name: &str,
+        order_id: [u8; 32],
+    ) -> Result<(), Box<dyn Error>> {
+        let payer = self.get_user(payer_name);
+        let ix = self.create_close_order_token_account_ix(&payer.pubkey(), order_id)?;
+
+        self.ctx
+            .execute_instruction(ix, &[&payer])?
+            .assert_success();
+
+        Ok(())
+    }
+
+    /// Create close instruction with custom payer/sender (for testing validation errors)
+    fn create_close_order_token_account_ix_custom(
+        &self,
+        payer: &Pubkey,
+        sender: &Pubkey,
+        order_id: [u8; 32],
+        include_recipient: bool,
+    ) -> Result<Instruction, Box<dyn Error>> {
+        let (order_account, native_order_data) = self.get_native_order_account(&order_id)?;
+        let token_in_mint = native_order_data.data.token_in;
+        let order_token_in_ata = get_associated_token_address(&order_account, &token_in_mint);
+        let sender_token_ata = get_associated_token_address(sender, &token_in_mint);
+
+        let recipient_token_account = if include_recipient {
+            Some(sender_token_ata)
+        } else {
+            None
+        };
+
+        let ix = self
+            .ctx
+            .program()
+            .accounts(order_book::accounts::CloseOrderTokenAccount {
+                sender: *sender,
+                payer: *payer,
+                order: order_account,
+                token_in_mint,
+                recipient_token_account,
+                order_token_in_ata,
+                token_in_program: anchor_spl::token::ID,
+            })
+            .args(order_book::instruction::CloseOrderTokenAccount { order_id })
+            .instruction()?;
+
+        Ok(ix)
     }
 
     // Convenience functions for common test actions can go here
@@ -998,5 +1216,92 @@ impl OrderBookTest {
     fn current_time(&self) -> u64 {
         let clock = self.ctx.svm.get_sysvar::<anchor_lang::prelude::Clock>();
         clock.unix_timestamp as u64
+    }
+
+    // Pause/unpause helpers
+
+    fn create_pause_ix(&self, admin: &Pubkey) -> Result<Instruction, Box<dyn Error>> {
+        let global_account = self
+            .ctx
+            .svm
+            .get_pda(&[order_book::state::GLOBAL_SEED], &order_book::ID);
+
+        let ix = self
+            .ctx
+            .program()
+            .accounts(order_book::accounts::AdminInstruction {
+                admin: *admin,
+                global_account,
+            })
+            .args(order_book::instruction::Pause {})
+            .instruction()?;
+
+        Ok(ix)
+    }
+
+    fn create_unpause_ix(&self, admin: &Pubkey) -> Result<Instruction, Box<dyn Error>> {
+        let global_account = self
+            .ctx
+            .svm
+            .get_pda(&[order_book::state::GLOBAL_SEED], &order_book::ID);
+
+        let ix = self
+            .ctx
+            .program()
+            .accounts(order_book::accounts::AdminInstruction {
+                admin: *admin,
+                global_account,
+            })
+            .args(order_book::instruction::Unpause {})
+            .instruction()?;
+
+        Ok(ix)
+    }
+
+    fn create_set_portal_authority_ix(
+        &self,
+        admin: &Pubkey,
+        portal_authority: &Pubkey,
+    ) -> Result<Instruction, Box<dyn Error>> {
+        let global_account = self
+            .ctx
+            .svm
+            .get_pda(&[order_book::state::GLOBAL_SEED], &order_book::ID);
+
+        let ix = self
+            .ctx
+            .program()
+            .accounts(order_book::accounts::AdminInstruction {
+                admin: *admin,
+                global_account,
+            })
+            .args(order_book::instruction::SetPortalAuthority {
+                portal_authority: *portal_authority,
+            })
+            .instruction()?;
+
+        Ok(ix)
+    }
+
+    fn pause(&mut self) -> Result<(), Box<dyn Error>> {
+        let admin_keypair = self.users.get("admin").unwrap();
+        let ix = self.create_pause_ix(&admin_keypair.pubkey())?;
+
+        self.ctx
+            .execute_instruction(ix, &[admin_keypair])?
+            .assert_success();
+
+        Ok(())
+    }
+
+    fn unpause(&mut self) -> Result<(), Box<dyn Error>> {
+        let admin_keypair = self.users.get("admin").unwrap();
+        let ix = self.create_unpause_ix(&admin_keypair.pubkey())?;
+
+        self.ctx
+            .execute_instruction(ix, &[admin_keypair])?
+            .assert_success();
+
+        Ok(())
     }
 }

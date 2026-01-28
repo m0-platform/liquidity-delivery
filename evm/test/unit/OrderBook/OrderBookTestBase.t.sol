@@ -1,22 +1,24 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { Test } from "../../../lib/forge-std/src/Test.sol";
 import { ERC1967Proxy } from "../../../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { TypeConverter } from "../../../lib/common/src/libs/TypeConverter.sol";
+import { UIntMath } from "../../../lib/common/src/libs/UIntMath.sol";
 
 import { OrderBook, IOrderBook } from "../../../src/OrderBook.sol";
-import { MockMessenger } from "../../mock/MockMessenger.t.sol";
+import { MockPortalV2 } from "../../mock/MockPortalV2.t.sol";
 import { MockERC20 } from "../../mock/MockERC20.t.sol";
 
 abstract contract OrderBookTestBase is Test {
     using TypeConverter for *;
+    using UIntMath for uint256;
 
     OrderBook internal orderBook;
-    MockMessenger internal messenger;
+    MockPortalV2 internal portal;
 
     uint16 internal constant VERSION = 1;
-    uint32 internal constant CHAIN_ID = 1;
+    uint32 internal CHAIN_ID = block.chainid.safe32();
     uint32 internal constant DEST_CHAIN_ID = 2;
     uint256 internal constant MINT_AMOUNT = 1000;
     uint128 internal constant AMOUNT_IN = 100;
@@ -33,6 +35,7 @@ abstract contract OrderBookTestBase is Test {
     string[] internal USERS;
 
     address internal admin;
+    address internal pauser;
     MockERC20 internal tokenIn;
     MockERC20 internal tokenOut;
     mapping(string => MockERC20) internal tokens;
@@ -49,6 +52,7 @@ abstract contract OrderBookTestBase is Test {
 
         // Insert users to be created
         USERS.push("admin");
+        USERS.push("pauser");
         USERS.push("solver");
         USERS.push("alice");
         USERS.push("bob");
@@ -81,18 +85,20 @@ abstract contract OrderBookTestBase is Test {
         }
 
         // Deploy
-        messenger = new MockMessenger();
+        portal = new MockPortalV2();
         admin = users["admin"];
-        vm.deal(admin, 1 ether);
-        address implementation = address(new OrderBook(CHAIN_ID, address(messenger)));
+        pauser = users["pauser"];
+        address implementation = address(new OrderBook(address(portal)));
         orderBook = OrderBook(
-            address(new ERC1967Proxy(implementation, abi.encodeWithSelector(OrderBook.initialize.selector, admin)))
+            address(
+                new ERC1967Proxy(implementation, abi.encodeWithSelector(OrderBook.initialize.selector, admin, pauser))
+            )
         );
 
         // Configure
-        messenger.setOrderBook(address(orderBook));
+        portal.setOrderBook(address(orderBook));
         vm.prank(admin);
-        orderBook.setDestinationConfig(DEST_CHAIN_ID, true, uint32(10 minutes));
+        orderBook.setDestinationSupported(DEST_CHAIN_ID, true);
 
         // Setup the standard order params used in tests
         params = IOrderBook.OrderParams({
@@ -124,6 +130,7 @@ abstract contract OrderBookTestBase is Test {
                     sender: sender_.toBytes32(),
                     nonce: nonce_,
                     destChainId: params_.destChainId,
+                    createdAt: uint64(block.timestamp),
                     fillDeadline: params_.fillDeadline,
                     amountIn: params_.amountIn,
                     amountOut: params_.amountOut,
@@ -158,21 +165,12 @@ abstract contract OrderBookTestBase is Test {
 
         orderBook.fillOrder(
             orderId_,
-            IOrderBook.OrderData({
-                version: order.version,
-                originChainId: CHAIN_ID,
-                sender: order.sender.toBytes32(),
-                nonce: order.nonce,
-                destChainId: order.destChainId,
-                fillDeadline: order.fillDeadline,
-                amountIn: order.amountIn,
-                amountOut: order.amountOut,
-                tokenIn: order.tokenIn.toBytes32(),
-                tokenOut: order.tokenOut,
-                recipient: order.recipient,
-                solver: order.solver
-            }),
-            IOrderBook.FillParams({ amountOutToFill: fillAmount_, originRecipient: order.solver })
+            _getOrderDataFromOrder(orderId_, order),
+            IOrderBook.FillParams({
+                amountOutToFill: fillAmount_,
+                originRecipient: solver_.toBytes32(),
+                refundAddress: bytes32(0)
+            })
         );
     }
 
@@ -183,14 +181,60 @@ abstract contract OrderBookTestBase is Test {
         uint128 amountInToRelease_
     ) internal {
         // Report the fill back to the origin chain
-        vm.prank(address(messenger));
+        vm.prank(address(portal));
         orderBook.reportFill(
+            DEST_CHAIN_ID,
             IOrderBook.FillReport({
                 orderId: orderId_,
                 amountOutFilled: amountOutFilled_,
                 amountInToRelease: amountInToRelease_,
                 originRecipient: solver_.toBytes32(),
                 tokenIn: address(tokenIn).toBytes32()
+            })
+        );
+    }
+
+    function _getOrderDataFromOrder(
+        bytes32 orderId_,
+        IOrderBook.Order memory order_
+    ) internal view returns (IOrderBook.OrderData memory) {
+        return
+            IOrderBook.OrderData({
+                version: order_.version,
+                originChainId: CHAIN_ID,
+                sender: order_.sender.toBytes32(),
+                nonce: order_.nonce,
+                destChainId: order_.destChainId,
+                createdAt: uint64(order_.createdAt),
+                fillDeadline: uint64(order_.fillDeadline),
+                amountIn: order_.amountIn,
+                amountOut: order_.amountOut,
+                tokenIn: order_.tokenIn.toBytes32(),
+                tokenOut: order_.tokenOut,
+                recipient: order_.recipient,
+                solver: order_.solver
+            });
+    }
+
+    function _cancelOrder(address caller_, bytes32 orderId_, IOrderBook.Order memory order_) internal {
+        vm.prank(caller_);
+        orderBook.cancelOrder(orderId_, _getOrderDataFromOrder(orderId_, order_), new bytes(0));
+    }
+
+    function _reportCancel(
+        bytes32 orderId_,
+        address orderSender_,
+        address tokenIn_,
+        uint128 amountInToRefund_
+    ) internal {
+        vm.prank(address(portal));
+        orderBook.reportCancel(
+            DEST_CHAIN_ID,
+            IOrderBook.CancelReport({
+                orderId: orderId_,
+                orderSender: orderSender_.toBytes32(),
+                tokenIn: tokenIn_.toBytes32(),
+                amountInToRefund: amountInToRefund_
             })
         );
     }
