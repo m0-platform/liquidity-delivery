@@ -32,7 +32,7 @@ contract ScriptBase is Script {
         return string.concat(parentNode_, key_);
     }
     
-    /// @notice Serialize the upgrade information to the deployment file
+    /// @notice Serialize the upgrade information to the deployment file (or console in dry-run mode)
     function _serializeDeployment (
         uint256 chainId_,
         address proxy_,
@@ -44,7 +44,14 @@ contract ScriptBase is Script {
         root_.serialize("orderBook", proxy_);
         root_.serialize("proxyAdmin", proxyAdmin_);
         string memory output = root_.serialize("upgradedAt", block.timestamp);
-        vm.writeJson(output, _deployOutputPath(chainId_));
+
+        if (vm.envOr("DRY_RUN", false)) {
+            console2.log("\n=== DRY RUN - Deployment JSON (not written to file) ===");
+            console2.log(output);
+            console2.log("=== End Deployment JSON ===\n");
+        } else {
+            vm.writeJson(output, _deployOutputPath(chainId_));
+        }
     }
 
     /// @notice Get the ProxyAdmin address from the proxy's ERC-1967 admin slot
