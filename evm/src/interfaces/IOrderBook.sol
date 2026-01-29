@@ -642,6 +642,15 @@ interface IOrderBook {
     function getOrder(bytes32 orderId_) external view returns (Order memory);
 
     /**
+     * @notice Returns the OrderData for a local order (i.e. one that originated on this chain)
+     * @dev The order must have originated on this chain or the information will not be available
+     *      This is a convenience function for solvers to get the OrderData needed to fill an order
+     * @param orderId_ The ID of the order to get data for
+     * @return orderData_ The OrderData struct containing all order information needed to fill
+     */
+    function getOrderData(bytes32 orderId_) external view returns (OrderData memory orderData_);
+
+    /**
      * @notice Returns the amount out filled and amount in released for an order with this chain as the destination
      * @dev The order must be settled on this chain or the information will not be available
      */
