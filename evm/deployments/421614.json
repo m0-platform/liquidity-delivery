@@ -1,6 +1,6 @@
 {
+  "implementation": "0x4B0913562da0f12CDBb45b394B820282bb138489",
   "orderBook": "0xe39B012AB3b20E94a9beEa557eB0DE4171D4D3E4",
-  "implementation": "0xD9D1Cfa884D72Fb654e5bB2dD4884F7324B1FCD0",
   "proxyAdmin": "0xcE59404053AB3056F96588eD04aE59fB8bD70abC",
-  "updatedAt": 1769640540
+  "upgradedAt": 1769707161
 }
