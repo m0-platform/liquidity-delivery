@@ -38,8 +38,8 @@ chains:
     chain: Sepolia
     rpc_url: https://eth-sepolia.g.alchemy.com/v2/w-r8VabcoQMvw_Sp-krrirztyoLSc2sS
     ws_url: wss://eth-sepolia.g.alchemy.com/v2/w-r8VabcoQMvw_Sp-krrirztyoLSc2sS
-    order_book_address: "0xYOUR_ORDER_BOOK_ADDRESS"
-    enabled: false
+    order_book_address: "0xe39B012AB3b20E94a9beEa557eB0DE4171D4D3E4"
+    enabled: true
 
   # Solana Devnet
   - chain_id: 1399811150
@@ -48,3 +48,10 @@ chains:
     ws_url: wss://devnet.helius-rpc.com/?api-key=c5cd4e3c-bba3-47ce-bec8-74a82995a1c1
     order_book_address: "MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK"
     enabled: true
+
+  # Arbitrum Sepolia Testnet
+  - chain_id: 421614
+    enabled: true
+    rpc_url: https://arb-sepolia.g.alchemy.com/v2/w-r8VabcoQMvw_Sp-krrirztyoLSc2sS
+    ws_url: wss://arb-sepolia.g.alchemy.com/v2/w-r8VabcoQMvw_Sp-krrirztyoLSc2sS
+    order_book_address: "0xe39B012AB3b20E94a9beEa557eB0DE4171D4D3E4"

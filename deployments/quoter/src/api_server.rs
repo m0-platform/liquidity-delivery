@@ -98,7 +98,8 @@ async fn handle_quote_request(
                         Ok(result) => {
                             quote.evm_transaction = Some(result.transaction);
                             quote.approval_transaction = result.approval_transaction;
-                            quote.order_id = Some(result.order_id);
+                            // order_id is None for EVM - frontend must get it from tx logs
+                            quote.order_id = result.order_id;
                             quote.nonce = Some(result.nonce);
                             quote.orderbook_address = Some(chain.order_book_address.clone());
                         }

@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity 0.8.26;
+pragma solidity 0.8.33;
 
 import { Script } from "../../lib/forge-std/src/Script.sol";
 import { console } from "../../lib/forge-std/src/console.sol";
 import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
+import { TransparentUpgradeableProxy } from "../../lib/common/lib/openzeppelin-contracts-upgradeable/lib/openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 import { OrderBook } from "../../src/OrderBook.sol";
 import { MockERC20 } from "../../test/mock/MockERC20.t.sol";
-import { MockMessenger } from "../../test/mock/MockMessenger.t.sol";
+import { MockPortalV2 } from "../../test/mock/MockPortalV2.t.sol";
 
 /**
  * @title DeployLocal
@@ -43,22 +44,30 @@ contract DeployLocal is Script {
         // Deployer address (Anvil account 0)
         address deployer = vm.addr(ANVIL_PRIVATE_KEY);
 
-        // Deploy MockMessenger with CREATE2 for deterministic address
-        MockMessenger messenger = new MockMessenger{salt: MESSENGER_SALT}();
-        console.log("MockMessenger deployed at:", address(messenger));
+        // Deploy MockPortalV2 with CREATE2 for deterministic address
+        MockPortalV2 messenger = new MockPortalV2{salt: MESSENGER_SALT}();
+        console.log("MockPortalV2 deployed at:", address(messenger));
 
-        // Deploy OrderBook with messenger address
-        OrderBook orderBook = new OrderBook(chainId, address(messenger));
+        // Deploy OrderBook implementation
+        OrderBook orderBookImpl = new OrderBook(address(messenger));
+        console.log("OrderBook implementation deployed at:", address(orderBookImpl));
 
-        // Initialize with deployer as admin first so we can configure
-        orderBook.initialize(deployer);
+        // Deploy TransparentUpgradeableProxy with initialize call
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
+            address(orderBookImpl),
+            deployer, // proxy admin
+            abi.encodeWithSelector(OrderBook.initialize.selector, deployer, deployer)
+        );
 
-        // Configure MockMessenger to point to OrderBook
+        // Cast proxy to OrderBook for interaction
+        OrderBook orderBook = OrderBook(address(proxy));
+
+        // Configure MockMessenger to point to OrderBook proxy
         messenger.setOrderBook(address(orderBook));
 
         // Configure all destination chains (before transferring admin)
         for (uint256 i = 0; i < destChainIds.length; i++) {
-            orderBook.setDestinationConfig(destChainIds[i], true, 10);
+            orderBook.setDestinationSupported(destChainIds[i], true);
             console.log("Configured destination chain:", destChainIds[i]);
         }
 
@@ -143,7 +152,7 @@ contract DeployLocal is Script {
     function computeAddresses() external view {
         address deployer = vm.addr(ANVIL_PRIVATE_KEY);
 
-        bytes memory messengerBytecode = type(MockMessenger).creationCode;
+        bytes memory messengerBytecode = type(MockPortalV2).creationCode;
         bytes memory usdcBytecode = abi.encodePacked(
             type(MockERC20).creationCode,
             abi.encode("USD Coin", "USDC", uint8(6))
@@ -158,7 +167,7 @@ contract DeployLocal is Script {
         address usdtAddress = Create2.computeAddress(USDT_SALT, keccak256(usdtBytecode), deployer);
 
         console.log("Deployer:", deployer);
-        console.log("MockMessenger will be deployed at:", messengerAddress);
+        console.log("MockPortalV2 will be deployed at:", messengerAddress);
         console.log("USDC will be deployed at:", usdcAddress);
         console.log("USDT will be deployed at:", usdtAddress);
     }

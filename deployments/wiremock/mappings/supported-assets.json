@@ -15,7 +15,7 @@
       {
         "chain": "Ethereum",
         "chainId": 1,
-        "address": "0x63d5B14C052fFd52596246a49b43Ce3bE114C994",
+        "address": "0xbFfe29Ab275E191e1B9AaB937c824E1848473142",
         "symbol": "USDC",
         "icon": "https://cryptologos.cc/logos/usd-coin-usdc-logo.svg",
         "name": "USD Coin",
@@ -26,7 +26,7 @@
       {
         "chain": "Ethereum",
         "chainId": 1,
-        "address": "0xF6d8b261781Db63dD04Ec127A3F336310589170b",
+        "address": "0x7D50d4186086beB2B535Ae3b52Cc16fA4c3f17f7",
         "symbol": "wM",
         "icon": "https://green-obedient-albatross-155.mypinata.cloud/ipfs/bafkreickomstkfveoq5kmyvapoj6qfa3eja7sn2qoukziuqlsov4texx54",
         "name": "wM by M0",
@@ -37,7 +37,7 @@
       {
         "chain": "Base",
         "chainId": 8453,
-        "address": "0x63d5B14C052fFd52596246a49b43Ce3bE114C994",
+        "address": "0xbFfe29Ab275E191e1B9AaB937c824E1848473142",
         "symbol": "USDC",
         "icon": "https://cryptologos.cc/logos/usd-coin-usdc-logo.svg",
         "name": "USD Coin",
@@ -48,7 +48,7 @@
       {
         "chain": "Base",
         "chainId": 8453,
-        "address": "0xF6d8b261781Db63dD04Ec127A3F336310589170b",
+        "address": "0x7D50d4186086beB2B535Ae3b52Cc16fA4c3f17f7",
         "symbol": "wM",
         "icon": "https://green-obedient-albatross-155.mypinata.cloud/ipfs/bafkreickomstkfveoq5kmyvapoj6qfa3eja7sn2qoukziuqlsov4texx54",
         "name": "wM by M0",

@@ -1,5 +1,5 @@
 import { getOrdersUrl, NetworkType } from "@/config/network";
-import { computed, MaybeRef, ref, toValue } from "vue";
+import { computed, MaybeRef, ref, toValue, watch } from "vue";
 
 export interface SolverBalance {
   chain: string;
@@ -57,6 +57,17 @@ export function useSolverBalances(networkRef: MaybeRef<NetworkType>) {
 
   // Calculate total USD value (placeholder - would need price feeds)
   const totalCount = computed(() => balances.value.length);
+
+  // Fetch balances when network changes (and on initial mount via immediate: true)
+  watch(
+    () => toValue(networkRef),
+    () => {
+      // Clear stale balances from previous network
+      balances.value = [];
+      fetchBalances();
+    },
+    { immediate: true },
+  );
 
   return {
     balances,

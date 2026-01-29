@@ -4220,6 +4220,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "m0-portal-common"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f07f55ba3f8375daa4c8cc60c21fd863da2f0cba91055978630ec3c0fd45d6dd"
+dependencies = [
+ "anchor-client",
+ "anchor-lang",
+ "anchor-spl",
+ "borsh 0.10.4",
+ "hex",
+ "m0-portal-common-macros",
+ "reqwest 0.12.24",
+ "serde",
+ "serde_json",
+ "spl-token-2022 7.0.0",
+]
+
+[[package]]
+name = "m0-portal-common-macros"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f008023fccf2aa47c434a9d02f3209299d315bee29aef60f8fe2273b4b051fb0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
+]
+
+[[package]]
 name = "macro-string"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5157,6 +5186,7 @@ name = "quoter"
 version = "0.1.0"
 dependencies = [
  "alloy",
+ "anchor-lang",
  "axum",
  "base64 0.22.1",
  "bincode",
@@ -5165,6 +5195,7 @@ dependencies = [
  "chrono",
  "futures-util",
  "hex",
+ "order_book",
  "prost",
  "serde",
  "serde_json",
@@ -5453,6 +5484,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "encoding_rs",
+ "futures-channel",
  "futures-core",
  "futures-util",
  "h2 0.4.13",
@@ -10273,6 +10305,7 @@ dependencies = [
  "governor",
  "hex",
  "m0-liquidity-sdk",
+ "m0-portal-common",
  "mockito",
  "nanoid",
  "order_book",

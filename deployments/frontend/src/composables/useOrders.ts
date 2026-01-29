@@ -1,5 +1,5 @@
 import { getOrdersUrl, NetworkType } from "@/config/network";
-import { computed, MaybeRef, ref, toValue } from "vue";
+import { computed, MaybeRef, ref, toValue, watch } from "vue";
 
 export interface TransactionRecord {
   transaction_hash: string;
@@ -70,6 +70,17 @@ export function useOrders(networkRef: MaybeRef<NetworkType>) {
       (order) => order.sender.toLowerCase() === sender.toLowerCase(),
     );
   }
+
+  // Fetch orders when network changes (and on initial mount via immediate: true)
+  watch(
+    () => toValue(networkRef),
+    () => {
+      // Clear stale orders from previous network to prevent chain ID mismatches
+      orders.value = [];
+      fetchOrders();
+    },
+    { immediate: true },
+  );
 
   return {
     orders,

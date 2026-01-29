@@ -366,8 +366,8 @@ function setMaxFromBalance() {
 
 // Handle swap execution
 async function handleSwap() {
-  if (!quote.value || !quote.value.orderId) {
-    console.error('No quote or order ID available')
+  if (!quote.value ) {
+    console.error('No quote available')
     return
   }
 
@@ -384,7 +384,8 @@ async function handleSwap() {
       evmTransaction: quote.value.evmTransaction,
       approvalTransaction: quote.value.approvalTransaction,
       svmTransaction: quote.value.svmTransaction,
-      orderId: quote.value.orderId,
+      // orderId may be undefined for EVM (extracted from tx logs instead)
+      orderId: quote.value.orderId ?? '',
       svmRpcUrl: srcChain.rpc,
       localEvmSigner: props.evmSigner,
       localSvmKeypair: props.svmKeypair,

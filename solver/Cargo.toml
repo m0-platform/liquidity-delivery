@@ -14,6 +14,7 @@ slog-term = "2.9"
 slog-async = "2.8"
 chrono = "0.4"
 m0-liquidity-sdk = "0.0.5"
+m0-portal-common = {version = "0.1.2", features = ["executor"]}
 order_book = { version = "0.1.0", path = "../svm/programs/order_book", features = ["no-entrypoint"] }
 hex = "0.4.3"
 dotenvy = "0.15"
@@ -29,7 +30,7 @@ alloy = { version = "1.0.38", features = [
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 futures-util = "0.3"
-anchor-client = { version = "0.31.1", features = ["async"] }
+anchor-client = { workspace = true, features = ["async"] }
 spl-token = "8.0.0"
 spl-associated-token-account = { version = "7.0.0", features = ["no-entrypoint"] }
 governor = "0.6"
@@ -37,8 +38,8 @@ nanoid = "0.4"
 tonic = "0.12"
 prost = "0.13"
 tokio-stream = "0.1"
-solana-client = "2.2.4"
-solana-transaction-status-client-types = "2.2.4"
+solana-client.workspace = true
+solana-transaction-status-client-types.workspace = true
 axum = "0.7"
 tower-http = { version = "0.6", features = ["cors"] }
 serde_yaml = "0.9.34"
@@ -54,5 +55,5 @@ regex = "1.11"
 reqwest = { version = "0.12.23", features = ["json"] }
 quoter = { path = "../deployments/quoter" }
 portpicker = "0.1"
-anchor-spl = "0.31.1"
+anchor-spl.workspace = true
 async-stream = "0.3"

@@ -6,8 +6,14 @@ chains:
     enabled: false
     rpc_url: https://eth-sepolia.g.alchemy.com/v2/w-r8VabcoQMvw_Sp-krrirztyoLSc2sS
     ws_url: wss://eth-sepolia.g.alchemy.com/v2/w-r8VabcoQMvw_Sp-krrirztyoLSc2sS
-    order_book_address: "0xYOUR_ORDER_BOOK_ADDRESS"
-    starting_block: 10078462
+    order_book_address: "0xe39B012AB3b20E94a9beEa557eB0DE4171D4D3E4"
+
+  # Arbitrum Sepolia Testnet
+  - chain_id: 421614
+    enabled: false
+    rpc_url: https://arb-sepolia.g.alchemy.com/v2/w-r8VabcoQMvw_Sp-krrirztyoLSc2sS
+    ws_url: wss://arb-sepolia.g.alchemy.com/v2/w-r8VabcoQMvw_Sp-krrirztyoLSc2sS
+    order_book_address: "0xe39B012AB3b20E94a9beEa557eB0DE4171D4D3E4"
 
   # Solana Devnet
   - chain_id: 1399811150
@@ -15,5 +21,4 @@ chains:
     rpc_url: https://devnet.helius-rpc.com/?api-key=c5cd4e3c-bba3-47ce-bec8-74a82995a1c1
     ws_url: wss://devnet.helius-rpc.com/?api-key=c5cd4e3c-bba3-47ce-bec8-74a82995a1c1
     order_book_address: "MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK"
-    starting_block: 0
     chain_type: svm

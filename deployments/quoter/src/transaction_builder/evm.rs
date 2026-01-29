@@ -5,7 +5,6 @@ use alloy::sol_types::SolCall;
 use std::str::FromStr;
 
 use super::error::TransactionBuilderError;
-use super::order_id::OrderData;
 use super::{EvmTransactionResult, OpenOrderInput};
 use crate::models::EvmTransaction;
 
@@ -39,6 +38,7 @@ sol! {
 pub struct EvmTransactionBuilder {
     rpc_url: String,
     contract_address: Address,
+    #[allow(dead_code)]
     chain_id: u32,
 }
 
@@ -138,8 +138,6 @@ impl EvmTransactionBuilder {
         // Parse addresses
         let token_in = Address::from_str(&input.token_in)
             .map_err(|e| TransactionBuilderError::InvalidAddress(e.to_string()))?;
-        let sender = Address::from_str(&input.sender_address)
-            .map_err(|e| TransactionBuilderError::InvalidAddress(e.to_string()))?;
 
         // Parse token_out as bytes32 (could be Solana address or EVM address)
         let token_out = parse_bytes32(&input.token_out)?;
@@ -180,30 +178,9 @@ impl EvmTransactionBuilder {
         }
         .abi_encode();
 
-        // Convert sender address to bytes32 (left-padded)
-        let mut sender_bytes32 = [0u8; 32];
-        sender_bytes32[12..].copy_from_slice(sender.as_slice());
-
-        // Convert token_in to bytes32 (left-padded)
-        let mut token_in_bytes32 = [0u8; 32];
-        token_in_bytes32[12..].copy_from_slice(token_in.as_slice());
-
-        // Compute order ID
-        let order_data = OrderData {
-            version: 1, // VERSION constant
-            sender: sender_bytes32,
-            nonce,
-            origin_chain_id: self.chain_id,
-            dest_chain_id: input.dest_chain_id,
-            fill_deadline: input.fill_deadline,
-            token_in: token_in_bytes32,
-            token_out: token_out.0,
-            amount_in: input.amount_in as u128,
-            amount_out: input.amount_out,
-            recipient: input.recipient,
-            solver: input.solver,
-        };
-        let order_id = order_data.compute_order_id();
+        // Note: Order ID cannot be predicted for EVM because the contract uses block.timestamp
+        // for created_at, which is only known at transaction inclusion time.
+        // The frontend must extract the actual order ID from the OrderOpened event logs.
 
         Ok(EvmTransactionResult {
             transaction: EvmTransaction {
@@ -212,7 +189,7 @@ impl EvmTransactionBuilder {
                 value: "0x0".to_string(),
             },
             approval_transaction,
-            order_id: format!("0x{}", hex::encode(order_id)),
+            order_id: None,
             nonce,
             contract_address: format!("{:?}", self.contract_address),
         })

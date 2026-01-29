@@ -24,7 +24,7 @@ const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
 
 // Polling state
-const POLL_INTERVAL = 10000 // 10 seconds
+const POLL_INTERVAL = 2000 // 2 seconds
 let pollTimer: ReturnType<typeof setInterval> | null = null
 const isPolling = ref(false)
 

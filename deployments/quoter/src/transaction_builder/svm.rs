@@ -1,5 +1,6 @@
+use anchor_lang::AnchorSerialize;
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine};
-use borsh::BorshSerialize;
+use order_book::{compute_order_id, OrderData, OrderParams};
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_sdk::{
     instruction::{AccountMeta, Instruction},
@@ -10,9 +11,9 @@ use solana_sdk::{
 };
 use spl_associated_token_account::get_associated_token_address_with_program_id;
 use std::str::FromStr;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::error::TransactionBuilderError;
-use super::order_id::OrderData;
 use super::{OpenOrderInput, TransactionResult};
 
 const DEFAULT_ORDER_BOOK_PROGRAM_ID: &str = "MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK";
@@ -25,17 +26,6 @@ const DESTINATION_SEED_PREFIX: &[u8] = b"destination";
 const ORDER_SEED_PREFIX: &[u8] = b"order";
 const EVENT_AUTHORITY_SEED: &[u8] = b"__event_authority";
 const VERSION: u16 = 1;
-
-#[derive(BorshSerialize)]
-pub struct OrderParams {
-    pub dest_chain_id: u32,
-    pub fill_deadline: u64,
-    pub token_out: [u8; 32],
-    pub amount_in: u64,
-    pub amount_out: u128,
-    pub recipient: [u8; 32],
-    pub solver: [u8; 32],
-}
 
 pub struct SvmTransactionBuilder {
     rpc_url: String,
@@ -114,12 +104,19 @@ impl SvmTransactionBuilder {
         let blockhash = self.get_recent_blockhash().await?;
         let token_out = parse_bytes32_svm(&input.token_out)?;
 
+        // Generate created_at timestamp (current time, must be within 5-minute window when tx lands)
+        let created_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|e| TransactionBuilderError::SerializationError(e.to_string()))?
+            .as_secs();
+
         let order_data = OrderData {
             version: VERSION,
             sender: sender.to_bytes(),
             nonce,
             origin_chain_id: self.chain_id,
             dest_chain_id: input.dest_chain_id,
+            created_at,
             fill_deadline: input.fill_deadline,
             token_in: token_in_mint.to_bytes(),
             token_out,
@@ -128,7 +125,7 @@ impl SvmTransactionBuilder {
             recipient: input.recipient,
             solver: input.solver,
         };
-        let order_id = order_data.compute_order_id();
+        let order_id = compute_order_id(&order_data);
 
         // Derive all PDAs
         let (global_account, _) = Pubkey::find_program_address(&[GLOBAL_SEED], &self.program_id);
@@ -164,6 +161,7 @@ impl SvmTransactionBuilder {
 
         let order_params = OrderParams {
             dest_chain_id: input.dest_chain_id,
+            created_at,
             fill_deadline: input.fill_deadline,
             token_out,
             amount_in: input.amount_in,

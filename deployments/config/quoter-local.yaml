@@ -3,20 +3,17 @@ chains:
     enabled: true
     rpc_url: http://anvil-chain-a:8545
     ws_url: ws://anvil-chain-a:8545
-    order_book_address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
-    starting_block: 0
+    order_book_address: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9"
 
   - chain_id: 8453
     enabled: true
     rpc_url: http://anvil-chain-b:8545
     ws_url: ws://anvil-chain-b:8545
-    order_book_address: "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
-    starting_block: 0
+    order_book_address: "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9"
 
   - chain_id: 1399811149
     enabled: true
     rpc_url: http://surfpool:8899
     ws_url: ws://surfpool:8900
     order_book_address: "MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK"
-    starting_block: 0
     chain_type: svm

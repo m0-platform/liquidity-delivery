@@ -14,7 +14,9 @@ use serde::{Deserialize, Serialize};
 pub struct EvmTransactionResult {
     pub transaction: EvmTransaction,
     pub approval_transaction: Option<EvmTransaction>,
-    pub order_id: String,
+    /// Order ID is not predictable for EVM (uses block.timestamp on-chain)
+    /// Frontend must extract actual order ID from transaction logs
+    pub order_id: Option<String>,
     pub nonce: u64,
     pub contract_address: String,
 }

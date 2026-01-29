@@ -9,21 +9,23 @@ use anchor_client::solana_sdk::{
 };
 use async_trait::async_trait;
 use m0_liquidity_sdk::types::ChainRuntime;
+use m0_portal_common::{
+    build_relay_instruction, get_wormhole_chain_id, wormhole, WormholeRemainingAccounts,
+};
 use slog::{error, info, Logger};
 use spl_associated_token_account::get_associated_token_address;
 use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::components::ComponentParams;
-use crate::config::ChainConfig;
+use crate::config::{self, ChainConfig};
 use crate::error::{Result, SolverError};
 use crate::events::{EventHandler, EventProcessor, FillOrderSuccessfulEvent, SolverEvent};
 use crate::providers::ProviderManager;
 use crate::stores::OrderStore;
 use crate::utils::{
-    anchor_discriminator, build_executor_relay_instruction, chain_runtime, decode_order_id,
-    derive_wormhole_accounts, find_pda, get_wormhole_emitter, get_wormhole_sequence_account,
-    ExecutorRelayParams, PORTAL_PROGRAM_ID, WORMHOLE_ADAPTER,
+    anchor_discriminator, chain_runtime, decode_address, decode_order_id, find_pda,
+    PORTAL_PROGRAM_ID, WORMHOLE_ADAPTER,
 };
 
 pub struct SvmWriter {
@@ -32,6 +34,7 @@ pub struct SvmWriter {
     chains: Vec<ChainConfig>,
     keypair: Arc<Keypair>,
     logger: Logger,
+    network: config::Network,
 }
 
 impl SvmWriter {
@@ -42,6 +45,7 @@ impl SvmWriter {
             chains: params.config.chains.clone(),
             keypair: params.config.signers.svm_keypair(),
             logger: params.logger.new(slog::o!("component" => "SvmWriter")),
+            network: params.config.network.clone(),
         }
     }
 
@@ -67,6 +71,20 @@ impl SvmWriter {
                 .map_err(|e| SolverError::Component(format!("Invalid adapter program ID: {e}"))),
             None => Ok(WORMHOLE_ADAPTER),
         }
+    }
+
+    fn get_destination_order_book_address(&self, chain_id: u32) -> Result<[u8; 32]> {
+        let config = self
+            .chains
+            .iter()
+            .find(|c| c.chain_id == chain_id)
+            .ok_or_else(|| {
+                SolverError::Component("Destination chain config not found".to_string())
+            })?;
+
+        decode_address(config.order_book_address.clone(), chain_id).ok_or_else(|| {
+            SolverError::Component("Failed to decode order book address".to_string())
+        })
     }
 
     async fn fill_native_order(
@@ -182,6 +200,7 @@ impl SvmWriter {
             .get_svm_provider(dest_chain_id)
             .await?;
         let rpc_client = provider.client().await;
+        let is_devnet = self.network == config::Network::Devnet;
 
         let program_id = self.get_order_book_program_id(dest_chain_id)?;
         let bridge_adapter = self.get_bridge_adapter(dest_chain_id)?;
@@ -245,7 +264,7 @@ impl SvmWriter {
 
         match bridge_adapter {
             adapter if adapter == WORMHOLE_ADAPTER => {
-                accounts.extend(derive_wormhole_accounts(dest_chain_id))
+                accounts.extend(WormholeRemainingAccounts::account_metas(is_devnet));
             }
             _ => {
                 error!(
@@ -267,48 +286,21 @@ impl SvmWriter {
 
         // If using Wormhole adapter, add request_for_execution instruction
         if bridge_adapter == WORMHOLE_ADAPTER {
-            // TODO: Obtain these values from the executor quote service
-            let payee = solver_pubkey; // Placeholder - should come from quote.payeeAddress
-            let estimated_cost: u64 = 0; // Placeholder - should come from quote.estimatedCost
-            let signed_quote: Vec<u8> = vec![]; // Placeholder - should come from quote.signedQuote
-            let relay_instructions: Vec<u8> = vec![]; // Placeholder - should come from quote.relayInstructions
-
-            // Fetch the current sequence from the Wormhole sequence account
-            let sequence_account = get_wormhole_sequence_account(dest_chain_id);
-            let sequence_data = rpc_client
-                .get_account_data(&sequence_account)
+            let sequence = wormhole::get_current_sequence(rpc_client, is_devnet)
                 .await
-                .map_err(|e| {
-                    SolverError::Component(format!("Failed to get sequence account: {}", e))
+                .map_err(|_| {
+                    SolverError::Component("Error getting wormhole sequence".to_string())
                 })?;
 
-            // Sequence is stored as u64 little-endian
-            let sequence = u64::from_le_bytes(
-                sequence_data[..8]
-                    .try_into()
-                    .map_err(|_| SolverError::Component("Invalid sequence data".to_string()))?,
-            );
-
-            let emitter = get_wormhole_emitter();
-
-            // Wormhole chain IDs: Solana = 1, Ethereum = 2, etc.
-            // TODO: Map dest_chain_id to Wormhole chain ID properly
-            let wormhole_dest_chain_id = dest_chain_id as u16;
-            let wormhole_source_chain_id = 1u16; // Solana
-
-            let relay_ix = build_executor_relay_instruction(ExecutorRelayParams {
-                sender: solver_pubkey,
-                payee,
-                destination_chain_id: wormhole_dest_chain_id,
-                peer_portal: PORTAL_PROGRAM_ID,
-                refund_address: solver_pubkey,
-                estimated_cost,
-                signed_quote,
-                relay_instructions,
-                emitter_chain_id: wormhole_source_chain_id,
-                emitter_address: emitter.to_bytes(),
+            let relay_ix = build_relay_instruction(
+                &solver_pubkey,
+                get_wormhole_chain_id(dest_chain_id).unwrap(),
                 sequence,
-            });
+                &self.get_destination_order_book_address(dest_chain_id)?,
+                Some(wormhole::DEFAULT_GAS_LIMIT),
+                Some(wormhole::DEFAULT_MSG_VALUE),
+            )
+            .map_err(|_| SolverError::Component("Error building relay instruction".to_string()))?;
 
             instructions.push(relay_ix);
         }
