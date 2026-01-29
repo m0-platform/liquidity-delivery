@@ -15,7 +15,7 @@ contract Upgrade is ScriptBase {
     /// @dev Reads deployment from deployments/{chainId}.json, deploys new implementation,
     ///      and calls ProxyAdmin.upgradeAndCall
     function run() external {
-        address admin_  = vm.rememberKey(vm.envUint("ADMIN_PRIVATE_KEY"));
+        address admin_ = vm.rememberKey(vm.envUint("ADMIN_PRIVATE_KEY"));
         address portal_ = vm.envAddress("PORTAL_ADDRESS");
 
         // Read existing deployment

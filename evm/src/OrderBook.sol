@@ -762,21 +762,22 @@ contract OrderBook is
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
         Order storage order_ = $.orders[orderId_];
 
-        return OrderData({
-            version: order_.version,
-            sender: order_.sender.toBytes32(),
-            nonce: order_.nonce,
-            originChainId: uint32(block.chainid),
-            destChainId: order_.destChainId,
-            createdAt: uint64(order_.createdAt),
-            fillDeadline: uint64(order_.fillDeadline),
-            tokenIn: order_.tokenIn.toBytes32(),
-            tokenOut: order_.tokenOut,
-            amountIn: order_.amountIn,
-            amountOut: order_.amountOut,
-            recipient: order_.recipient,
-            solver: order_.solver
-        });
+        return
+            OrderData({
+                version: order_.version,
+                sender: order_.sender.toBytes32(),
+                nonce: order_.nonce,
+                originChainId: uint32(block.chainid),
+                destChainId: order_.destChainId,
+                createdAt: uint64(order_.createdAt),
+                fillDeadline: uint64(order_.fillDeadline),
+                tokenIn: order_.tokenIn.toBytes32(),
+                tokenOut: order_.tokenOut,
+                amountIn: order_.amountIn,
+                amountOut: order_.amountOut,
+                recipient: order_.recipient,
+                solver: order_.solver
+            });
     }
 
     /// @inheritdoc IOrderBook

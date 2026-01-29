@@ -31,9 +31,9 @@ contract ScriptBase is Script {
     function _readKey(string memory parentNode_, string memory key_) internal pure returns (string memory) {
         return string.concat(parentNode_, key_);
     }
-    
+
     /// @notice Serialize the upgrade information to the deployment file (or console in dry-run mode)
-    function _serializeDeployment (
+    function _serializeDeployment(
         uint256 chainId_,
         address proxy_,
         address implementation_,

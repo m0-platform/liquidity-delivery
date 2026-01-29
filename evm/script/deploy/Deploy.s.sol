@@ -24,12 +24,7 @@ contract Deploy is ScriptBase, DeployHelpers {
 
         vm.stopBroadcast();
 
-        _serializeDeployment(
-            block.chainid,
-            proxy_,
-            implementation_,
-            _getProxyAdmin(proxy_)
-        );
+        _serializeDeployment(block.chainid, proxy_, implementation_, _getProxyAdmin(proxy_));
     }
 
     /**

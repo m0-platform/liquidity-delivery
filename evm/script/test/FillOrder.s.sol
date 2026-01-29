@@ -200,11 +200,7 @@ contract FillOrder is ScriptBase {
     }
 
     /// @notice Log fill details
-    function _logFillDetails(
-        FillConfig memory config_,
-        bytes32 messageId_,
-        uint32 originChainId_
-    ) internal pure {
+    function _logFillDetails(FillConfig memory config_, bytes32 messageId_, uint32 originChainId_) internal pure {
         // solhint-disable-next-line no-console
         console2.log("\n=== Fill Details ===");
         // solhint-disable-next-line no-console
