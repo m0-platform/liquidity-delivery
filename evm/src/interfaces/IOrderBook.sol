@@ -17,8 +17,8 @@ interface IOrderBook {
      * @param solver The address of the solver that will fill the order, or zero address if any solver can fill
      */
     event OrderOpened(
-        bytes32 indexed orderId,
-        address sender,
+        bytes32 orderId,
+        address indexed sender,
         address tokenIn,
         uint128 amountIn,
         uint32 indexed destChainId,
