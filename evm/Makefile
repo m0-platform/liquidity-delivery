@@ -156,7 +156,7 @@ status: ## Show deployment status (alias for deploy-list)
 
 ## Testing Commands
 
-.PHONY: open-order fill-order
+.PHONY: open-order fill-order cancel-order
 
 open-order: ## Open a test order (ENV=dev CHAIN=sepolia TOKEN_IN=0x... AMOUNT_IN=... DEST_CHAIN=arbitrum_sepolia TOKEN_OUT=0x... AMOUNT_OUT=...)
 ifndef ENV
@@ -220,6 +220,27 @@ endif
 		$(if $(ORIGIN_RECIPIENT),--origin-recipient $(ORIGIN_RECIPIENT)) \
 		$(if $(BRIDGE_ADAPTER_ARGS),--bridge-adapter-args $(BRIDGE_ADAPTER_ARGS))
 
+cancel-order: ## Cancel a test order (ENV=dev CHAIN=arbitrum_sepolia ORDER_ID=0x... ORIGIN_CHAIN=sepolia)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make cancel-order ENV=dev CHAIN=arbitrum_sepolia ORDER_ID=0x... ORIGIN_CHAIN=sepolia"
+	@exit 1
+endif
+ifndef CHAIN
+	@echo "Error: CHAIN is required."
+	@exit 1
+endif
+ifndef ORDER_ID
+	@echo "Error: ORDER_ID is required."
+	@exit 1
+endif
+ifndef ORIGIN_CHAIN
+	@echo "Error: ORIGIN_CHAIN is required."
+	@exit 1
+endif
+	@./ops/cancel-order.sh --env $(ENV) --chain $(CHAIN) \
+		--order-id $(ORDER_ID) --origin-chain $(ORIGIN_CHAIN) \
+		$(if $(BRIDGE_ADAPTER_ARGS),--bridge-adapter-args $(BRIDGE_ADAPTER_ARGS))
+
 ## Help
 
 .PHONY: help
@@ -252,6 +273,8 @@ help: ## Show this help
 	@echo "       DEST_CHAIN=<alias> TOKEN_OUT=0x... AMOUNT_OUT=..."
 	@echo "  make fill-order ENV=<dev|prod> CHAIN=<alias> \\    Fill a test order"
 	@echo "       ORDER_ID=0x... ORIGIN_CHAIN=<alias> AMOUNT_OUT=..."
+	@echo "  make cancel-order ENV=<dev|prod> CHAIN=<alias> \\  Cancel a test order"
+	@echo "       ORDER_ID=0x... ORIGIN_CHAIN=<alias>"
 	@echo ""
 	@echo "Status:"
 	@echo "  make status                                      Show deployment status"
@@ -274,6 +297,8 @@ help: ## Show this help
 	@echo "       DEST_CHAIN=arbitrum_sepolia TOKEN_OUT=0x... AMOUNT_OUT=1e18"
 	@echo "  2. make fill-order ENV=dev CHAIN=arbitrum_sepolia ORDER_ID=0x... \\"
 	@echo "       ORIGIN_CHAIN=sepolia AMOUNT_OUT=1e18"
+	@echo "  3. make cancel-order ENV=dev CHAIN=arbitrum_sepolia ORDER_ID=0x... \\"
+	@echo "       ORIGIN_CHAIN=sepolia  (alternative to fill)"
 	@echo ""
 	@echo "Dry run example:"
 	@echo "  make deploy ENV=dev CHAIN=sepolia DRY_RUN=true"
