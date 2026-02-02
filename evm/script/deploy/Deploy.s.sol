@@ -11,13 +11,11 @@ contract Deploy is ScriptBase, DeployHelpers {
     string internal constant _ORDER_BOOK_CONTRACT_NAME = "OrderBook";
 
     function run() external {
-        // TODO update to use foundry keystore
         address deployer_ = vm.rememberKey(vm.envUint("DEPLOYER_PRIVATE_KEY"));
 
         vm.startBroadcast(deployer_);
 
-        // TODO use defined configuration and chain definitions to handle inputs
-        (, address orderBook_) = _deployOrderBook(
+        (address implementation_, address proxy_) = _deployOrderBook(
             deployer_,
             vm.envAddress("ADMIN_ADDRESS"),
             vm.envAddress("PAUSER_ADDRESS"),
@@ -26,7 +24,7 @@ contract Deploy is ScriptBase, DeployHelpers {
 
         vm.stopBroadcast();
 
-        _serializeDeployment(block.chainid, orderBook_);
+        _serializeDeployment(block.chainid, proxy_, implementation_, _getProxyAdmin(proxy_));
     }
 
     /**
@@ -49,10 +47,5 @@ contract Deploy is ScriptBase, DeployHelpers {
             abi.encodeWithSelector(OrderBook.initialize.selector, admin_, pauser_),
             _computeSalt(deployer_, _ORDER_BOOK_CONTRACT_NAME)
         );
-    }
-
-    function _serializeDeployment(uint256 chainId_, address orderBook_) internal {
-        string memory root = "";
-        vm.writeJson(vm.serializeAddress(root, "orderBook", orderBook_), _deployOutputPath(chainId_));
     }
 }

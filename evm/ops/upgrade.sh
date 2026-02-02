@@ -121,8 +121,15 @@ upgrade_chain() {
     # Build forge command
     local forge_cmd="FOUNDRY_PROFILE=production forge script script/deploy/Upgrade.s.sol"
     forge_cmd="$forge_cmd --rpc-url $rpc_alias"
-    forge_cmd="$forge_cmd --broadcast"
     forge_cmd="$forge_cmd -vvv"
+    # Ignore assembly NatSpec memory-safe deprecation warnings from forge-std
+    forge_cmd="$forge_cmd --ignored-error-codes 2424"
+
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        log_warn "DRY RUN MODE - Simulating upgrade (no broadcast)"
+    else
+        forge_cmd="$forge_cmd --broadcast"
+    fi
 
     if [[ "$verify" == "true" ]]; then
         forge_cmd="$forge_cmd --verify"
@@ -132,14 +139,18 @@ upgrade_chain() {
 
     # Execute from EVM directory with op run
     cd "$EVM_DIR"
-    op run --env-file="$env_file" --account="$OP_ACCOUNT" -- bash -c "$forge_cmd"
+    op run --env-file="$env_file" --account="$OP_ACCOUNT" -- bash -c "DRY_RUN=${DRY_RUN:-false} $forge_cmd"
 
-    # Show updated deployment info
-    local deployment_file="$EVM_DIR/deployments/$chain_id.json"
-    if [[ -f "$deployment_file" ]]; then
-        local new_impl=$(jq -r '.implementation // "unknown"' "$deployment_file")
-        log_info "Successfully upgraded OrderBook on $chain_name"
-        log_info "New implementation: $new_impl"
+    # Show updated deployment info (skip file check in dry-run mode)
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        log_info "Dry run complete for $chain_name"
+    else
+        local deployment_file="$EVM_DIR/deployments/$chain_id.json"
+        if [[ -f "$deployment_file" ]]; then
+            local new_impl=$(jq -r '.implementation // "unknown"' "$deployment_file")
+            log_info "Successfully upgraded OrderBook on $chain_name"
+            log_info "New implementation: $new_impl"
+        fi
     fi
 }
 
@@ -181,10 +192,14 @@ usage() {
     echo "  $0 --env <dev|prod> --all                     Upgrade on all deployed chains"
     echo "  $0 --status                                   Show current deployment status"
     echo ""
+    echo "Options:"
+    echo "  DRY_RUN=true  Simulate upgrade without broadcasting (logs JSON to console)"
+    echo ""
     echo "Examples:"
     echo "  $0 --env dev --chain sepolia"
     echo "  $0 --env dev --chain arbitrum_sepolia --verify"
     echo "  $0 --env prod --all"
+    echo "  DRY_RUN=true $0 --env dev --chain sepolia    # Dry run"
     echo ""
     echo "Environment files:"
     echo "  .env.dev   - Development/testnet configuration"
