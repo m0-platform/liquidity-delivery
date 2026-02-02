@@ -246,8 +246,8 @@ function onOrderCreated(orderId: string) {
             @back="backToOrders"
           />
         </div>
-        <!-- Orders List (constrained width) -->
-        <div v-else class="w-full max-w-md animate-in">
+        <!-- Orders List (wider for table/grid views) -->
+        <div v-else class="w-full max-w-5xl animate-in">
           <OrdersPage
             :evm-address="evmAddress"
             :svm-address="svmAddress"

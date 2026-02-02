@@ -23,6 +23,7 @@ max_order_clip_size: 10000
 max_clip_reprocess_delay_sec: 60
 solver_fee_bps: 1
 auto_rebalance: false
+exclusive_mode: true
 
 # Asset configuration
 supported_assets:

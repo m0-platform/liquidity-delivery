@@ -81,6 +81,7 @@ pub struct Config {
     pub connect_to_quote_stream: bool,
     pub http_port: Option<u16>,
     pub loki_url: Option<String>,
+    pub exclusive_mode: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -101,6 +102,7 @@ struct ConfigFile {
     connect_to_quote_stream: bool,
     http_port: Option<u16>,
     loki_url: Option<String>,
+    exclusive_mode: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -171,6 +173,7 @@ impl Default for Config {
             connect_to_quote_stream: true,
             http_port: None,
             loki_url: None,
+            exclusive_mode: false,
         }
     }
 }
@@ -262,6 +265,9 @@ impl Config {
         }
         if let Some(loki_url) = config_file.loki_url {
             config.loki_url = Some(loki_url);
+        }
+        if let Some(exclusive_mode) = config_file.exclusive_mode {
+            config.exclusive_mode = exclusive_mode;
         }
 
         Ok(config)

@@ -25,6 +25,7 @@ pub struct OrderProcessor {
     proprocess_queue: Arc<RwLock<Vec<(String, u128)>>>,
     solver_address_evm: String,
     solver_address_svm: String,
+    exclusive_mode: bool,
 }
 
 impl OrderProcessor {
@@ -40,6 +41,7 @@ impl OrderProcessor {
             proprocess_queue: Arc::new(RwLock::new(Vec::new())),
             solver_address_evm: params.provider_manager.evm_address.to_string(),
             solver_address_svm: params.provider_manager.svm_address.to_string(),
+            exclusive_mode: params.config.exclusive_mode,
         }
     }
 
@@ -96,6 +98,33 @@ impl OrderProcessor {
             .as_millis()
             + (self.clip_process_delay as u128 * 1000)
     }
+
+    fn is_order_for_this_solver(&self, order_solver: &[u8; 32], dest_chain_id: u32) -> bool {
+        if !self.exclusive_mode {
+            return true;
+        }
+
+        // Get solver address bytes based on destination chain runtime
+        let solver_bytes: [u8; 32] = if chain_runtime(dest_chain_id) == ChainRuntime::Svm {
+            // SVM address is already 32 bytes
+            self.solver_address_svm
+                .parse::<anchor_client::solana_sdk::pubkey::Pubkey>()
+                .map(|pk| pk.to_bytes())
+                .unwrap_or([0u8; 32])
+        } else {
+            // EVM address is 20 bytes, left-padded with zeros to 32 bytes
+            let mut bytes = [0u8; 32];
+            if let Ok(addr) = self
+                .solver_address_evm
+                .parse::<alloy::primitives::Address>()
+            {
+                bytes[12..32].copy_from_slice(addr.as_slice());
+            }
+            bytes
+        };
+
+        *order_solver == solver_bytes
+    }
 }
 
 #[async_trait]
@@ -115,6 +144,16 @@ impl EventHandler for OrderProcessor {
 
         match event {
             SolverEvent::OrderCreated(e) => {
+                // In exclusive mode, only fill orders where the solver field matches this solver
+                if !self.is_order_for_this_solver(&e.order.solver, e.order.dest_chain_id) {
+                    info!(
+                        self.logger,
+                        "Skipping order in exclusive mode - solver field does not match";
+                        "order_id" => e.order_id.clone()
+                    );
+                    return Ok(vec![]);
+                }
+
                 let (_, destination_asset) = match self
                     .get_supported_assets(
                         e.order.token_in,
@@ -127,7 +166,9 @@ impl EventHandler for OrderProcessor {
                     Ok(assets) => assets,
                     Err(reason) => {
                         return Ok(vec![SolverEvent::OrderRejected(OrderRejectEvent::new(
-                            e.order_id, reason, e.order.origin_chain_id,
+                            e.order_id,
+                            reason,
+                            e.order.origin_chain_id,
                         ))]);
                     }
                 };

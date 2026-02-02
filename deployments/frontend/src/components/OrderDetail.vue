@@ -43,8 +43,8 @@ const fillPercentage = computed(() => {
   const totalAmountOut = BigInt(selectedOrder.value.amount_out)
   if (totalAmountOut === 0n) return 0
   const filledAmountOut = BigInt(selectedOrder.value.filled_amount)
-  // Calculate percentage (multiply by 100 first to avoid precision loss)
-  const percentage = Number((filledAmountOut * 100n) / totalAmountOut)
+  // Calculate percentage with 2 decimal places precision for proper rounding
+  const percentage = Number((filledAmountOut * 10000n) / totalAmountOut) / 100
   return Math.min(percentage, 100)
 })
 

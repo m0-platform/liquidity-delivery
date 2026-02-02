@@ -2,6 +2,7 @@ use std::cmp::min;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use alloy::primitives::Address;
 use alloy::providers::Provider;
@@ -26,6 +27,8 @@ use crate::providers::ProviderManager;
 use crate::stores::{AssetStore, OrderStore};
 use crate::utils::{chain_from_id, chain_runtime, format_address};
 
+const BALANCE_RELOAD_INTERVAL: Duration = Duration::from_secs(2 * 60);
+
 pub struct InventoryManager {
     asset_store: Arc<AssetStore>,
     order_store: Arc<OrderStore>,
@@ -35,6 +38,7 @@ pub struct InventoryManager {
     order_holds: Arc<Mutex<HashMap<String, u128>>>,
     auto_rebalance: bool,
     provider_manager: Arc<ProviderManager>,
+    last_balance_reload: Arc<Mutex<Instant>>,
     logger: Logger,
 }
 
@@ -53,6 +57,7 @@ impl InventoryManager {
             order_holds: Arc::new(Mutex::new(HashMap::new())),
             auto_rebalance: params.config.auto_rebalance,
             provider_manager: params.provider_manager.clone(),
+            last_balance_reload: Arc::new(Mutex::new(Instant::now())),
             logger,
         }
     }
@@ -279,6 +284,24 @@ impl InventoryManager {
         let balances = self.balances.lock().await.clone();
         SolverEvent::InventoryUpdate(InventoryUpdateEvent::new(balances))
     }
+
+    async fn maybe_reload_balances(&self) -> Result<Option<SolverEvent>> {
+        let should_reload = {
+            let last_reload = self.last_balance_reload.lock().await;
+            last_reload.elapsed() >= BALANCE_RELOAD_INTERVAL
+        };
+
+        if should_reload {
+            info!(self.logger, "Periodic balance reload triggered");
+            self.load_svm_balances().await?;
+            self.load_evm_balances().await?;
+            self.log_balances().await;
+            *self.last_balance_reload.lock().await = Instant::now();
+            return Ok(Some(self.create_inventory_update_event().await));
+        }
+
+        Ok(None)
+    }
 }
 
 #[async_trait]
@@ -317,7 +340,22 @@ impl EventHandler for InventoryManager {
                     .and_then(|h| h.get(&e.asset.address).cloned())
                     .unwrap_or(0);
 
-                let available = balance.get(&e.asset).cloned().unwrap_or(0) - active_holds;
+                let raw_balance = balance.get(&e.asset).cloned().unwrap_or(0);
+                let available = raw_balance.saturating_sub(active_holds);
+
+                debug!(
+                    self.logger,
+                    "Hold request evaluation";
+                    "order_id" => %e.order_id,
+                    "asset" => %e.asset.symbol,
+                    "asset_chain" => ?e.asset.chain,
+                    "asset_address" => %e.asset.address,
+                    "requested" => e.amount,
+                    "raw_balance" => raw_balance,
+                    "active_holds" => active_holds,
+                    "available" => available,
+                    "balance_keys" => ?balance.keys().map(|a| (&a.symbol, &a.chain, &a.address)).collect::<Vec<_>>(),
+                );
 
                 if available >= e.amount {
                     holds
@@ -431,6 +469,11 @@ impl EventHandler for InventoryManager {
                 return Ok(vec![self.create_inventory_update_event().await]);
             }
             _ => {}
+        }
+
+        // Check for periodic balance reload
+        if let Some(event) = self.maybe_reload_balances().await? {
+            return Ok(vec![event]);
         }
 
         Ok(vec![])

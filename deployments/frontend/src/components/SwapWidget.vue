@@ -400,7 +400,7 @@ async function handleSwap() {
     }
 
     redirecting.value = true
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await new Promise(resolve => setTimeout(resolve, 2000))
 
     // Emit order created event to navigate to order details
     emit('order-created', result.orderId)
