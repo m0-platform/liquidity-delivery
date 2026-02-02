@@ -5,7 +5,8 @@ import { useAssets } from '../composables/useAssets'
 import type { NetworkType } from '../config/network'
 
 const props = defineProps<{
-  walletAddress: string | null
+  evmAddress: string | null
+  svmAddress: string | null
   network: NetworkType
 }>()
 
@@ -23,10 +24,21 @@ async function loadOrders() {
   await fetchOrders()
 }
 
+// Check if any wallet is connected
+const hasWallet = computed(() => !!props.evmAddress || !!props.svmAddress)
+
 // Computed filtered orders for display
 const displayOrders = computed(() => {
-  if (showMyOrdersOnly.value && props.walletAddress) {
-    return getOrdersBySender(props.walletAddress)
+  if (showMyOrdersOnly.value && hasWallet.value) {
+    const evmOrders = props.evmAddress ? getOrdersBySender(props.evmAddress) : []
+    const svmOrders = props.svmAddress ? getOrdersBySender(props.svmAddress) : []
+    const combined = [...evmOrders, ...svmOrders]
+    const seen = new Set<string>()
+    return combined.filter(order => {
+      if (seen.has(order.order_id)) return false
+      seen.add(order.order_id)
+      return true
+    })
   }
   return orders.value
 })
@@ -100,9 +112,9 @@ onMounted(loadOrders)
 </script>
 
 <template>
-  <div class="glass-card rounded-3xl p-6">
+  <div class="glass-card rounded-3xl p-6 flex flex-col overflow-hidden max-h-[calc(100vh-220px)]">
     <!-- Header -->
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between mb-6 flex-shrink-0">
       <h2 class="text-xl font-semibold text-white">Orders</h2>
       <button
         @click="loadOrders"
@@ -123,23 +135,23 @@ onMounted(loadOrders)
     </div>
 
     <!-- Filter -->
-    <div class="mb-6">
+    <div class="mb-6 flex-shrink-0">
       <label class="flex items-center gap-3 cursor-pointer group">
         <div class="relative">
           <input
             type="checkbox"
             v-model="showMyOrdersOnly"
-            :disabled="!walletAddress"
+            :disabled="!hasWallet"
             class="sr-only peer"
           />
           <div class="w-10 h-6 bg-slate-700 rounded-full peer peer-checked:bg-accent-600 transition-colors"></div>
           <div class="absolute left-1 top-1 w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-4"></div>
         </div>
-        <span :class="['text-sm transition-colors', walletAddress ? 'text-surface-300 group-hover:text-white' : 'text-surface-500']">
+        <span :class="['text-sm transition-colors', hasWallet ? 'text-surface-300 group-hover:text-white' : 'text-surface-500']">
           Show my orders only
         </span>
       </label>
-      <p v-if="!walletAddress && showMyOrdersOnly" class="text-xs text-surface-500 mt-2 ml-13">
+      <p v-if="!hasWallet && showMyOrdersOnly" class="text-xs text-surface-500 mt-2 ml-13">
         Connect wallet to filter by your orders
       </p>
     </div>
@@ -176,7 +188,7 @@ onMounted(loadOrders)
     </div>
 
     <!-- Orders List -->
-    <div v-else class="space-y-3 max-h-[60vh] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-surface-600 scrollbar-track-transparent">
+    <div v-else class="space-y-3 flex-1 min-h-[200px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-surface-600 scrollbar-track-transparent">
       <TransitionGroup
         enter-active-class="transition-all duration-300 ease-out"
         enter-from-class="opacity-0 translate-y-2"
@@ -268,7 +280,7 @@ onMounted(loadOrders)
     </div>
 
     <!-- Order Count -->
-    <div v-if="displayOrders.length > 0" class="mt-6 pt-4 border-t border-white/5 text-center">
+    <div v-if="displayOrders.length > 0" class="mt-6 pt-4 border-t border-white/5 text-center flex-shrink-0">
       <span class="text-sm text-surface-500">
         {{ displayOrders.length }} order{{ displayOrders.length === 1 ? '' : 's' }}
       </span>

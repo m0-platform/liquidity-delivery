@@ -127,7 +127,7 @@ impl EventHandler for OrderProcessor {
                     Ok(assets) => assets,
                     Err(reason) => {
                         return Ok(vec![SolverEvent::OrderRejected(OrderRejectEvent::new(
-                            e.order_id, reason,
+                            e.order_id, reason, e.order.origin_chain_id,
                         ))]);
                     }
                 };
@@ -141,6 +141,7 @@ impl EventHandler for OrderProcessor {
                             "Order amount_out {} does not cover fee-inclusive amount_out {}",
                             e.order.amount_out, min_amount_out
                         ),
+                        e.order.origin_chain_id,
                     ))]);
                 }
 

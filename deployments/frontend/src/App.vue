@@ -97,7 +97,7 @@ function onOrderCreated(orderId: string) {
 </script>
 
 <template>
-  <div class="min-h-screen flex flex-col relative">
+  <div class="h-screen flex flex-col relative overflow-hidden">
     <!-- Ambient background effects -->
     <div class="fixed inset-0 pointer-events-none overflow-hidden">
       <div class="absolute top-0 left-1/4 w-96 h-96 bg-accent-500/10 rounded-full blur-3xl animate-pulse-slow"></div>
@@ -221,7 +221,7 @@ function onOrderCreated(orderId: string) {
     </nav>
 
     <!-- Main Content -->
-    <main class="flex-1 flex items-start justify-center px-4 md:px-6 py-6 md:py-10 relative z-10">
+    <main class="flex-1 flex items-start justify-center px-4 md:px-6 py-6 md:py-10 relative z-10 overflow-hidden min-h-0">
       <!-- Swap Tab (constrained width) -->
       <div v-if="activeTab === 'swap'" class="w-full max-w-md animate-in">
         <SwapWidget
@@ -249,7 +249,8 @@ function onOrderCreated(orderId: string) {
         <!-- Orders List (constrained width) -->
         <div v-else class="w-full max-w-md animate-in">
           <OrdersPage
-            :wallet-address="evmAddress"
+            :evm-address="evmAddress"
+            :svm-address="svmAddress"
             :network="network"
             @select-order="selectOrder"
           />

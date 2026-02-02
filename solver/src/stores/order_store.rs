@@ -94,7 +94,7 @@ impl EventProcessor for OrderStore {
                     transaction_history: vec![TransactionRecord {
                         transaction_hash: e.transaction_hash.clone(),
                         event: "OrderCreated".to_string(),
-                        chain_id: e.order.origin_chain_id,
+                        chain_id: e.chain_id,
                     }],
                 };
                 orders.insert(order.id.clone(), order);
@@ -114,7 +114,7 @@ impl EventProcessor for OrderStore {
                 order.transaction_history.push(TransactionRecord {
                     transaction_hash: e.transaction_hash.clone(),
                     event: "OrderFill".to_string(),
-                    chain_id: order.data.dest_chain_id,
+                    chain_id: e.chain_id,
                 });
             }
             SolverEvent::OrderRejected(e) => {
@@ -133,7 +133,7 @@ impl EventProcessor for OrderStore {
                 order.transaction_history.push(TransactionRecord {
                     transaction_hash: e.transaction_hash.clone(),
                     event: "OrderCancelRequest".to_string(),
-                    chain_id: order.data.dest_chain_id,
+                    chain_id: e.chain_id,
                 });
             }
             SolverEvent::OrderRefundClaimed(e) => {
@@ -142,7 +142,7 @@ impl EventProcessor for OrderStore {
                     order.transaction_history.push(TransactionRecord {
                         transaction_hash: e.transaction_hash.clone(),
                         event: "OrderRefundClaimed".to_string(),
-                        chain_id: order.data.origin_chain_id,
+                        chain_id: e.chain_id,
                     });
                 }
             }

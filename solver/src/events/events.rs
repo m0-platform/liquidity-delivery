@@ -104,10 +104,11 @@ pub struct OrderCreatedEvent {
     pub created_timestamp: u64,
     pub order: OrderData,
     pub transaction_hash: String,
+    pub chain_id: u32,
 }
 
 impl OrderCreatedEvent {
-    pub fn new(order: OrderData, transaction_hash: String, created_timestamp: u64) -> Self {
+    pub fn new(order: OrderData, transaction_hash: String, created_timestamp: u64, chain_id: u32) -> Self {
         Self {
             order_id: hex::encode(order.compute_order_id()),
             timestamp: SystemTime::now()
@@ -117,6 +118,7 @@ impl OrderCreatedEvent {
             order,
             transaction_hash,
             created_timestamp,
+            chain_id,
         }
     }
 }
@@ -127,14 +129,16 @@ pub struct OrderFillEvent {
     pub order_id: String,
     pub amount: u128,
     pub transaction_hash: String,
+    pub chain_id: u32,
 }
 
 impl OrderFillEvent {
-    pub fn new(order_id: String, amount: u128, transaction_hash: String) -> Self {
+    pub fn new(order_id: String, amount: u128, transaction_hash: String, chain_id: u32) -> Self {
         Self {
             order_id,
             amount,
             transaction_hash,
+            chain_id,
         }
     }
 }
@@ -144,11 +148,12 @@ impl OrderFillEvent {
 pub struct OrderRejectEvent {
     pub order_id: String,
     pub reason: String,
+    pub chain_id: u32,
 }
 
 impl OrderRejectEvent {
-    pub fn new(order_id: String, reason: String) -> Self {
-        Self { order_id, reason }
+    pub fn new(order_id: String, reason: String, chain_id: u32) -> Self {
+        Self { order_id, reason, chain_id }
     }
 }
 
@@ -157,13 +162,15 @@ impl OrderRejectEvent {
 pub struct OrderCancelledEvent {
     pub order_id: String,
     pub transaction_hash: String,
+    pub chain_id: u32,
 }
 
 impl OrderCancelledEvent {
-    pub fn new(order_id: String, transaction_hash: String) -> Self {
+    pub fn new(order_id: String, transaction_hash: String, chain_id: u32) -> Self {
         Self {
             order_id,
             transaction_hash,
+            chain_id,
         }
     }
 }
@@ -175,6 +182,7 @@ pub struct OrderRefundClaimedEvent {
     pub sender: String,
     pub amount_refunded: u128,
     pub transaction_hash: String,
+    pub chain_id: u32,
 }
 
 impl OrderRefundClaimedEvent {
@@ -183,12 +191,14 @@ impl OrderRefundClaimedEvent {
         sender: String,
         amount_refunded: u128,
         transaction_hash: String,
+        chain_id: u32,
     ) -> Self {
         Self {
             order_id,
             sender,
             amount_refunded,
             transaction_hash,
+            chain_id,
         }
     }
 }

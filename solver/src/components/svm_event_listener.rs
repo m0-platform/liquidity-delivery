@@ -367,6 +367,7 @@ impl SvmEventListener {
                                 tx.block_time
                                     .map(|t| t as u64)
                                     .unwrap_or_else(unix_timestamp_secs),
+                                chain_id,
                             ))
                         }
                         OrderBookEvent::OrderFilled(e) => {
@@ -374,6 +375,7 @@ impl SvmEventListener {
                                 hex::encode(e.order_id),
                                 e.amount_out_filled,
                                 signature_str.clone(),
+                                chain_id,
                             ))
                         }
                         OrderBookEvent::OrderCompleted(e) => {
@@ -387,6 +389,7 @@ impl SvmEventListener {
                             SolverEvent::OrderCancelled(OrderCancelledEvent::new(
                                 hex::encode(e.order_id),
                                 signature_str.clone(),
+                                chain_id,
                             ))
                         }
                         OrderBookEvent::FillReported(e) => {
@@ -394,6 +397,7 @@ impl SvmEventListener {
                                 hex::encode(e.order_id),
                                 e.amount_out_filled,
                                 signature_str.clone(),
+                                chain_id,
                             ))
                         }
                         OrderBookEvent::RefundClaimed(e) => {
@@ -402,6 +406,7 @@ impl SvmEventListener {
                                 e.sender.to_string(),
                                 e.amount as u128,
                                 signature_str.clone(),
+                                chain_id,
                             ))
                         }
                     };
