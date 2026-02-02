@@ -1,4 +1,5 @@
 use serde::Serialize;
+use serde_json;
 use slog::{Drain, Key, OwnedKVList, Record, KV};
 use std::collections::HashMap;
 use std::sync::mpsc::{self, Sender};
@@ -137,13 +138,22 @@ fn flush_batch(
     let request = LokiPushRequest { streams };
 
     // Send to Loki
-    if let Err(e) = client
+    match client
         .post(push_url)
         .header("Content-Type", "application/json")
         .json(&request)
         .send()
     {
-        eprintln!("Failed to send logs to Loki: {}", e);
+        Ok(response) => {
+            if !response.status().is_success() {
+                let status = response.status();
+                let body = response.text().unwrap_or_default();
+                eprintln!("Loki rejected logs: status={}, body={}", status, body);
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to send logs to Loki: {}", e);
+        }
     }
 }
 
@@ -180,19 +190,18 @@ impl Drain for LokiDrain {
         let _ = values.serialize(record, &mut serializer);
         let _ = record.kv().serialize(record, &mut serializer);
 
-        // Build message with key-value context
-        let mut message = format!("{}", record.msg());
-        if !serializer.values.is_empty() {
-            let kv_str: Vec<String> = serializer
-                .values
-                .iter()
-                .filter(|(k, _)| *k != "timestamp" && *k != "environment")
-                .map(|(k, v)| format!("{}={}", k, v))
-                .collect();
-            if !kv_str.is_empty() {
-                message = format!("{} {}", message, kv_str.join(" "));
+        // Build message as JSON
+        let mut json_map: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
+        json_map.insert("msg".to_string(), serde_json::Value::String(format!("{}", record.msg())));
+        json_map.insert("level".to_string(), serde_json::Value::String(record.level().as_str().to_string()));
+
+        for (k, v) in serializer.values.iter() {
+            if k != "timestamp" && k != "environment" && k != "component" {
+                json_map.insert(k.clone(), serde_json::Value::String(v.clone()));
             }
         }
+
+        let message = serde_json::to_string(&json_map).unwrap_or_else(|_| format!("{}", record.msg()));
 
         let entry = LogEntry {
             timestamp_ns,

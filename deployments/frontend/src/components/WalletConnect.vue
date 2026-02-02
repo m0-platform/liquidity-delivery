@@ -81,7 +81,7 @@ function getWalletTypeColor(type: 'evm' | 'svm' | 'local'): string {
       <!-- EVM Wallet Slot -->
       <div
         v-if="evmAddress"
-        class="group flex items-center gap-2 bg-slate-850/80 rounded-xl px-3 py-2 border border-white/5 hover:border-accent-500/30 transition-all duration-200"
+        class="group flex items-center gap-1 sm:gap-2 bg-slate-850/80 rounded-xl px-2 sm:px-3 py-2 border border-white/5 hover:border-accent-500/30 transition-all duration-200"
       >
         <!-- Chain Badge -->
         <div
@@ -95,7 +95,7 @@ function getWalletTypeColor(type: 'evm' | 'svm' | 'local'): string {
 
         <!-- Address -->
         <button
-          class="text-sm font-mono text-surface-300 hover:text-white transition-colors"
+          class="hidden sm:block text-sm font-mono text-surface-300 hover:text-white transition-colors"
           :title="evmAddress"
           @click="copyAddress(evmAddress, 'evm')"
         >
@@ -111,7 +111,7 @@ function getWalletTypeColor(type: 'evm' | 'svm' | 'local'): string {
           leave-from-class="opacity-100 scale-100"
           leave-to-class="opacity-0 scale-90"
         >
-          <span v-if="copied === 'evm'" class="text-xs text-emerald-400 flex items-center gap-1">
+          <span v-if="copied === 'evm'" class="hidden sm:flex text-xs text-emerald-400 items-center gap-1">
             <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
               <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -135,18 +135,18 @@ function getWalletTypeColor(type: 'evm' | 'svm' | 'local'): string {
         @click="connectEvm"
         @mouseenter="isLocal && (showLocalInfo = true)"
         @mouseleave="showLocalInfo = false"
-        class="flex items-center gap-2 bg-slate-850/80 rounded-xl px-3 py-2 border border-white/5 hover:border-blue-500/30 transition-all duration-200 text-surface-400 hover:text-white"
+        class="flex items-center gap-2 bg-slate-850/80 rounded-xl px-2 sm:px-3 py-2 border border-white/5 hover:border-blue-500/30 transition-all duration-200 text-surface-400 hover:text-white"
       >
         <div class="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-blue-500 to-blue-600">
           E
         </div>
-        <span class="text-sm">Connect EVM</span>
+        <span class="text-sm hidden md:inline">Connect EVM</span>
       </button>
 
       <!-- SVM Wallet Slot -->
       <div
         v-if="svmAddress"
-        class="group flex items-center gap-2 bg-slate-850/80 rounded-xl px-3 py-2 border border-white/5 hover:border-accent-500/30 transition-all duration-200"
+        class="group flex items-center gap-1 sm:gap-2 bg-slate-850/80 rounded-xl px-2 sm:px-3 py-2 border border-white/5 hover:border-accent-500/30 transition-all duration-200"
       >
         <!-- Chain Badge -->
         <div
@@ -160,7 +160,7 @@ function getWalletTypeColor(type: 'evm' | 'svm' | 'local'): string {
 
         <!-- Address -->
         <button
-          class="text-sm font-mono text-surface-300 hover:text-white transition-colors"
+          class="hidden sm:block text-sm font-mono text-surface-300 hover:text-white transition-colors"
           :title="svmAddress"
           @click="copyAddress(svmAddress, 'svm')"
         >
@@ -176,7 +176,7 @@ function getWalletTypeColor(type: 'evm' | 'svm' | 'local'): string {
           leave-from-class="opacity-100 scale-100"
           leave-to-class="opacity-0 scale-90"
         >
-          <span v-if="copied === 'svm'" class="text-xs text-emerald-400 flex items-center gap-1">
+          <span v-if="copied === 'svm'" class="hidden sm:flex text-xs text-emerald-400 items-center gap-1">
             <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
               <path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -200,12 +200,12 @@ function getWalletTypeColor(type: 'evm' | 'svm' | 'local'): string {
         @click="connectSvm"
         @mouseenter="isLocal && (showLocalInfo = true)"
         @mouseleave="showLocalInfo = false"
-        class="flex items-center gap-2 bg-slate-850/80 rounded-xl px-3 py-2 border border-white/5 hover:border-purple-500/30 transition-all duration-200 text-surface-400 hover:text-white"
+        class="flex items-center gap-2 bg-slate-850/80 rounded-xl px-2 sm:px-3 py-2 border border-white/5 hover:border-purple-500/30 transition-all duration-200 text-surface-400 hover:text-white"
       >
         <div class="w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-bold text-white bg-gradient-to-br from-purple-500 to-purple-600">
           S
         </div>
-        <span class="text-sm">Connect Solana</span>
+        <span class="text-sm hidden md:inline">Connect Solana</span>
       </button>
     </div>
 

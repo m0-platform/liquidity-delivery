@@ -152,7 +152,7 @@ impl EventProcessor for OrderStore {
                     order.transaction_history.push(TransactionRecord {
                         transaction_hash: e.transaction_hash.clone(),
                         event: "OrderCompleted".to_string(),
-                        chain_id: order.data.origin_chain_id,
+                        chain_id: e.chain_id,
                     });
                 }
             }

@@ -33,19 +33,20 @@ function getDotColor(id: string): string {
 </script>
 
 <template>
-  <div class="flex items-center gap-1 p-1 bg-slate-900/50 rounded-xl border border-white/5">
+  <div class="flex items-center gap-0.5 sm:gap-1 p-1 bg-slate-900/50 rounded-xl border border-white/5">
     <button
       v-for="net in networks"
       :key="net.id"
       :class="[
-        'relative px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 border',
+        'relative px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm font-medium transition-all duration-200 border',
         modelValue === net.id
           ? ['bg-slate-800/80 text-white', getNetworkColor(net.id, true)]
           : 'bg-transparent text-surface-400 hover:text-surface-200 hover:bg-slate-800/40 border-transparent'
       ]"
       @click="$emit('update:modelValue', net.id)"
+      :title="net.name"
     >
-      <span class="flex items-center gap-2">
+      <span class="flex items-center gap-1.5 sm:gap-2">
         <span
           :class="[
             'w-2 h-2 rounded-full transition-all duration-300',
@@ -54,7 +55,7 @@ function getDotColor(id: string): string {
           ]"
           :style="modelValue === net.id ? `box-shadow: 0 0 8px ${net.id === 'local' ? 'rgba(16,185,129,0.6)' : net.id === 'devnet' ? 'rgba(245,158,11,0.6)' : 'rgba(244,63,94,0.6)'}` : ''"
         ></span>
-        <span>{{ net.name }}</span>
+        <span class="hidden sm:inline">{{ net.name }}</span>
       </span>
     </button>
   </div>

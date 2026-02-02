@@ -64,7 +64,9 @@ sol! {
         function fillOrder(
             bytes32 orderId,
             OrderData calldata orderData,
-            FillParams calldata fillerParams
+            FillParams calldata fillerParams,
+            address bridgeAdapter,
+            bytes calldata bridgeAdapterArgs
         ) external payable;
 
         function getFilledAmounts(bytes32 orderId_) external view returns (FilledAmounts memory);

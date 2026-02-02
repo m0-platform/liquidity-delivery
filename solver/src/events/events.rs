@@ -199,10 +199,11 @@ pub struct OrderCompletedEvent {
     pub order_id: String,
     pub timestamp: u64,
     pub transaction_hash: String,
+    pub chain_id: u32,
 }
 
 impl OrderCompletedEvent {
-    pub fn new(order_id: String, transaction_hash: String) -> Self {
+    pub fn new(order_id: String, transaction_hash: String, chain_id: u32) -> Self {
         Self {
             order_id,
             timestamp: SystemTime::now()
@@ -210,6 +211,7 @@ impl OrderCompletedEvent {
                 .unwrap()
                 .as_secs(),
             transaction_hash,
+            chain_id,
         }
     }
 }

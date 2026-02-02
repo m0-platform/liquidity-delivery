@@ -9,8 +9,10 @@ use order_book::{
     FillReported, NativeOrder, Order, OrderCancelled, OrderCompleted, OrderData, OrderFilled,
     OrderOpened, RefundClaimed,
 };
-use slog::{error, info, Logger};
-use solana_client::rpc_config::{RpcTransactionLogsConfig, RpcTransactionLogsFilter};
+use slog::{error, info, warn, Logger};
+use solana_client::rpc_config::{
+    RpcTransactionConfig, RpcTransactionLogsConfig, RpcTransactionLogsFilter,
+};
 use solana_transaction_status_client_types::{
     option_serializer, EncodedConfirmedTransactionWithStatusMeta, UiInstruction,
     UiTransactionEncoding,
@@ -273,7 +275,14 @@ impl SvmEventListener {
                 for attempt in 0..5 {
                     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                     match rpc_client
-                        .get_transaction(&signature, UiTransactionEncoding::Json)
+                        .get_transaction_with_config(
+                            &signature,
+                            RpcTransactionConfig {
+                                encoding: Some(UiTransactionEncoding::Json),
+                                commitment: Some(CommitmentConfig::confirmed()),
+                                max_supported_transaction_version: Some(0),
+                            },
+                        )
                         .await
                     {
                         Ok(transaction) => {
@@ -302,6 +311,15 @@ impl SvmEventListener {
                 // Parse all order_book events from transaction
                 let events = Self::parse_order_book_events(&tx, &logger, &signature_str);
 
+                if events.is_empty() {
+                    warn!(
+                        logger,
+                        "No order_book events found in transaction";
+                        "signature" => &signature_str,
+                        "chain_id" => %chain_id,
+                    );
+                }
+
                 for event in events {
                     let solver_event = match event {
                         OrderBookEvent::OrderOpened(e) => {
@@ -311,24 +329,36 @@ impl SvmEventListener {
                                 &program_id,
                             );
 
-                            let order = match rpc_client
-                                .get_account_data(&order_account)
-                                .await
-                                .and_then(|data| {
-                                    let mut slice = &data[8..];
-                                    Order::<NativeOrder>::deserialize(&mut slice)
-                                        .map_err(|e| e.into())
-                                }) {
-                                Ok(order) => order,
-                                Err(err) => {
-                                    error!(
-                                        logger,
-                                        "Failed to fetch or deserialize order data";
-                                        "order_id" => hex::encode(e.order_id),
-                                        "error" => %err,
-                                    );
-                                    continue;
+                            let mut order_result = None;
+                            for attempt in 0..5 {
+                                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+                                match rpc_client.get_account_data(&order_account).await.and_then(
+                                    |data| {
+                                        let mut slice = &data[8..];
+                                        Order::<NativeOrder>::deserialize(&mut slice)
+                                            .map_err(|e| e.into())
+                                    },
+                                ) {
+                                    Ok(order) => {
+                                        order_result = Some(order);
+                                        break;
+                                    }
+                                    Err(err) => {
+                                        error!(
+                                            logger,
+                                            "Failed to fetch or deserialize order data after retries";
+                                            "order_id" => hex::encode(e.order_id),
+                                            "attempt" => attempt + 1,
+                                            "error" => %err,
+                                        );
+                                    }
                                 }
+                            }
+
+                            let order = match order_result {
+                                Some(order) => order,
+                                None => continue,
                             };
 
                             SolverEvent::OrderCreated(OrderCreatedEvent::new(
@@ -350,6 +380,7 @@ impl SvmEventListener {
                             SolverEvent::OrderCompleted(OrderCompletedEvent::new(
                                 hex::encode(e.order_id),
                                 signature_str.clone(),
+                                chain_id,
                             ))
                         }
                         OrderBookEvent::OrderCancelled(e) => {

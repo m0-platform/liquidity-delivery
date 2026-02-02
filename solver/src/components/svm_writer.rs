@@ -5,9 +5,10 @@ use crate::events::{EventHandler, EventProcessor, FillOrderSuccessfulEvent, Solv
 use crate::providers::ProviderManager;
 use crate::stores::OrderStore;
 use crate::utils::{
-    anchor_discriminator, chain_runtime, decode_address, decode_order_id, find_pda,
-    PORTAL_PROGRAM_ID, WORMHOLE_ADAPTER,
+    anchor_discriminator, chain_runtime, decode_address, decode_evm_address, decode_order_id,
+    find_pda, PORTAL_PROGRAM_ID, WORMHOLE_ADAPTER,
 };
+use alloy::primitives::Address;
 use anchor_client::anchor_lang::AnchorSerialize;
 use anchor_client::solana_sdk::address_lookup_table::state::AddressLookupTable;
 use anchor_client::solana_sdk::{
@@ -39,6 +40,7 @@ pub struct SvmWriter {
     provider_manager: Arc<ProviderManager>,
     chains: Vec<ChainConfig>,
     keypair: Arc<Keypair>,
+    evm_solver: Address,
     logger: Logger,
     network: config::Network,
 }
@@ -50,6 +52,7 @@ impl SvmWriter {
             provider_manager: params.provider_manager.clone(),
             chains: params.config.chains.clone(),
             keypair: params.config.signers.svm_keypair(),
+            evm_solver: params.config.signers.evm_address(),
             logger: params.logger.new(slog::o!("component" => "SvmWriter")),
             network: params.config.network.clone(),
         }
@@ -65,21 +68,7 @@ impl SvmWriter {
             })
     }
 
-    fn get_bridge_adapter(&self, chain_id: u32) -> Result<Pubkey> {
-        let chain = self
-            .chains
-            .iter()
-            .find(|c| c.chain_id == chain_id)
-            .ok_or_else(|| SolverError::Component("Chain not found for bridge adapter".into()))?;
-
-        match &chain.bridge_adapter {
-            Some(adapter) => Pubkey::from_str(adapter)
-                .map_err(|e| SolverError::Component(format!("Invalid adapter program ID: {e}"))),
-            None => Ok(WORMHOLE_ADAPTER),
-        }
-    }
-
-    fn get_destination_order_book_address(&self, chain_id: u32) -> Result<[u8; 32]> {
+    fn get_destination_wormhole_adapter(&self, chain_id: u32) -> Result<[u8; 32]> {
         let config = self
             .chains
             .iter()
@@ -88,9 +77,8 @@ impl SvmWriter {
                 SolverError::Component("Destination chain config not found".to_string())
             })?;
 
-        decode_address(config.order_book_address.clone(), chain_id).ok_or_else(|| {
-            SolverError::Component("Failed to decode order book address".to_string())
-        })
+        decode_address(config.wormhole_adapter.clone(), chain_id)
+            .ok_or_else(|| SolverError::Component("Failed to decode wormhole adapter".to_string()))
     }
 
     fn get_lut_address(&self, chain_id: u32) -> Option<Pubkey> {
@@ -345,8 +333,6 @@ impl SvmWriter {
         let is_devnet = self.network == config::Network::Devnet;
 
         let program_id = self.get_order_book_program_id(dest_chain_id)?;
-        let bridge_adapter = self.get_bridge_adapter(dest_chain_id)?;
-
         let solver_pubkey = self.keypair.pubkey();
         let order_id_bytes = decode_order_id(&order_id.to_string());
 
@@ -383,7 +369,7 @@ impl SvmWriter {
 
         let fill_params = order_book::instructions::fill::FillParams {
             amount_out_to_fill: amount_out_to_fill as u64,
-            origin_recipient: solver_pubkey.to_bytes(),
+            origin_recipient: decode_evm_address(self.evm_solver),
         };
 
         // Build instruction data using Anchor format:
@@ -412,22 +398,12 @@ impl SvmWriter {
             AccountMeta::new_readonly(PORTAL_PROGRAM_ID, false),
             AccountMeta::new(portal_global, false),
             AccountMeta::new_readonly(portal_authority, false),
-            AccountMeta::new_readonly(bridge_adapter, false),
+            AccountMeta::new_readonly(WORMHOLE_ADAPTER, false),
             AccountMeta::new_readonly(event_authority, false),
+            AccountMeta::new_readonly(program_id, false),
         ];
 
-        match bridge_adapter {
-            adapter if adapter == WORMHOLE_ADAPTER => {
-                accounts.extend(WormholeRemainingAccounts::account_metas(is_devnet));
-            }
-            _ => {
-                error!(
-                    self.logger,
-                    "Unsupported bridge adapter for foreign SVM fill";
-                    "adapter" => %bridge_adapter,
-                );
-            }
-        }
+        accounts.extend(WormholeRemainingAccounts::account_metas(is_devnet));
 
         let fill_ix = Instruction {
             program_id,
@@ -439,7 +415,7 @@ impl SvmWriter {
         let mut instructions = vec![fill_ix];
 
         // If using Wormhole adapter, add request_for_execution instruction
-        if bridge_adapter == WORMHOLE_ADAPTER {
+        {
             let sequence = wormhole::get_current_sequence(rpc_client, is_devnet)
                 .await
                 .map_err(|_| {
@@ -448,11 +424,11 @@ impl SvmWriter {
 
             let relay_ix = build_relay_instruction(
                 &solver_pubkey,
-                get_wormhole_chain_id(dest_chain_id).unwrap(),
+                get_wormhole_chain_id(order_data.origin_chain_id).unwrap(),
                 sequence,
-                &self.get_destination_order_book_address(dest_chain_id)?,
-                Some(wormhole::DEFAULT_GAS_LIMIT),
-                Some(wormhole::DEFAULT_MSG_VALUE),
+                &self.get_destination_wormhole_adapter(order_data.origin_chain_id)?,
+                Some(500_000),
+                Some(20_000_000),
             )
             .map_err(|_| SolverError::Component("Error building relay instruction".to_string()))?;
 

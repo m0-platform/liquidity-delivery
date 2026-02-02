@@ -1,6 +1,8 @@
-use alloy::primitives::{Address, U256};
+use alloy::primitives::{Address, Bytes, U256};
 use async_trait::async_trait;
 use m0_liquidity_sdk::types::ChainRuntime;
+use m0_portal_common::get_wormhole_chain_id;
+use serde::{Deserialize, Serialize};
 use slog::{error, info, warn, Logger};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -8,13 +10,45 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::components::ComponentParams;
-use crate::config::ChainConfig;
+use crate::config::{self, ChainConfig};
 use crate::contracts::{IOrderBook, IPortal, IERC20};
 use crate::error::{Result, SolverError};
 use crate::events::{EventHandler, EventProcessor, FillOrderSuccessfulEvent, SolverEvent};
 use crate::providers::ProviderManager;
 use crate::stores::OrderStore;
 use crate::utils::{chain_runtime, decode_evm_address, decode_order_id, encode_evm_address};
+
+/// Wormhole executor quote API
+const EXECUTOR_QUOTE_API_TESTNET: &str = "https://executor-testnet.labsapis.com/v0/quote";
+const EXECUTOR_QUOTE_API_MAINNET: &str = "https://executor.labsapis.com/v0/quote";
+
+/// Wormhole relay consts
+const GAS_INSTRUCTION_DISCRIMINANT: u8 = 1;
+const DEFAULT_GAS_LIMIT: u128 = 500_000;
+const DEFAULT_MSG_VALUE: u128 = 20_000_000;
+
+/// Request body for the Wormhole executor quote API
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WormholeQuoteRequest {
+    src_chain: u16,
+    dst_chain: u16,
+    relay_instructions: String,
+}
+
+/// Response from the Wormhole executor quote API
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WormholeQuoteResponse {
+    signed_quote: String,
+    estimated_cost: Option<String>,
+}
+
+/// Result from fetching a Wormhole executor quote
+struct WormholeQuote {
+    signed_quote: Vec<u8>,
+    estimated_cost: U256,
+}
 
 pub struct EvmWriter {
     order_store: Arc<OrderStore>,
@@ -23,6 +57,7 @@ pub struct EvmWriter {
     logger: Logger,
     /// Per-chain transaction locks to prevent nonce conflicts
     tx_locks: HashMap<u32, Arc<Mutex<()>>>,
+    network: config::Network,
 }
 
 impl EvmWriter {
@@ -42,6 +77,7 @@ impl EvmWriter {
             chains: params.config.chains.clone(),
             logger: params.logger.new(slog::o!("component" => "EvmWriter")),
             tx_locks,
+            network: params.config.network.clone(),
         }
     }
 
@@ -63,9 +99,97 @@ impl EvmWriter {
         self.chains
             .iter()
             .find(|c| c.chain_id == chain_id)
-            .and_then(|c| c.portal_address.as_ref())
-            .map(|addr| Address::from_str(addr).unwrap())
+            .map(|c| Address::from_str(&c.portal_address).unwrap())
             .ok_or_else(|| SolverError::Component("Portal address not found for chain".to_string()))
+    }
+
+    fn get_wormhole_adapter_address(&self, chain_id: u32) -> Result<Address> {
+        self.chains
+            .iter()
+            .find(|c| c.chain_id == chain_id)
+            .map(|c| Address::from_str(&c.wormhole_adapter).unwrap())
+            .ok_or_else(|| {
+                SolverError::Component("Wormhole adapter address not found for chain".to_string())
+            })
+    }
+
+    /// Encode relay instructions for the Wormhole executor quote API
+    fn encode_relay_instructions(gas_limit: u128, msg_value: u128) -> String {
+        let mut data = Vec::with_capacity(33);
+        data.push(GAS_INSTRUCTION_DISCRIMINANT);
+        data.extend_from_slice(&gas_limit.to_be_bytes());
+        data.extend_from_slice(&msg_value.to_be_bytes());
+        format!("0x{}", hex::encode(data))
+    }
+
+    /// Fetch a signed quote from the Wormhole executor API
+    async fn fetch_wormhole_quote(
+        &self,
+        src_chain_id: u32,
+        dst_chain_id: u32,
+    ) -> Result<WormholeQuote> {
+        let src_wormhole_chain_id = get_wormhole_chain_id(src_chain_id).ok_or_else(|| {
+            SolverError::Component(format!(
+                "Unknown Wormhole chain ID for source chain {}",
+                src_chain_id
+            ))
+        })?;
+
+        let dst_wormhole_chain_id = get_wormhole_chain_id(dst_chain_id).ok_or_else(|| {
+            SolverError::Component(format!(
+                "Unknown Wormhole chain ID for destination chain {}",
+                dst_chain_id
+            ))
+        })?;
+
+        let relay_instructions =
+            Self::encode_relay_instructions(DEFAULT_GAS_LIMIT, DEFAULT_MSG_VALUE);
+
+        let request = WormholeQuoteRequest {
+            src_chain: src_wormhole_chain_id,
+            dst_chain: dst_wormhole_chain_id,
+            relay_instructions,
+        };
+
+        let api_url = match self.network {
+            config::Network::Devnet | config::Network::Local => EXECUTOR_QUOTE_API_TESTNET,
+            config::Network::Mainnet => EXECUTOR_QUOTE_API_MAINNET,
+        };
+
+        let client = reqwest::Client::new();
+        let response: WormholeQuoteResponse = client
+            .post(api_url)
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| SolverError::Component(format!("Failed to fetch Wormhole quote: {}", e)))?
+            .json()
+            .await
+            .map_err(|e| {
+                SolverError::Component(format!("Failed to parse Wormhole quote response: {}", e))
+            })?;
+
+        // Decode hex to bytes (strip 0x prefix if present)
+        let hex_str = response
+            .signed_quote
+            .strip_prefix("0x")
+            .unwrap_or(&response.signed_quote);
+        let signed_quote = hex::decode(hex_str).map_err(|e| {
+            SolverError::Component(format!("Failed to decode signed quote hex: {}", e))
+        })?;
+
+        // Parse estimated cost (defaults to 0 if not provided)
+        let estimated_cost = response
+            .estimated_cost
+            .as_ref()
+            .and_then(|c| c.parse::<u128>().ok())
+            .map(U256::from)
+            .unwrap_or(U256::ZERO);
+
+        Ok(WormholeQuote {
+            signed_quote,
+            estimated_cost,
+        })
     }
 
     async fn approve_spending(&self, token: &[u8; 32], chain_id: u32, amount: u128) -> Result<()> {
@@ -196,28 +320,55 @@ impl EventHandler for EvmWriter {
                 let provider = provider_wrapper.provider().await;
                 let order_book = IOrderBook::new(order_book_address, provider.clone());
 
-                // Get portal quote for the fill report message
-                let portal_address = self.get_portal_address(dest_chain_id)?;
-                let portal = IPortal::new(portal_address, provider);
-                let quote = portal
-                    .quote(order.data.origin_chain_id, IPortal::PayloadType::FillReport)
-                    .call()
-                    .await
-                    .map_err(|err| {
-                        SolverError::Component(format!("Failed to get portal quote: {}", err))
-                    })?;
-
                 // Ensure spending is approved
                 self.approve_spending(&order.data.token_out, dest_chain_id, e.amount)
                     .await?;
 
-                // Call fillOrder with portal quote as msg.value
-                match order_book
-                    .fillOrder(order_id_bytes.into(), order_data, fill_params)
-                    .value(quote)
+                // Determine bridge adapter and quote based on origin chain
+                let (bridge_adapter, bridge_adapter_args, msg_value) =
+                    if chain_runtime(order.data.origin_chain_id) == ChainRuntime::Svm {
+                        // Solana origin - use Wormhole adapter for FillReport
+                        let wormhole_quote = self
+                            .fetch_wormhole_quote(dest_chain_id, order.data.origin_chain_id)
+                            .await?;
+                        let wormhole_adapter = self.get_wormhole_adapter_address(dest_chain_id)?;
+
+                        (
+                            wormhole_adapter,
+                            Bytes::from(wormhole_quote.signed_quote),
+                            wormhole_quote.estimated_cost,
+                        )
+                    } else {
+                        // EVM origin - use default adapter (Hyperlane) with Portal quote
+                        let portal_address = self.get_portal_address(dest_chain_id)?;
+                        let portal = IPortal::new(portal_address, provider);
+                        let quote = portal
+                            .quote(order.data.origin_chain_id, IPortal::PayloadType::FillReport)
+                            .call()
+                            .await
+                            .map_err(|err| {
+                                SolverError::Component(format!(
+                                    "Failed to get portal quote: {}",
+                                    err
+                                ))
+                            })?;
+
+                        (Address::ZERO, Bytes::new(), quote)
+                    };
+
+                let fill_result = order_book
+                    .fillOrder(
+                        order_id_bytes.into(),
+                        order_data,
+                        fill_params,
+                        bridge_adapter,
+                        bridge_adapter_args,
+                    )
+                    .value(msg_value)
                     .send()
-                    .await
-                {
+                    .await;
+
+                match fill_result {
                     Ok(pending_tx) => {
                         info!(
                             self.logger,
@@ -258,7 +409,6 @@ impl EventHandler for EvmWriter {
                             "Failed to submit fill order transaction";
                             "order_id" => %e.order_id,
                             "error" => %err,
-                            "quote" => %quote
                         );
                     }
                 }

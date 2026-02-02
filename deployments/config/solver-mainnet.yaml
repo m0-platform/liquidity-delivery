@@ -1,6 +1,4 @@
 # Production environment configuration for the solver
-# NOTE: Private keys are passed via environment variables (EVM_PRIVATE_KEY, SVM_PRIVATE_KEY)
-# NOTE: Liquidity API URL is passed via environment variable (LIQUIDITY_API_URL)
 
 environment: production
 network: mainnet
@@ -41,8 +39,10 @@ chains:
     chain: Ethereum
     rpc_url: https://mainnet.infura.io/v3/YOUR_INFURA_KEY
     ws_url: wss://mainnet.infura.io/ws/v3/YOUR_INFURA_KEY
-    order_book_address: "0xYOUR_ORDER_BOOK_ADDRESS"
-    enabled: false
+    order_book_address: ""
+    portal_address: ""
+    wormhole_adapter: ""
+    enabled: true
 
   # Solana Mainnet
   - chain_id: 1399811149
@@ -51,5 +51,6 @@ chains:
     ws_url: wss://mainnet.helius-rpc.com/?api-key=c5cd4e3c-bba3-47ce-bec8-74a82995a1c1
     order_book_address: "MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK"
     enabled: true
-    portal_address: "MzBrgc8yXBj4P16GTkcSyDZkEQZB9qDqf3fh9bByJce"
+    portal_address: ""
     lut_address: "52jvd5uEcgemmXzhmyaAxPSPQgHFdSQgKwVfauattsE3"
+    wormhole_adapter: "mzp1q2j5Hr1QuLC3KFBCAUz5aUckT6qyuZKZ3WJnMmY"

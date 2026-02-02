@@ -106,15 +106,15 @@ function onOrderCreated(orderId: string) {
 
     <!-- Header -->
     <header class="relative z-10 border-b border-white/5 backdrop-blur-xl bg-slate-950/50">
-      <div class="max-w-7xl mx-auto px-6 py-4">
-        <div class="flex items-center justify-between">
+      <div class="max-w-7xl mx-auto px-4 md:px-6 py-3 md:py-4">
+        <div class="flex items-center justify-between gap-2 md:gap-4">
           <!-- Logo & Network -->
-          <div class="flex items-center gap-6">
+          <div class="flex items-center gap-2 sm:gap-4 md:gap-6 min-w-0">
             <!-- Logo -->
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
               <div class="relative">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-400 to-accent-600 flex items-center justify-center shadow-glow">
-                  <svg class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-accent-400 to-accent-600 flex items-center justify-center shadow-glow">
+                  <svg class="w-5 h-5 sm:w-6 sm:h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M12 2L2 7l10 5 10-5-10-5z" stroke-linecap="round" stroke-linejoin="round"/>
                     <path d="M2 17l10 5 10-5" stroke-linecap="round" stroke-linejoin="round"/>
                     <path d="M2 12l10 5 10-5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -122,14 +122,14 @@ function onOrderCreated(orderId: string) {
                 </div>
                 <div class="absolute -inset-1 rounded-xl bg-accent-500/20 blur-lg -z-10"></div>
               </div>
-              <div>
+              <div class="hidden sm:block">
                 <h1 class="text-lg font-semibold text-white tracking-tight">Liquidity Delivery</h1>
                 <p class="text-xs text-surface-500">Cross-chain transfers</p>
               </div>
             </div>
 
             <!-- Divider -->
-            <div class="h-8 w-px bg-white/10"></div>
+            <div class="hidden md:block h-8 w-px bg-white/10"></div>
 
             <!-- Network Selector -->
             <NetworkSelector v-model="network" />
@@ -152,12 +152,12 @@ function onOrderCreated(orderId: string) {
 
     <!-- Navigation Tabs -->
     <nav class="relative z-10 border-b border-white/5 bg-slate-950/30 backdrop-blur-sm">
-      <div class="max-w-7xl mx-auto px-6">
+      <div class="max-w-7xl mx-auto px-4 md:px-6">
         <div class="flex gap-1">
           <button
             @click="activeTab = 'swap'; selectedOrderId = null"
             :class="[
-              'relative px-5 py-3.5 text-sm font-medium transition-all duration-200',
+              'relative px-3 sm:px-5 py-3 sm:py-3.5 text-sm font-medium transition-all duration-200',
               activeTab === 'swap'
                 ? 'text-white'
                 : 'text-surface-400 hover:text-surface-200'
@@ -178,7 +178,7 @@ function onOrderCreated(orderId: string) {
           <button
             @click="activeTab = 'orders'; selectedOrderId = null"
             :class="[
-              'relative px-5 py-3.5 text-sm font-medium transition-all duration-200',
+              'relative px-3 sm:px-5 py-3 sm:py-3.5 text-sm font-medium transition-all duration-200',
               activeTab === 'orders'
                 ? 'text-white'
                 : 'text-surface-400 hover:text-surface-200'
@@ -199,7 +199,7 @@ function onOrderCreated(orderId: string) {
           <button
             @click="activeTab = 'balances'"
             :class="[
-              'relative px-5 py-3.5 text-sm font-medium transition-all duration-200',
+              'relative px-3 sm:px-5 py-3 sm:py-3.5 text-sm font-medium transition-all duration-200',
               activeTab === 'balances'
                 ? 'text-white'
                 : 'text-surface-400 hover:text-surface-200'
@@ -221,7 +221,7 @@ function onOrderCreated(orderId: string) {
     </nav>
 
     <!-- Main Content -->
-    <main class="flex-1 flex items-start justify-center px-6 py-10 relative z-10">
+    <main class="flex-1 flex items-start justify-center px-4 md:px-6 py-6 md:py-10 relative z-10">
       <!-- Swap Tab (constrained width) -->
       <div v-if="activeTab === 'swap'" class="w-full max-w-md animate-in">
         <SwapWidget
@@ -263,7 +263,7 @@ function onOrderCreated(orderId: string) {
     </main>
 
     <!-- Footer -->
-    <footer class="relative z-10 border-t border-white/5 bg-slate-950/30 backdrop-blur-sm px-6 py-5">
+    <footer class="relative z-10 border-t border-white/5 bg-slate-950/30 backdrop-blur-sm px-4 md:px-6 py-4 md:py-5">
       <p class="text-accent-400 text-sm w-full text-center">
         This is a development tool and should not be used in production
       </p>

@@ -1,20 +1,45 @@
-# Build stage
-FROM rust:latest AS builder
-
+# Chef stage - compute recipe for dependencies
+FROM rust:latest AS chef
+RUN cargo install cargo-chef
 WORKDIR /app
+
+# Planner stage - analyze dependencies
+FROM chef AS planner
+
+# Copy workspace files needed for dependency analysis
+COPY Cargo.toml Cargo.lock ./
+COPY solver/Cargo.toml solver/Cargo.toml
+COPY solver/build.rs solver/build.rs
+COPY solver/proto solver/proto
+COPY svm/programs/order_book/Cargo.toml svm/programs/order_book/Cargo.toml
+COPY deployments/quoter/Cargo.toml deployments/quoter/Cargo.toml
+
+# Create stub source files for workspace members
+RUN mkdir -p solver/src && echo "fn main() {}" > solver/src/main.rs
+RUN mkdir -p svm/programs/order_book/src && echo "" > svm/programs/order_book/src/lib.rs
+RUN mkdir -p deployments/quoter/src && echo "fn main() {}" > deployments/quoter/src/main.rs
+
+RUN cargo chef prepare --recipe-path recipe.json
+
+# Builder stage - compile dependencies (cached) then source
+FROM chef AS builder
 
 # Install protobuf compiler for gRPC builds
 RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
 
-# Copy workspace files
+# Copy the recipe and build dependencies only (this layer is cached!)
+COPY --from=planner /app/recipe.json recipe.json
+RUN cargo chef cook --release --recipe-path recipe.json --package solver
+
+# Now copy actual source code
 COPY Cargo.toml Cargo.lock ./
-COPY deployments/quoter ./deployments/quoter
 COPY solver ./solver
 COPY svm ./svm
+COPY deployments/quoter ./deployments/quoter
 # EVM contract ABIs are needed at compile time for alloy sol! macro
 COPY evm/out ./evm/out
 
-# Build solver binary
+# Build solver binary (only application code compiles now)
 RUN cargo build --release --package solver
 
 # Runtime stage
