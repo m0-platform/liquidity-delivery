@@ -3,371 +3,68 @@ syntax = "proto3";
 package substreams.v1.program;
 
 message Data {
-    repeated CancelReported_Event cancel_reported_event_list = 1;
-    repeated DestinationSupportUpdated_Event destination_support_updated_event_list = 2;
-    repeated FillReported_Event fill_reported_event_list = 3;
-    repeated OrderCancelled_Event order_cancelled_event_list = 4;
-    repeated OrderCompleted_Event order_completed_event_list = 5;
-    repeated OrderFilled_Event order_filled_event_list = 6;
-    repeated OrderOpened_Event order_opened_event_list = 7;
-    repeated RefundClaimed_Event refund_claimed_event_list = 8;
-    repeated AcceptAdminRole_Instruction accept_admin_role_instruction_list = 9;
-    repeated AddDestination_Instruction add_destination_instruction_list = 10;
-    repeated CancelForeignOrder_Instruction cancel_foreign_order_instruction_list = 11;
-    repeated CancelNativeOrder_Instruction cancel_native_order_instruction_list = 12;
-    repeated ClearNewAdmin_Instruction clear_new_admin_instruction_list = 13;
-    repeated CloseOrderTokenAccount_Instruction close_order_token_account_instruction_list = 14;
-    repeated FillForeignOrder_Instruction fill_foreign_order_instruction_list = 15;
-    repeated FillNativeOrder_Instruction fill_native_order_instruction_list = 16;
-    repeated IdlInstruction_Instruction idl_instruction_instruction_list = 17;
-    repeated Initialize_Instruction initialize_instruction_list = 18;
-    repeated OpenOrder_Instruction open_order_instruction_list = 19;
-    repeated Pause_Instruction pause_instruction_list = 20;
-    repeated RemoveDestination_Instruction remove_destination_instruction_list = 21;
-    repeated ReportOrderCancel_Instruction report_order_cancel_instruction_list = 22;
-    repeated ReportOrderFill_Instruction report_order_fill_instruction_list = 23;
-    repeated SetNewAdmin_Instruction set_new_admin_instruction_list = 24;
-    repeated SetPortalAuthority_Instruction set_portal_authority_instruction_list = 25;
-    repeated Unpause_Instruction unpause_instruction_list = 26;
+  repeated CancelReported cancel_reported_event_list = 1;
+  repeated DestinationSupportUpdated destination_support_updated_event_list = 2;
+  repeated FillReported fill_reported_event_list = 3;
+  repeated OrderCancelled order_cancelled_event_list = 4;
+  repeated OrderCompleted order_completed_event_list = 5;
+  repeated OrderFilled order_filled_event_list = 6;
+  repeated OrderOpened order_opened_event_list = 7;
+  repeated RefundClaimed refund_claimed_event_list = 8;
 }
 
-message CancelReported_Event {
-  string trx_hash = 1;
-     repeated   uint64 order_id = 2;
+message CancelReported {
+  string transaction_hash = 1;
+  string order_id = 2;
 }
 
-message DestinationSupportUpdated_Event {
-  string trx_hash = 1;
-      uint32 dest_chain_id = 2;
-      bool is_supported = 3;
+message DestinationSupportUpdated {
+  string transaction_hash = 1;
+  uint32 dest_chain_id = 2;
+  bool is_supported = 3;
 }
 
-message FillReported_Event {
-  string trx_hash = 1;
-     repeated   uint64 order_id = 2;
-      uint64 amount_in_to_release = 3;
-      uint64 amount_out_filled = 4;
-     repeated   uint64 origin_recipient = 5;
+message FillReported {
+  string transaction_hash = 1;
+  string order_id = 2;
+  uint64 amount_in_to_release = 3;
+  uint64 amount_out_filled = 4;
+  string origin_recipient = 5;
 }
 
-message OrderCancelled_Event {
-  string trx_hash = 1;
-     repeated   uint64 order_id = 2;
+message OrderCancelled {
+  string transaction_hash = 1;
+  string order_id = 2;
 }
 
-message OrderCompleted_Event {
-  string trx_hash = 1;
-     repeated   uint64 order_id = 2;
+message OrderCompleted {
+  string transaction_hash = 1;
+  string order_id = 2;
 }
 
-message OrderFilled_Event {
-  string trx_hash = 1;
-     repeated   uint64 order_id = 2;
-      string solver = 3;
-      uint64 amount_in_to_release = 4;
-      uint64 amount_out_filled = 5;
+message OrderFilled {
+  string transaction_hash = 1;
+  string order_id = 2;
+  string solver = 3;
+  uint64 amount_in_to_release = 4;
+  uint64 amount_out_filled = 5;
 }
 
-message OrderOpened_Event {
-  string trx_hash = 1;
-     repeated   uint64 order_id = 2;
-      string sender = 3;
-      string token_in = 4;
-      uint64 amount_in = 5;
-      uint32 dest_chain_id = 6;
-     repeated   uint64 token_out = 7;
-      uint64 amount_out = 8;
-     repeated   uint64 solver = 9;
+message OrderOpened {
+  string transaction_hash = 1;
+  string order_id = 2;
+  string sender = 3;
+  string token_in = 4;
+  uint64 amount_in = 5;
+  uint32 dest_chain_id = 6;
+  string token_out = 7;
+  uint64 amount_out = 8;
+  string solver = 9;
 }
 
-message RefundClaimed_Event {
-  string trx_hash = 1;
-     repeated   uint64 order_id = 2;
-      string sender = 3;
-      uint64 amount = 4;
-}
-
-message AcceptAdminRole_Instruction {
-  string trx_hash = 1;
-    string acct_new_admin = 2;
-    string acct_global_account = 3;
-}
-
-message AddDestination_Instruction {
-  string trx_hash = 1;
-    uint32 dest_chain_id = 2;
-    string acct_admin = 3;
-    string acct_global_account = 4;
-    string acct_destination_account = 5;
-    string acct_event_authority = 6;
-    string acct_program = 7;
-}
-
-message CancelForeignOrder_Instruction {
-  string trx_hash = 1;
-    repeated uint64 order_id = 2;
-    OrderData order_data = 3;
-    string acct_signer = 4;
-    string acct_global_account = 5;
-    string acct_order = 6;
-    string acct_portal_global = 7;
-    string acct_portal_authority = 8;
-    string acct_bridge_adapter = 9;
-    string acct_event_authority = 10;
-    string acct_program = 11;
-}
-
-message CancelNativeOrder_Instruction {
-  string trx_hash = 1;
-    repeated uint64 order_id = 2;
-    string acct_signer = 3;
-    string acct_sender = 4;
-    string acct_global_account = 5;
-    string acct_order = 6;
-    string acct_token_in_mint = 7;
-    string acct_sender_token_in_ata = 8;
-    string acct_order_token_in_ata = 9;
-    string acct_token_in_program = 10;
-    string acct_event_authority = 11;
-    string acct_program = 12;
-}
-
-message ClearNewAdmin_Instruction {
-  string trx_hash = 1;
-    string acct_admin = 2;
-    string acct_global_account = 3;
-}
-
-message CloseOrderTokenAccount_Instruction {
-  string trx_hash = 1;
-    repeated uint64 order_id = 2;
-    string acct_payer = 3;
-    string acct_sender = 4;
-    string acct_order = 5;
-    string acct_token_in_mint = 6;
-    string acct_order_token_in_ata = 7;
-    string acct_recipient_token_account = 8;
-    string acct_token_in_program = 9;
-}
-
-message FillForeignOrder_Instruction {
-  string trx_hash = 1;
-    repeated uint64 order_id = 2;
-    OrderData order_data = 3;
-    FillParams fill_params = 4;
-    string acct_solver = 5;
-    string acct_global_account = 6;
-    string acct_token_out_mint = 7;
-    string acct_solver_token_out_account = 8;
-    string acct_recipient = 9;
-    string acct_recipient_token_out_ata = 10;
-    string acct_token_out_program = 11;
-    string acct_order = 12;
-    string acct_portal_global = 13;
-    string acct_portal_authority = 14;
-    string acct_bridge_adapter = 15;
-    string acct_event_authority = 16;
-    string acct_program = 17;
-}
-
-message FillNativeOrder_Instruction {
-  string trx_hash = 1;
-    repeated uint64 order_id = 2;
-    OrderData order_data = 3;
-    FillParams fill_params = 4;
-    string acct_solver = 5;
-    string acct_global_account = 6;
-    string acct_token_out_mint = 7;
-    string acct_solver_token_out_account = 8;
-    string acct_recipient = 9;
-    string acct_recipient_token_out_ata = 10;
-    string acct_token_out_program = 11;
-    string acct_order = 12;
-    string acct_token_in_mint = 13;
-    string acct_solver_token_in_account = 14;
-    string acct_order_token_in_ata = 15;
-    string acct_token_in_program = 16;
-    string acct_event_authority = 17;
-    string acct_program = 18;
-}
-
-message IdlInstruction_Instruction {
-  string trx_hash = 1;
-    ForeignOrder foreign = 2;
-    NativeOrder native = 3;
-}
-
-message Initialize_Instruction {
-  string trx_hash = 1;
-    uint32 chain_id = 2;
-    string portal_authority = 3;
-    string acct_admin = 4;
-    string acct_global_account = 5;
-}
-
-message OpenOrder_Instruction {
-  string trx_hash = 1;
-    OrderParams params = 2;
-    string acct_payer = 3;
-    string acct_token_authority = 4;
-    string acct_global_account = 5;
-    string acct_destination_account = 6;
-    string acct_token_in_mint = 7;
-    string acct_sender_token_in_account = 8;
-    string acct_sender_nonce_account = 9;
-    string acct_order = 10;
-    string acct_order_token_in_ata = 11;
-    string acct_token_in_program = 12;
-    string acct_event_authority = 13;
-    string acct_program = 14;
-}
-
-message Pause_Instruction {
-  string trx_hash = 1;
-    string acct_admin = 2;
-    string acct_global_account = 3;
-}
-
-message RemoveDestination_Instruction {
-  string trx_hash = 1;
-    uint32 dest_chain_id = 2;
-    string acct_admin = 3;
-    string acct_global_account = 4;
-    string acct_destination_account = 5;
-    string acct_event_authority = 6;
-    string acct_program = 7;
-}
-
-message ReportOrderCancel_Instruction {
-  string trx_hash = 1;
-    uint32 source_chain_id = 2;
-    CancelReport cancel_report = 3;
-    string acct_relayer = 4;
-    string acct_portal_authority = 5;
-    string acct_global_account = 6;
-    string acct_order = 7;
-    string acct_token_in_mint = 8;
-    string acct_order_sender = 9;
-    string acct_sender_token_in_ata = 10;
-    string acct_order_token_in_ata = 11;
-    string acct_token_in_program = 12;
-    string acct_event_authority = 13;
-    string acct_program = 14;
-}
-
-message ReportOrderFill_Instruction {
-  string trx_hash = 1;
-    uint32 source_chain_id = 2;
-    FillReport fill_report = 3;
-    string acct_relayer = 4;
-    string acct_portal_authority = 5;
-    string acct_global_account = 6;
-    string acct_order = 7;
-    string acct_token_in_mint = 8;
-    string acct_origin_recipient = 9;
-    string acct_recipient_token_in_ata = 10;
-    string acct_order_token_in_ata = 11;
-    string acct_token_in_program = 12;
-    string acct_event_authority = 13;
-    string acct_program = 14;
-}
-
-message SetNewAdmin_Instruction {
-  string trx_hash = 1;
-    string new_admin = 2;
-    string acct_admin = 3;
-    string acct_global_account = 4;
-}
-
-message SetPortalAuthority_Instruction {
-  string trx_hash = 1;
-    string portal_authority = 2;
-    string acct_admin = 3;
-    string acct_global_account = 4;
-}
-
-message Unpause_Instruction {
-  string trx_hash = 1;
-    string acct_admin = 2;
-    string acct_global_account = 3;
-}
-
-message CancelReport {
-     repeated   uint64 order_id = 1;
-     repeated   uint64 order_sender = 2;
-     repeated   uint64 token_in = 3;
-      uint64 amount_in_to_refund = 4;
-}
-
-message FillParams {
-      uint64 amount_out_to_fill = 1;
-     repeated   uint64 origin_recipient = 2;
-}
-
-message FillReport {
-     repeated   uint64 order_id = 1;
-      uint64 amount_in_to_release = 2;
-      uint64 amount_out_filled = 3;
-     repeated   uint64 origin_recipient = 4;
-     repeated   uint64 token_in = 5;
-}
-
-message ForeignOrder {
-      OrderStatusEnum status = 1;
-      uint64 amount_in_released = 2;
-      uint64 amount_out_filled = 3;
-      uint64 amount_in_refunded = 4;
-}
-
-message NativeOrder {
-      OrderStatusEnum status = 1;
-      uint64 version = 2;
-      string sender = 3;
-      string payer = 4;
-      uint64 nonce = 5;
-      uint32 dest_chain_id = 6;
-      uint64 created_at = 7;
-      uint64 fill_deadline = 8;
-      string token_in = 9;
-     repeated   uint64 token_out = 10;
-      uint64 amount_in = 11;
-      uint64 amount_out = 12;
-     repeated   uint64 recipient = 13;
-     repeated   uint64 solver = 14;
-      uint64 amount_in_released = 15;
-      uint64 amount_out_filled = 16;
-      uint64 amount_in_refunded = 17;
-}
-message OrderData {
-      uint64 version = 1;
-     repeated   uint64 sender = 2;
-      uint64 nonce = 3;
-      uint32 origin_chain_id = 4;
-      uint32 dest_chain_id = 5;
-      uint64 created_at = 6;
-      uint64 fill_deadline = 7;
-     repeated   uint64 token_in = 8;
-     repeated   uint64 token_out = 9;
-      uint64 amount_in = 10;
-      uint64 amount_out = 11;
-     repeated   uint64 recipient = 12;
-     repeated   uint64 solver = 13;
-}
-
-message OrderParams {
-      uint32 dest_chain_id = 1;
-      uint64 created_at = 2;
-      uint64 fill_deadline = 3;
-     repeated   uint64 token_out = 4;
-      uint64 amount_in = 5;
-      uint64 amount_out = 6;
-     repeated   uint64 recipient = 7;
-     repeated   uint64 solver = 8;
-}
-
-enum OrderStatusEnum {
-    ORDER_STATUS_DOES_NOT_EXIST = 0;
-    ORDER_STATUS_CREATED = 1;
-    ORDER_STATUS_CANCELLED = 2;
-    ORDER_STATUS_COMPLETED = 3;
+message RefundClaimed {
+  string transaction_hash = 1;
+  string order_id = 2;
+  string sender = 3;
+  uint64 amount = 4;
 }

@@ -71,3 +71,4 @@ yarn-error.log*
 
 # substreams
 *.spkg
+.substreams.env
