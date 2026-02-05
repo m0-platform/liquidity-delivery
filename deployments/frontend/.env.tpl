@@ -1,11 +1,11 @@
 # =============================================================================
 # Quoter API URLs
 # =============================================================================
-VITE_QUOTER_URL_LOCAL=http://localhost:3002
+VITE_QUOTER_URL_LOCAL=http://localhost:5600
 VITE_QUOTER_URL_DEVNET=https://quoter-devnet.up.railway.app
 VITE_QUOTER_URL_MAINNET=https://quoter-mainnet.up.railway.app
 
-VITE_LIQUIDITY_API_LOCAL=http://localhost:8080
+VITE_LIQUIDITY_API_LOCAL=http://localhost:5600
 VITE_LIQUIDITY_API_DEVNET=https://api-devnet-devnet.up.railway.app
 VITE_LIQUIDITY_API_MAINNET=https://swap-api-devnet.up.railway.app
 

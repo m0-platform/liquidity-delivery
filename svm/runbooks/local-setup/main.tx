@@ -43,7 +43,7 @@ action "initialize_orderbook" "svm::process_instructions" {
     depends_on = [action.deploy_order_book]
 }
 
-# CONFIGURATION ETHEREUM
+# CONFIGURATION SEPOLIA
 action "configure_destination_eth" "svm::process_instructions" {
     description = "Configures a destination chain (Ethereum)"
     signers = [signer.caller]
@@ -56,12 +56,12 @@ action "configure_destination_eth" "svm::process_instructions" {
         destination_account {
             public_key = "9sKXCLNYtDAtGpSssvQHj7zkAACutH3N9hRpSkpysp5Z"
         }
-        instruction_args = [1]
+        instruction_args = [11155111]
     }
     depends_on = [action.initialize_orderbook]
 }
 
-# CONFIGURATION BASE
+# CONFIGURATION ARBITRUM SEPOLIA
 action "configure_destination_base" "svm::process_instructions" {
     description = "Configures a destination chain (Base)"
     signers = [signer.caller]
@@ -74,7 +74,7 @@ action "configure_destination_base" "svm::process_instructions" {
         destination_account {
             public_key = "4vbJ2P91EtA72GKyCG2ZS6eGDHgN9oZtCUH3syFJRpXa"
         }
-        instruction_args = [8453]
+        instruction_args = [421614]
     }
     depends_on = [action.initialize_orderbook]
 }

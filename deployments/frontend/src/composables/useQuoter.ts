@@ -2,8 +2,8 @@ import { ref, computed, toValue, type MaybeRef } from "vue";
 import { getQuoterUrl, type NetworkType } from "../config/network";
 
 interface QuoteRequest {
-  srcChainId: number;
-  dstChainId: number;
+  srcChain: string;
+  dstChain: string;
   srcToken: string;
   dstToken: string;
   amount: string;
@@ -15,6 +15,7 @@ export interface EvmTransaction {
   to: string;
   data: string;
   value: string;
+  chainId?: number;
 }
 
 export interface QuoteResponse {
@@ -23,12 +24,10 @@ export interface QuoteResponse {
   fee: string;
   estimatedTime: string;
   solver?: string;
-  orderId?: string;
   evmTransaction?: EvmTransaction;
   approvalTransaction?: EvmTransaction;
   svmTransaction?: string;
-  nonce?: number;
-  orderbookAddress?: string;
+  orderId?: string;
 }
 
 export function useQuoter(networkRef: MaybeRef<NetworkType>) {
@@ -52,12 +51,18 @@ export function useQuoter(networkRef: MaybeRef<NetworkType>) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          input_chain_id: request.srcChainId,
-          output_chain_id: request.dstChainId,
-          input_token: request.srcToken,
-          output_token: request.dstToken,
-          amount_in: parseInt(request.amount),
-          sender_address: request.senderAddress,
+          route: {
+            source: {
+              chain: request.srcChain,
+              address: request.srcToken,
+            },
+            destination: {
+              chain: request.dstChain,
+              address: request.dstToken,
+            },
+          },
+          amountIn: request.amount,
+          sender: request.senderAddress || "",
           recipient: request.recipient,
         }),
       });
@@ -76,31 +81,69 @@ export function useQuoter(networkRef: MaybeRef<NetworkType>) {
         throw new Error("No quotes available");
       }
 
-      // Check if quote was rejected
-      if (quoteData.rejected) {
-        throw new Error(quoteData.reject_reason || "Quote rejected");
-      }
-
-      const outputAmount = String(
-        quoteData.output_amount ?? quoteData.amount_out ?? "0"
-      );
+      const outputAmount = String(quoteData.amountOut ?? "0");
       const inputAmount = parseInt(request.amount) || 1;
       const outputAmountNum = parseInt(outputAmount) || 1;
+
+      // Extract transactions from payloads
+      interface PayloadData {
+        type: string;
+        chain?: string;
+        chainId?: number;
+        to: string;
+        data: string;
+        value: string;
+        transaction?: string;
+      }
+      interface Payload {
+        provider: string;
+        annotation: string;
+        data: PayloadData;
+      }
+
+      const payloads: Payload[] = quoteData.payloads || [];
+
+      // Filter EVM payloads and separate approval from main transaction
+      const evmPayloads = payloads.filter((p) => p.data?.type === "evm");
+
+      // Approval transaction has "Approve" in annotation
+      const approvalPayload = evmPayloads.find((p) =>
+        p.annotation?.toLowerCase().includes("approve")
+      );
+
+      // Main transaction is the non-approval EVM payload
+      const mainEvmPayload = evmPayloads.find(
+        (p) => !p.annotation?.toLowerCase().includes("approve")
+      );
+
+      // SVM transaction
+      const svmPayload = payloads.find((p) => p.data?.type === "svm");
 
       quote.value = {
         amountOut: outputAmount,
         rate: outputAmountNum / inputAmount,
-        fee: String(quoteData.fee_bps ?? "0"),
-        estimatedTime: quoteData.est_fill_time_seconds
-          ? `~${quoteData.est_fill_time_seconds}s`
+        fee: "0",
+        estimatedTime: quoteData.estFillTime
+          ? `~${quoteData.estFillTime}s`
           : "~30s",
-        solver: quoteData.solver_address || quoteData.solver,
-        orderId: quoteData.order_id,
-        evmTransaction: quoteData.evm_transaction,
-        approvalTransaction: quoteData.approval_transaction,
-        svmTransaction: quoteData.svm_transaction,
-        nonce: quoteData.nonce,
-        orderbookAddress: quoteData.orderbook_address,
+        solver: payloads[0]?.provider,
+        approvalTransaction: approvalPayload?.data
+          ? {
+              to: approvalPayload.data.to,
+              data: approvalPayload.data.data,
+              value: approvalPayload.data.value,
+              chainId: approvalPayload.data.chainId,
+            }
+          : undefined,
+        evmTransaction: mainEvmPayload?.data
+          ? {
+              to: mainEvmPayload.data.to,
+              data: mainEvmPayload.data.data,
+              value: mainEvmPayload.data.value,
+              chainId: mainEvmPayload.data.chainId,
+            }
+          : undefined,
+        svmTransaction: svmPayload?.data?.transaction,
       };
 
       return quote.value;

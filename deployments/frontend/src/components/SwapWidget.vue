@@ -56,9 +56,9 @@ const chains = computed(() => {
 
   if (props.network === 'local') {
     return [
-      { id: 'ethereum', name: 'Ethereum (Anvil)', chainId: 1, rpc: config.ethereumRpc },
-      { id: 'base', name: 'Base (Anvil)', chainId: 8453, rpc: config.baseRpc || 'http://localhost:8546' },
-      { id: 'solana', name: 'Solana (Surfpool)', chainId: 1399811149, rpc: config.solanaRpc },
+      { id: 'sepolia', name: 'Sepolia (Anvil)', chainId: 11155111, rpc: config.ethereumRpc },
+      { id: 'arbitrum', name: 'Arbitrum (Anvil)', chainId: 421614, rpc: config.baseRpc || 'http://localhost:8546' },
+      { id: 'solana', name: 'Solana (Surfpool)', chainId: 1399811150, rpc: config.solanaRpc },
     ]
   } else if (props.network === 'devnet') {
     return [
@@ -195,8 +195,8 @@ async function requestQuote() {
     : props.evmAddress
 
   await getQuote({
-    srcChainId: srcChain.chainId,
-    dstChainId: dstChain.chainId,
+    srcChain: srcAsset.chain,
+    dstChain: dstAsset.chain,
     srcToken: srcAsset.address,
     dstToken: dstAsset.address,
     amount: integerAmount,

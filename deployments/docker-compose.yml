@@ -98,46 +98,33 @@ services:
     networks:
       - liquidity-network
 
-  # Mock liquidity API using WireMock
-  mock-api:
-    image: wiremock/wiremock:latest
-    container_name: liquidity-mock-api
-    volumes:
-      - ./wiremock/mappings:/home/wiremock/mappings:ro
-    ports:
-      - "8080:8080"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/__admin/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
-    networks:
-      - liquidity-network
-
-  # Quoter service - provides quotes via gRPC and HTTP API
-  quoter:
+  # Liquidity server - provides quotes via gRPC and HTTP API
+  liquidity-server:
     build:
-      context: ..
-      dockerfile: deployments/quoter/Dockerfile
-    container_name: liquidity-quoter
+      context: ../../liquidity-toolkit
+      dockerfile: Dockerfile.local
+      target: liquidity-api-server
+    container_name: liquidity-server
     depends_on:
       deployer:
         condition: service_completed_successfully
+      surfpool:
+        condition: service_healthy
+      anvil-chain-a:
+        condition: service_healthy
+      anvil-chain-b:
+        condition: service_healthy
+    env_file:
+      - ../../liquidity-toolkit/packages/server/.env.local
     environment:
-      - QUOTER_ENV=development
-      - QUOTE_TIMEOUT_MS=1000
-      - GRPC_HOST=0.0.0.0
-      - GRPC_PORT=50051
-      - API_PORT=3000
-      - QUOTER_CONFIG=/app/config.yaml
+      - LOCAL_ASSETS_FILE=/app/config/local-assets.json
     volumes:
-      - ./config/quoter-local.yaml:/app/config.yaml:ro
+      - ./config/local-assets.json:/app/config/local-assets.json:ro
     ports:
-      - "3002:3000"   # HTTP API (host:container)
-      - "50052:50051" # gRPC (host:container)
+      - "5600:5600"   # HTTP API
+      - "50052:50051" # gRPC
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5600/supported-assets').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -152,9 +139,7 @@ services:
       dockerfile: solver/Dockerfile
     container_name: liquidity-solver
     depends_on:
-      quoter:
-        condition: service_healthy
-      mock-api:
+      liquidity-server:
         condition: service_healthy
       deployer:
         condition: service_completed_successfully
@@ -172,10 +157,6 @@ services:
       dockerfile: Dockerfile
       target: development
     container_name: liquidity-frontend
-    environment:
-      - VITE_QUOTER_URL=http://localhost:3002
-      - VITE_ANVIL_RPC=http://localhost:8545
-      - VITE_BASE_LOCAL_RPC=http://localhost:8546
     ports:
       - "5173:5173"
     volumes:
@@ -183,7 +164,7 @@ services:
       - ./frontend/public:/app/public:ro
       - ./frontend/index.html:/app/index.html:ro
     depends_on:
-      quoter:
+      liquidity-server:
         condition: service_healthy
     networks:
       - liquidity-network
