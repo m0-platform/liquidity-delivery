@@ -1,5 +1,5 @@
 [workspace]
-members = ["svm/programs/*", "solver", "deployments/quoter", "deployments/substreams/svm-orderbook"]
+members = ["svm/programs/*", "solver", "deployments/quoter", "deployments/substreams/*"]
 resolver = "2"
 
 [profile.release]

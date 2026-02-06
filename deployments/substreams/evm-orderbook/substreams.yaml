@@ -1,0 +1,37 @@
+specVersion: v0.1.0
+package:
+  name: evm_orderbook
+  version: v0.1.0
+  url: https://github.com/username/evm_orderbook-sepolia
+  description: Substreams module for evm_orderbook on Ethereum Sepolia Testnet
+
+imports:
+  ethcommon: https://spkg.io/streamingfast/ethereum-common-v0.3.3.spkg
+
+protobuf:
+  files:
+    - contract.proto
+  importPaths:
+    - ./proto
+  excludePaths:
+    - sf/substreams
+    - google
+
+binaries:
+  default:
+    type: wasm/rust-v1
+    file: ../../../target/wasm32-unknown-unknown/release/substreams.wasm
+
+modules:
+  - name: map_events
+    kind: map
+    initialBlock: 10108380
+    blockFilter:
+      module: ethcommon:index_events
+      query:
+        string: evt_addr:0xe39b012ab3b20e94a9beea557eb0de4171d4d3e4
+    inputs:
+      - source: sf.ethereum.type.v2.Block
+    output:
+      type: proto:contract.v1.Events
+network: sepolia
