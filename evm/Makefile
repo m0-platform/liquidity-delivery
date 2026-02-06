@@ -147,6 +147,25 @@ endif
 upgrade-status: ## Show current deployment and implementation status
 	@./ops/upgrade.sh --status
 
+## Admin Commands
+
+.PHONY: transfer-roles
+
+transfer-roles: ## Transfer all roles to a new admin (ENV=prod CHAIN=base NEW_ADMIN=0x...)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make transfer-roles ENV=prod CHAIN=base NEW_ADMIN=0x..."
+	@exit 1
+endif
+ifndef CHAIN
+	@echo "Error: CHAIN is required. Usage: make transfer-roles ENV=prod CHAIN=base NEW_ADMIN=0x..."
+	@exit 1
+endif
+ifndef NEW_ADMIN
+	@echo "Error: NEW_ADMIN is required. Usage: make transfer-roles ENV=prod CHAIN=base NEW_ADMIN=0x..."
+	@exit 1
+endif
+	@./ops/transfer-roles.sh --env $(ENV) --chain $(CHAIN) --new-admin $(NEW_ADMIN)
+
 ## Status Commands
 
 .PHONY: status
@@ -266,6 +285,10 @@ help: ## Show this help
 	@echo "  make upgrade ENV=<dev|prod> CHAIN=<alias>        Upgrade on a chain"
 	@echo "  make upgrade-all ENV=<dev|prod>                  Upgrade on all chains"
 	@echo "  make upgrade-status                              Show implementation status"
+	@echo ""
+	@echo "Admin:"
+	@echo "  make transfer-roles ENV=<dev|prod> CHAIN=<alias> \\  Transfer all roles to new admin"
+	@echo "       NEW_ADMIN=0x..."
 	@echo ""
 	@echo "Testing:"
 	@echo "  make open-order ENV=<dev|prod> CHAIN=<alias> \\    Create a test order"
