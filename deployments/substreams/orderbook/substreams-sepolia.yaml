@@ -1,16 +1,18 @@
 specVersion: v0.1.0
 package:
-  name: evm_orderbook
+  name: sepolia-orderbook
   version: v0.1.0
-  url: https://github.com/username/evm_orderbook-sepolia
-  description: Substreams module for evm_orderbook on Ethereum Sepolia Testnet
+  url: https://github.com/m0-foundation/liquidity-delivery
+  description: Substreams module for the M0 OrderBook program on Sepolia
 
 imports:
   ethcommon: https://spkg.io/streamingfast/ethereum-common-v0.3.3.spkg
 
 protobuf:
   files:
-    - contract.proto
+    - program.proto
+  descriptorSets:
+    - module: buf.build/streamingfast/substreams-sink-sql
   importPaths:
     - ./proto
   excludePaths:
@@ -23,7 +25,7 @@ binaries:
     file: ../../../target/wasm32-unknown-unknown/release/substreams.wasm
 
 modules:
-  - name: map_events
+  - name: map_evm_events
     kind: map
     initialBlock: 10108380
     blockFilter:
@@ -33,5 +35,13 @@ modules:
     inputs:
       - source: sf.ethereum.type.v2.Block
     output:
-      type: proto:contract.v1.Events
+      type: proto:substreams.v1.program.Data
+
+params:
+  map_evm_events: "1115511"
+
+sink:
+  module: map_evm_events
+  type: sf.substreams.sink.sql.v1.Service
+
 network: sepolia

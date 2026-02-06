@@ -1,6 +1,6 @@
 specVersion: v0.1.0
 package:
-  name: svm-orderbook
+  name: solana-devnet-orderbook
   version: v0.1.3
   url: https://github.com/m0-foundation/liquidity-delivery
   description: Substreams module for the M0 OrderBook program on Solana
@@ -31,10 +31,11 @@ binaries:
     file: ../../../target/wasm32-unknown-unknown/release/substreams.wasm
 
 modules:
-  - name: map_program_data
+  - name: map_svm_events
     kind: map
     initialBlock: 436247835
     inputs:
+      - params: string
       - map: solana:blocks_without_votes
     output:
       type: proto:substreams.v1.program.Data
@@ -43,8 +44,11 @@ modules:
       query:
         string: program:MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK
 
+params:
+  map_svm_events: "1399811150"
+
 sink:
-  module: map_program_data
+  module: map_svm_events
   type: sf.substreams.sink.sql.v1.Service
 
 network: solana-devnet

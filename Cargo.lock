@@ -2887,23 +2887,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "evm_orderbook"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "ethabi",
- "getrandom 0.2.16",
- "hex-literal",
- "num-bigint 0.4.6",
- "num-traits",
- "prost 0.13.5",
- "prost-types 0.13.5",
- "regex",
- "substreams 0.7.6",
- "substreams-ethereum",
-]
-
-[[package]]
 name = "fastbloom"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4851,6 +4834,26 @@ dependencies = [
  "anchor-spl",
  "litesvm 0.8.1",
  "solana-security-txt",
+]
+
+[[package]]
+name = "orderbook-substream"
+version = "0.0.1"
+dependencies = [
+ "anchor-lang",
+ "base64 0.22.1",
+ "ethabi",
+ "getrandom 0.2.16",
+ "hex-literal",
+ "num-bigint 0.4.6",
+ "num-traits",
+ "prost 0.13.5",
+ "prost-types 0.13.5",
+ "sologger_log_context",
+ "substreams 0.7.6",
+ "substreams-ethereum",
+ "substreams-solana",
+ "substreams-solana-program-instructions",
 ]
 
 [[package]]
@@ -11541,21 +11544,6 @@ name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
-
-[[package]]
-name = "svm-orderbook"
-version = "0.0.1"
-dependencies = [
- "anchor-lang",
- "base64 0.22.1",
- "getrandom 0.2.16",
- "prost 0.13.5",
- "prost-types 0.13.5",
- "sologger_log_context",
- "substreams 0.7.6",
- "substreams-solana",
- "substreams-solana-program-instructions",
-]
 
 [[package]]
 name = "syn"

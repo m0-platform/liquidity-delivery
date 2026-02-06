@@ -19,8 +19,9 @@ message CancelReported {
 
   string id = 1 [(schema.field) = { primary_key: true }];
   uint64 ts = 2;
-  string transaction_hash = 3;
-  string order_id = 4;
+  uint32 chain_id = 3;
+  string transaction_hash = 4;
+  string order_id = 5;
 }
 
 message FillReported {
@@ -28,11 +29,12 @@ message FillReported {
 
   string id = 1 [(schema.field) = { primary_key: true }];
   uint64 ts = 2;
-  string transaction_hash = 3;
-  string order_id = 4;
-  uint64 amount_in_to_release = 5;
-  uint64 amount_out_filled = 6;
-  string origin_recipient = 7;
+  uint32 chain_id = 3;
+  string transaction_hash = 4;
+  string order_id = 5;
+  uint64 amount_in_to_release = 6;
+  uint64 amount_out_filled = 7;
+  string origin_recipient = 8;
 }
 
 message OrderCancelled {
@@ -40,8 +42,9 @@ message OrderCancelled {
 
   string id = 1 [(schema.field) = { primary_key: true }];
   uint64 ts = 2;
-  string transaction_hash = 3;
-  string order_id = 4;
+  uint32 chain_id = 3;
+  string transaction_hash = 4;
+  string order_id = 5;
 }
 
 message OrderCompleted {
@@ -49,8 +52,9 @@ message OrderCompleted {
 
   string id = 1 [(schema.field) = { primary_key: true }];
   uint64 ts = 2;
-  string transaction_hash = 3;
-  string order_id = 4;
+  uint32 chain_id = 3;
+  string transaction_hash = 4;
+  string order_id = 5;
 }
 
 message OrderFilled {
@@ -58,11 +62,12 @@ message OrderFilled {
 
   string id = 1 [(schema.field) = { primary_key: true }];
   uint64 ts = 2;
-  string transaction_hash = 3;
-  string order_id = 4;
-  string solver = 5;
-  uint64 amount_in_to_release = 6;
-  uint64 amount_out_filled = 7;
+  uint32 chain_id = 3;
+  string transaction_hash = 4;
+  string order_id = 5;
+  string solver = 6;
+  uint64 amount_in_to_release = 7;
+  uint64 amount_out_filled = 8;
 }
 
 message OrderOpened {
@@ -70,15 +75,16 @@ message OrderOpened {
 
   string id = 1 [(schema.field) = { primary_key: true }];
   uint64 ts = 2;
-  string transaction_hash = 3;
-  string order_id = 4;
-  string sender = 5;
-  string token_in = 6;
-  uint64 amount_in = 7;
-  uint32 dest_chain_id = 8;
-  string token_out = 9;
-  uint64 amount_out = 10;
-  string solver = 11;
+  uint32 chain_id = 3;
+  string transaction_hash = 4;
+  string order_id = 5;
+  string sender = 6;
+  string token_in = 7;
+  uint64 amount_in = 8;
+  uint32 dest_chain_id = 9;
+  string token_out = 10;
+  uint64 amount_out = 11;
+  string solver = 12;
 }
 
 message RefundClaimed {
@@ -86,8 +92,9 @@ message RefundClaimed {
 
   string id = 1 [(schema.field) = { primary_key: true }];
   uint64 ts = 2;
-  string transaction_hash = 3;
-  string order_id = 4;
-  string sender = 5;
-  uint64 amount = 6;
+  uint32 chain_id = 3;
+  string transaction_hash = 4;
+  string order_id = 5;
+  string sender = 6;
+  uint64 amount = 7;
 }
