@@ -5,18 +5,16 @@ pub struct Data {
     #[prost(message, repeated, tag="1")]
     pub cancel_reported_event_list: ::prost::alloc::vec::Vec<CancelReported>,
     #[prost(message, repeated, tag="2")]
-    pub destination_support_updated_event_list: ::prost::alloc::vec::Vec<DestinationSupportUpdated>,
-    #[prost(message, repeated, tag="3")]
     pub fill_reported_event_list: ::prost::alloc::vec::Vec<FillReported>,
-    #[prost(message, repeated, tag="4")]
+    #[prost(message, repeated, tag="3")]
     pub order_cancelled_event_list: ::prost::alloc::vec::Vec<OrderCancelled>,
-    #[prost(message, repeated, tag="5")]
+    #[prost(message, repeated, tag="4")]
     pub order_completed_event_list: ::prost::alloc::vec::Vec<OrderCompleted>,
-    #[prost(message, repeated, tag="6")]
+    #[prost(message, repeated, tag="5")]
     pub order_filled_event_list: ::prost::alloc::vec::Vec<OrderFilled>,
-    #[prost(message, repeated, tag="7")]
+    #[prost(message, repeated, tag="6")]
     pub order_opened_event_list: ::prost::alloc::vec::Vec<OrderOpened>,
-    #[prost(message, repeated, tag="8")]
+    #[prost(message, repeated, tag="7")]
     pub refund_claimed_event_list: ::prost::alloc::vec::Vec<RefundClaimed>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
@@ -26,16 +24,6 @@ pub struct CancelReported {
     pub transaction_hash: ::prost::alloc::string::String,
     #[prost(string, tag="2")]
     pub order_id: ::prost::alloc::string::String,
-}
-#[allow(clippy::derive_partial_eq_without_eq)]
-#[derive(Clone, PartialEq, ::prost::Message)]
-pub struct DestinationSupportUpdated {
-    #[prost(string, tag="1")]
-    pub transaction_hash: ::prost::alloc::string::String,
-    #[prost(uint32, tag="2")]
-    pub dest_chain_id: u32,
-    #[prost(bool, tag="3")]
-    pub is_supported: bool,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message)]

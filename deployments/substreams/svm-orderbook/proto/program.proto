@@ -4,24 +4,17 @@ package substreams.v1.program;
 
 message Data {
   repeated CancelReported cancel_reported_event_list = 1;
-  repeated DestinationSupportUpdated destination_support_updated_event_list = 2;
-  repeated FillReported fill_reported_event_list = 3;
-  repeated OrderCancelled order_cancelled_event_list = 4;
-  repeated OrderCompleted order_completed_event_list = 5;
-  repeated OrderFilled order_filled_event_list = 6;
-  repeated OrderOpened order_opened_event_list = 7;
-  repeated RefundClaimed refund_claimed_event_list = 8;
+  repeated FillReported fill_reported_event_list = 2;
+  repeated OrderCancelled order_cancelled_event_list = 3;
+  repeated OrderCompleted order_completed_event_list = 4;
+  repeated OrderFilled order_filled_event_list = 5;
+  repeated OrderOpened order_opened_event_list = 6;
+  repeated RefundClaimed refund_claimed_event_list = 7;
 }
 
 message CancelReported {
   string transaction_hash = 1;
   string order_id = 2;
-}
-
-message DestinationSupportUpdated {
-  string transaction_hash = 1;
-  uint32 dest_chain_id = 2;
-  bool is_supported = 3;
 }
 
 message FillReported {
