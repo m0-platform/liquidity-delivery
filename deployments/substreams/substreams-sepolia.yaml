@@ -22,7 +22,7 @@ protobuf:
 binaries:
   default:
     type: wasm/rust-v1
-    file: ../../../target/wasm32-unknown-unknown/release/substreams.wasm
+    file: ../../target/wasm32-unknown-unknown/release/substreams.wasm
 
 modules:
   - name: map_evm_events
@@ -33,12 +33,13 @@ modules:
       query:
         string: evt_addr:0xe39b012ab3b20e94a9beea557eb0de4171d4d3e4
     inputs:
+      - params: string
       - source: sf.ethereum.type.v2.Block
     output:
       type: proto:substreams.v1.program.Data
 
 params:
-  map_evm_events: "1115511"
+  map_evm_events: "11155111"
 
 sink:
   module: map_evm_events

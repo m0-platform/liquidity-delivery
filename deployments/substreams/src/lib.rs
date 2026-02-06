@@ -1,6 +1,5 @@
 mod abi;
 mod idl;
-#[allow(unused)]
 mod pb;
 
 use abi::orderbook_contract::events as abi_events;
