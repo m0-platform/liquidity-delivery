@@ -1,7 +1,7 @@
 specVersion: v0.1.0
 package:
   name: svm-orderbook
-  version: v0.1.1
+  version: v0.1.3
   url: https://github.com/m0-foundation/liquidity-delivery
   description: Substreams module for the M0 OrderBook program on Solana
 
@@ -46,7 +46,5 @@ modules:
 sink:
   module: map_program_data
   type: sf.substreams.sink.sql.v1.Service
-  config:
-    schema: "../schema.sql"
 
 network: solana-devnet

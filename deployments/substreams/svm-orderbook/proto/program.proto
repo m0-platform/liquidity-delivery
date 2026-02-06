@@ -45,7 +45,7 @@ message OrderCancelled {
 }
 
 message OrderCompleted {
-  option (schema.table) = { name: "events_orde_completed" };
+  option (schema.table) = { name: "events_order_completed" };
 
   string id = 1 [(schema.field) = { primary_key: true }];
   uint64 ts = 2;
