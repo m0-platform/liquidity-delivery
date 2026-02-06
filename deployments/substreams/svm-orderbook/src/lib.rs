@@ -23,17 +23,20 @@ fn map_program_data(blk: Block) -> Data {
             continue;
         };
 
-        let mut instruction_datas = vec![];
-        for inner in meta.inner_instructions.iter() {
-            for instruction in inner.instructions.iter() {
-                if instruction.data.len() > 16 && instruction.data[0..8] == CPI_EVENT_DISCRIMINATOR
-                {
-                    instruction_datas.push(instruction.data[8..].to_vec());
-                }
-            }
-        }
+        // Filter out emit_cpi instruction data
+        let instruction_datas: Vec<Vec<u8>> = meta
+            .inner_instructions
+            .iter()
+            .flat_map(|inner| inner.instructions.iter())
+            .filter_map(|instruction| {
+                instruction
+                    .data
+                    .strip_prefix(&CPI_EVENT_DISCRIMINATOR)
+                    .map(|rest| rest.to_vec())
+            })
+            .collect();
 
-        for cpi_event in instruction_datas {
+        for (i, cpi_event) in instruction_datas.iter().enumerate() {
             substreams::log::info!(
                 "Processing cpi event for tx {}: 0x{}",
                 transaction.id(),
@@ -43,11 +46,18 @@ fn map_program_data(blk: Block) -> Data {
             let (discriminator, event_data) = cpi_event.split_at(8);
             let mut event_data = event_data;
             let transaction_hash = transaction.id();
+            let id = format!("{}:{}", transaction_hash, i + 1);
+            let ts: u64 = blk
+                .block_time
+                .and_then(|t| Some(t.timestamp as u64))
+                .unwrap_or(0);
 
             match discriminator {
                 idl_events::CancelReported::DISCRIMINATOR => {
                     if let Ok(e) = idl_events::CancelReported::deserialize(&mut event_data) {
                         data.cancel_reported_event_list.push(CancelReported {
+                            id,
+                            ts,
                             transaction_hash,
                             order_id: encode_hex(e.order_id),
                         });
@@ -56,6 +66,8 @@ fn map_program_data(blk: Block) -> Data {
                 idl_events::FillReported::DISCRIMINATOR => {
                     if let Ok(e) = idl_events::FillReported::deserialize(&mut event_data) {
                         data.fill_reported_event_list.push(FillReported {
+                            id,
+                            ts,
                             transaction_hash,
                             order_id: encode_hex(e.order_id),
                             amount_in_to_release: e.amount_in_to_release as u64,
@@ -67,6 +79,8 @@ fn map_program_data(blk: Block) -> Data {
                 idl_events::OrderCancelled::DISCRIMINATOR => {
                     if let Ok(e) = idl_events::OrderCancelled::deserialize(&mut event_data) {
                         data.order_cancelled_event_list.push(OrderCancelled {
+                            id,
+                            ts,
                             transaction_hash,
                             order_id: encode_hex(e.order_id),
                         });
@@ -75,6 +89,8 @@ fn map_program_data(blk: Block) -> Data {
                 idl_events::OrderCompleted::DISCRIMINATOR => {
                     if let Ok(e) = idl_events::OrderCompleted::deserialize(&mut event_data) {
                         data.order_completed_event_list.push(OrderCompleted {
+                            id,
+                            ts,
                             transaction_hash,
                             order_id: encode_hex(e.order_id),
                         });
@@ -83,6 +99,8 @@ fn map_program_data(blk: Block) -> Data {
                 idl_events::OrderFilled::DISCRIMINATOR => {
                     if let Ok(e) = idl_events::OrderFilled::deserialize(&mut event_data) {
                         data.order_filled_event_list.push(OrderFilled {
+                            id,
+                            ts,
                             transaction_hash,
                             order_id: encode_hex(e.order_id),
                             solver: e.solver.to_string(),
@@ -94,6 +112,8 @@ fn map_program_data(blk: Block) -> Data {
                 idl_events::OrderOpened::DISCRIMINATOR => {
                     if let Ok(e) = idl_events::OrderOpened::deserialize(&mut event_data) {
                         data.order_opened_event_list.push(OrderOpened {
+                            id,
+                            ts,
                             transaction_hash,
                             order_id: encode_hex(e.order_id),
                             sender: e.sender.to_string(),
@@ -109,6 +129,8 @@ fn map_program_data(blk: Block) -> Data {
                 idl_events::RefundClaimed::DISCRIMINATOR => {
                     if let Ok(e) = idl_events::RefundClaimed::deserialize(&mut event_data) {
                         data.refund_claimed_event_list.push(RefundClaimed {
+                            id,
+                            ts,
                             transaction_hash,
                             order_id: encode_hex(e.order_id),
                             sender: e.sender.to_string(),

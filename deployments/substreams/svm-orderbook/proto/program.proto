@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "sf/substreams/sink/sql/schema/v1/schema.proto";
+
 package substreams.v1.program;
 
 message Data {
@@ -13,51 +15,79 @@ message Data {
 }
 
 message CancelReported {
-  string transaction_hash = 1;
-  string order_id = 2;
+  option (schema.table) = { name: "events_cancel_reported" };
+
+  string id = 1 [(schema.field) = { primary_key: true }];
+  uint64 ts = 2;
+  string transaction_hash = 3;
+  string order_id = 4;
 }
 
 message FillReported {
-  string transaction_hash = 1;
-  string order_id = 2;
-  uint64 amount_in_to_release = 3;
-  uint64 amount_out_filled = 4;
-  string origin_recipient = 5;
+  option (schema.table) = { name: "events_fill_reported" };
+
+  string id = 1 [(schema.field) = { primary_key: true }];
+  uint64 ts = 2;
+  string transaction_hash = 3;
+  string order_id = 4;
+  uint64 amount_in_to_release = 5;
+  uint64 amount_out_filled = 6;
+  string origin_recipient = 7;
 }
 
 message OrderCancelled {
-  string transaction_hash = 1;
-  string order_id = 2;
+  option (schema.table) = { name: "events_order_cancelled" };
+
+  string id = 1 [(schema.field) = { primary_key: true }];
+  uint64 ts = 2;
+  string transaction_hash = 3;
+  string order_id = 4;
 }
 
 message OrderCompleted {
-  string transaction_hash = 1;
-  string order_id = 2;
+  option (schema.table) = { name: "events_orde_completed" };
+
+  string id = 1 [(schema.field) = { primary_key: true }];
+  uint64 ts = 2;
+  string transaction_hash = 3;
+  string order_id = 4;
 }
 
 message OrderFilled {
-  string transaction_hash = 1;
-  string order_id = 2;
-  string solver = 3;
-  uint64 amount_in_to_release = 4;
-  uint64 amount_out_filled = 5;
+  option (schema.table) = { name: "events_order_filled" };
+
+  string id = 1 [(schema.field) = { primary_key: true }];
+  uint64 ts = 2;
+  string transaction_hash = 3;
+  string order_id = 4;
+  string solver = 5;
+  uint64 amount_in_to_release = 6;
+  uint64 amount_out_filled = 7;
 }
 
 message OrderOpened {
-  string transaction_hash = 1;
-  string order_id = 2;
-  string sender = 3;
-  string token_in = 4;
-  uint64 amount_in = 5;
-  uint32 dest_chain_id = 6;
-  string token_out = 7;
-  uint64 amount_out = 8;
-  string solver = 9;
+  option (schema.table) = { name: "events_order_opened" };
+
+  string id = 1 [(schema.field) = { primary_key: true }];
+  uint64 ts = 2;
+  string transaction_hash = 3;
+  string order_id = 4;
+  string sender = 5;
+  string token_in = 6;
+  uint64 amount_in = 7;
+  uint32 dest_chain_id = 8;
+  string token_out = 9;
+  uint64 amount_out = 10;
+  string solver = 11;
 }
 
 message RefundClaimed {
-  string transaction_hash = 1;
-  string order_id = 2;
-  string sender = 3;
-  uint64 amount = 4;
+  option (schema.table) = { name: "events_refund_claimed" };
+
+  string id = 1 [(schema.field) = { primary_key: true }];
+  uint64 ts = 2;
+  string transaction_hash = 3;
+  string order_id = 4;
+  string sender = 5;
+  uint64 amount = 6;
 }

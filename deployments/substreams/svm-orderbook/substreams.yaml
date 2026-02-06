@@ -1,9 +1,9 @@
 specVersion: v0.1.0
 package:
   name: svm-orderbook
-  version: v0.1.0
-  url: https://github.com/username/orderbook-solana-devnet
-  description: Substreams module for orderbook on Solana Devnet
+  version: v0.1.1
+  url: https://github.com/m0-foundation/liquidity-delivery
+  description: Substreams module for the M0 OrderBook program on Solana
 
 imports:
   solana: https://spkg.io/streamingfast/solana-common-v0.3.3.spkg
@@ -11,6 +11,8 @@ imports:
 protobuf:
   files:
     - program.proto
+  descriptorSets:
+    - module: buf.build/streamingfast/substreams-sink-sql
   importPaths:
     - ./proto
   excludePaths:
@@ -29,16 +31,22 @@ binaries:
     file: ../../../target/wasm32-unknown-unknown/release/substreams.wasm
 
 modules:
- - name: map_program_data
-   kind: map
-   initialBlock: 436247835
-   inputs:
-   - map: solana:blocks_without_votes
-   output:
-     type: proto:substreams.v1.program.Data
-   blockFilter:
-     module: solana:program_ids_without_votes
-     query:
-       string: program:MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK
+  - name: map_program_data
+    kind: map
+    initialBlock: 436247835
+    inputs:
+      - map: solana:blocks_without_votes
+    output:
+      type: proto:substreams.v1.program.Data
+    blockFilter:
+      module: solana:program_ids_without_votes
+      query:
+        string: program:MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK
+
+sink:
+  module: map_program_data
+  type: sf.substreams.sink.sql.v1.Service
+  config:
+    schema: "../schema.sql"
 
 network: solana-devnet
