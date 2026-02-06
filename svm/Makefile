@@ -1,22 +1,21 @@
 # Default environment
 env ?= devnet
 
-# Inject secrets from 1Password and generate txtx.yml
-inject-secrets:
-	@op inject -f -i txtx.yml.tpl -o txtx.yml
-	@echo "Secrets injected into txtx.yml"
+# op run resolves op:// references in .env.svm into environment variables
+# so secrets are only held in memory, never written to disk.
+OP_RUN := op run --env-file=.env.svm --
 
 # Surfpool Runbooks
 
-deploy: inject-secrets
+deploy:
 	anchor build -p order_book
-	surfpool run deployment --env $(env) --unsupervised
+	$(OP_RUN) surfpool run deployment --env $(env) --unsupervised
 	@echo "Deployment complete"
 
-initialize: inject-secrets
-	surfpool run initialize --env $(env) --unsupervised
+initialize:
+	$(OP_RUN) surfpool run initialize --env $(env) --unsupervised
 	@echo "Initialization complete"
 
-set-destination: inject-secrets
-	surfpool run add_destination --env $(env) --unsupervised
+set-destination:
+	$(OP_RUN) surfpool run add_destination --env $(env) --unsupervised
 	@echo "Configuration complete"

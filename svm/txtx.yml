@@ -20,9 +20,9 @@ environments:
   devnet:
     network_id: devnet
     chain_id: 1399811150
-    rpc_api_url: "op://Solana Dev/Helius/dev rpc"
+    rpc_api_url: "${HELIUS_DEV_RPC}"
   mainnet:
     network_id: mainnet
-    rpc_api_url: "op://Solana Dev/Helius/prod rpc"
+    rpc_api_url: "${HELIUS_PROD_RPC}"
     chain_id: 1399811149
     build_dir: target/verifiable
