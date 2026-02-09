@@ -7,19 +7,39 @@ edition = "2021"
 name = "substreams"
 crate-type = ["cdylib"]
 
+[features]
+evm = [
+    "dep:substreams-ethereum",
+    "dep:hex-literal",
+    "dep:num-traits",
+    "dep:num-bigint",
+    "dep:ethabi",
+]
+svm = [
+    "dep:substreams-solana",
+    "dep:substreams-solana-program-instructions",
+    "dep:anchor-lang",
+    "dep:base64",
+]
+default = ["evm"]
+
 [dependencies]
 prost = "0.13"
 prost-types = "0.13"
 substreams = "0.7"
-substreams-solana = "0.14"
-substreams-solana-program-instructions = "0.3"
-anchor-lang = ">=0.31.0"
-base64 = "0.22.1"
-ethabi = "17"
-hex-literal = "0.3.4"
-substreams-ethereum = "0.11"
-num-traits = "0.2.15"
-num-bigint = "0.4"
+
+# SVM dependencies
+substreams-solana = { version = "0.14", optional = true }
+substreams-solana-program-instructions = { version = "0.3", optional = true }
+anchor-lang = { version = ">=0.31.0", optional = true }
+base64 = { version = "0.22.1", optional = true }
+
+# EVM dependencies
+ethabi = { version = "17", optional = true }
+hex-literal = { version = "0.3.4", optional = true }
+substreams-ethereum = { version = "0.11", optional = true }
+num-traits = { version = "0.2.15", optional = true }
+num-bigint = { version = "0.4", optional = true }
 
 # Required so that anchor-lang dependencies build correctly under wasm32-unknown-unknown
 [target.wasm32-unknown-unknown.dependencies]

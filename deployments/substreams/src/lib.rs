@@ -1,29 +1,39 @@
+#[cfg(feature = "evm")]
 mod abi;
+#[cfg(feature = "svm")]
 mod idl;
 mod pb;
 
-use abi::orderbook_contract::events as abi_events;
-use anchor_lang::AnchorDeserialize;
-use anchor_lang::Discriminator;
-use hex_literal::hex;
-use idl::idl::program::events as idl_events;
 use pb::substreams::v1::program::{
     CancelReported, Data, FillReported, OrderCancelled, OrderCompleted, OrderFilled, OrderOpened,
     RefundClaimed,
 };
 use substreams::Hex;
-use substreams_ethereum::pb::eth::v2 as eth;
-use substreams_ethereum::Event;
-use substreams_solana::pb::sf::solana::r#type::v1::Block;
 
-#[allow(unused_imports)]
-use {num_traits::cast::ToPrimitive, std::str::FromStr, substreams::scalar::BigDecimal};
+#[cfg(feature = "evm")]
+use {
+    abi::orderbook_contract::events as abi_events,
+    hex_literal::hex,
+    substreams_ethereum::{pb::eth::v2 as eth, Event},
+};
 
+#[cfg(feature = "svm")]
+use {
+    anchor_lang::{AnchorDeserialize, Discriminator},
+    idl::idl::program::events as idl_events,
+    substreams_solana::pb::sf::solana::r#type::v1::Block,
+};
+
+#[cfg(feature = "evm")]
 substreams_ethereum::init!();
 
-const CPI_EVENT_DISCRIMINATOR: [u8; 8] = [228, 69, 165, 46, 81, 203, 154, 29];
+#[cfg(feature = "evm")]
 const EVM_ORDERBOOK_CONTRACT: [u8; 20] = hex!("e39b012ab3b20e94a9beea557eb0de4171d4d3e4");
 
+#[cfg(feature = "svm")]
+const CPI_EVENT_DISCRIMINATOR: [u8; 8] = [228, 69, 165, 46, 81, 203, 154, 29];
+
+#[cfg(feature = "svm")]
 #[substreams::handlers::map]
 fn map_svm_events(chain_id_str: String, blk: Block) -> Data {
     let mut data = Data::default();
@@ -164,6 +174,7 @@ fn map_svm_events(chain_id_str: String, blk: Block) -> Data {
     data
 }
 
+#[cfg(feature = "evm")]
 #[substreams::handlers::map]
 fn map_evm_events(chain_id_str: String, blk: eth::Block) -> Data {
     let mut data = Data::default();
