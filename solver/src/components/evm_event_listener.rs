@@ -25,7 +25,7 @@ use crate::events::{
     OrderOpened, OrderRefundClaimedEvent, RefundClaimed, SolverEvent,
 };
 use crate::stores::OrderStore;
-use crate::utils::{chain_runtime, decode_evm_address, unix_timestamp_secs};
+use crate::utils::{chain_runtime, decode_evm_address};
 
 /// Component that listens to new orders created on multiple EVM chains
 pub struct EvmEventListener {
@@ -354,8 +354,6 @@ impl EvmEventListener {
             .map(|h| format!("{:x}", h))
             .unwrap_or_default();
 
-        let timestamp = log.block_timestamp.unwrap_or_else(unix_timestamp_secs);
-
         let log_data = Log {
             address: Address::from_slice(log.address().as_slice()),
             data: LogData::new(log.topics().to_vec(), log.data().data.clone())
@@ -370,7 +368,6 @@ impl EvmEventListener {
                 contract_address,
                 provider,
                 transaction_hash,
-                timestamp,
             )
             .await?;
             return Ok(Some(event));
@@ -415,7 +412,6 @@ impl EvmEventListener {
         contract_address: Address,
         provider: &P,
         transaction_hash: String,
-        timestamp: u64,
     ) -> Result<SolverEvent> {
         let event = OrderOpened::decode_log(log)
             .map_err(|e| SolverError::Component(format!("Failed to decode OrderOpen: {}", e)))?;

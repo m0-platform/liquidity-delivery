@@ -1,15 +1,17 @@
 use async_trait::async_trait;
+use chrono::{Duration, Utc};
 use m0_liquidity_sdk::types::{Asset, ChainRuntime};
 use slog::{info, Logger};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+use crate::components::quoter_client::proto::QuoteResponseProto;
 use crate::components::ComponentParams;
 use crate::config::SupportedAssets;
 use crate::error::Result;
 use crate::events::{
-    EventHandler, EventProcessor, OrderRejectEvent, QuoteResponse, QuoteResponseEvent,
-    RequestFillOrderEvent, RequestHoldEvent, SolverEvent,
+    EventHandler, EventProcessor, OrderRejectEvent, QuoteResponseEvent, RequestFillOrderEvent,
+    RequestHoldEvent, SolverEvent,
 };
 use crate::stores::{AssetStore, OrderStore};
 use crate::utils::chain_runtime;
@@ -273,9 +275,9 @@ impl EventHandler for OrderProcessor {
                 let req = request_event.request;
                 let mut resp = QuoteResponseEvent {
                     id: request_event.id,
-                    response: QuoteResponse {
+                    response: QuoteResponseProto {
                         fee_bps: self.fee_bps as u32,
-                        ..Default::default()
+                        ..QuoteResponseProto::solver_defaults()
                     },
                 };
 
@@ -290,20 +292,29 @@ impl EventHandler for OrderProcessor {
                 {
                     Ok(assets) => assets,
                     Err(reason) => {
-                        resp.response.reject_reason = Some(reason);
+                        resp.response.reject_reason = reason;
+                        return Ok(vec![SolverEvent::QuoteResponse(resp)]);
+                    }
+                };
+
+                let amount = match req.amount_in.parse::<u128>() {
+                    Ok(value) => value,
+                    Err(_) => {
+                        resp.response.rejected = true;
+                        resp.response.reject_reason = "Invalid amount_in".to_string();
                         return Ok(vec![SolverEvent::QuoteResponse(resp)]);
                     }
                 };
 
                 // Solver is willing to fill the order
                 resp.response.rejected = false;
-                resp.response.output_amount =
-                    (req.amount_in as u128 * (10_000 - self.fee_bps) / 10_000) as u64;
+                let output_amount = amount * (10_000 - self.fee_bps) / 10_000;
+                resp.response.output_amount = output_amount.to_string();
 
                 // Fill time based on how many clips will be needed to fill the order
                 let max_size = self.max_clip_size * 10u128.pow(output_asset.decimals as u32);
                 resp.response.est_fill_time_seconds =
-                    resp.response.output_amount / max_size as u64 * self.clip_process_delay;
+                    (output_amount / max_size as u128 * self.clip_process_delay as u128) as u32;
 
                 resp.response.solver_address =
                     if chain_runtime(req.output_chain_id) == ChainRuntime::Svm {
@@ -318,5 +329,26 @@ impl EventHandler for OrderProcessor {
         }
 
         Ok(vec![])
+    }
+}
+
+impl QuoteResponseProto {
+    pub fn solver_defaults() -> Self {
+        Self {
+            rejected: true,
+            fee_bps: 0,
+            quote_id: nanoid::nanoid!(),
+            output_amount: "0".to_string(),
+            expires_at: Utc::now()
+                .checked_add_signed(Duration::minutes(10))
+                .unwrap()
+                .timestamp() as u64,
+            est_fill_time_seconds: 10,
+            reject_reason: String::new(),
+            solver_address: String::new(),
+            requires_exclusivity: false,
+            request_id: String::new(),
+            solver_name: "M0 Solver".to_string(),
+        }
     }
 }

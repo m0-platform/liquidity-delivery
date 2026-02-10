@@ -3,47 +3,7 @@ use order_book::OrderData;
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct QuoteRequest {
-    pub input_token: String,
-    pub input_chain_id: u32,
-    pub output_token: String,
-    pub output_chain_id: u32,
-    pub amount_in: u64,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct QuoteResponse {
-    pub quote_id: String,
-    pub fee_bps: u32,
-    pub output_amount: u64,
-    pub est_fill_time_seconds: u64,
-    pub expires_at: String,
-    pub rejected: bool,
-    pub reject_reason: Option<String>,
-    pub solver_address: String,
-    pub requires_exclusivity: bool,
-}
-
-impl Default for QuoteResponse {
-    fn default() -> Self {
-        use chrono::{SecondsFormat, TimeDelta, Utc};
-        Self {
-            rejected: true,
-            fee_bps: 0,
-            quote_id: nanoid::nanoid!(),
-            output_amount: 0,
-            expires_at: Utc::now()
-                .checked_add_signed(TimeDelta::minutes(10))
-                .unwrap()
-                .to_rfc3339_opts(SecondsFormat::Secs, true),
-            est_fill_time_seconds: 10,
-            reject_reason: None,
-            solver_address: String::new(),
-            requires_exclusivity: false,
-        }
-    }
-}
+use crate::components::quoter_client::proto::{QuoteRequestProto, QuoteResponseProto};
 
 /// Unified event enum
 #[derive(Debug, Clone)]
@@ -336,7 +296,7 @@ pub struct SwapSuccessfulEvent {
 
 #[derive(Debug, Clone)]
 pub struct RequestQuoteEvent {
-    pub request: QuoteRequest,
+    pub request: QuoteRequestProto,
     pub id: String,
     pub parsed_input_token: [u8; 32],
     pub parsed_output_token: [u8; 32],
@@ -344,6 +304,6 @@ pub struct RequestQuoteEvent {
 
 #[derive(Debug, Clone)]
 pub struct QuoteResponseEvent {
-    pub response: QuoteResponse,
+    pub response: QuoteResponseProto,
     pub id: String,
 }

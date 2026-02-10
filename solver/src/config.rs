@@ -79,6 +79,7 @@ pub struct Config {
     pub supported_assets: SupportedAssets,
     pub quoter_grpc_url: String,
     pub connect_to_quote_stream: bool,
+    pub quoter_api_key: String,
     pub http_port: Option<u16>,
     pub loki_url: Option<String>,
     pub exclusive_mode: bool,
@@ -90,8 +91,6 @@ struct ConfigFile {
     network: String,
     chains: Vec<ChainConfigFile>,
     liquidity_api_url: String,
-    evm_private_key: String,
-    svm_private_key: String,
     rpc_rate_limit: Option<RateLimitConfig>,
     solver_fee_bps: Option<u32>,
     auto_rebalance: Option<bool>,
@@ -171,6 +170,7 @@ impl Default for Config {
             auto_rebalance: true,
             quoter_grpc_url: String::from("http://127.0.0.1:50051"),
             connect_to_quote_stream: true,
+            quoter_api_key: String::new(),
             http_port: None,
             loki_url: None,
             exclusive_mode: false,
@@ -223,12 +223,16 @@ impl Config {
         }
 
         // Parse signers
-        let evm_private_key = config_file
-            .evm_private_key
+        let evm_key =
+            std::env::var("EVM_PRIVATE_KEY").expect("EVM_PRIVATE_KEY environment variable not set");
+        let svm_key =
+            std::env::var("SVM_PRIVATE_KEY").expect("SVM_PRIVATE_KEY environment variable not set");
+
+        let evm_private_key = evm_key
             .parse()
             .map_err(|_| ConfigError::InvalidConfig("Invalid EVM_PRIVATE_KEY".to_string()))?;
 
-        let svm_private_key = Arc::new(Keypair::from_base58_string(&config_file.svm_private_key));
+        let svm_private_key = Arc::new(Keypair::from_base58_string(&svm_key));
 
         let mut config = Config {
             environment,
@@ -269,6 +273,8 @@ impl Config {
         if let Some(exclusive_mode) = config_file.exclusive_mode {
             config.exclusive_mode = exclusive_mode;
         }
+
+        config.quoter_api_key = std::env::var("QUOTER_API_KEY").unwrap_or_default();
 
         Ok(config)
     }

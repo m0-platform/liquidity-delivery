@@ -17,7 +17,7 @@ async fn test_quote_invalid_asset(ctx: &LiteTestSuite) {
         input_token: "0x437cc33344a0B27A429f795ff6B469C72698B291".to_string(),
         // Use a token address that is not in the supported assets list
         output_token: "0x0000000000000000000000000000000000000001".to_string(),
-        amount_in: 100000,
+        amount_in: "100000".to_string(),
     };
 
     // Send quote request via gRPC
@@ -49,7 +49,7 @@ async fn test_quote_success(ctx: &LiteTestSuite) {
         output_chain_id: 8453,
         input_token: "0x437cc33344a0B27A429f795ff6B469C72698B291".to_string(),
         output_token: "0x437cc33344a0B27A429f795ff6B469C72698B291".to_string(),
-        amount_in: 100000,
+        amount_in: "100000".to_string(),
     };
 
     // Send quote request via gRPC
@@ -71,7 +71,7 @@ async fn test_quote_success(ctx: &LiteTestSuite) {
         response.reject_reason
     );
     assert_eq!(
-        response.output_amount, 100000,
+        response.output_amount, "100000",
         "Unexpected output amount: {}",
         response.output_amount
     );

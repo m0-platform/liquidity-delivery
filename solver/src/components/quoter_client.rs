@@ -9,7 +9,7 @@ use tonic::transport::Channel;
 
 use crate::{
     error::{Result, SolverError},
-    events::{EventHandler, QuoteRequest, QuoteResponse, RequestQuoteEvent, SolverEvent},
+    events::{EventHandler, RequestQuoteEvent, SolverEvent},
     utils::decode_address,
 };
 
@@ -23,10 +23,11 @@ use proto::{quote_service_client::QuoteServiceClient, QuoteResponseProto};
 
 pub struct QuoterClient {
     quoter_url: String,
+    quoter_api_key: String,
     logger: slog::Logger,
     solver_fee_bps: u32,
     event_bus: Arc<crate::events::EventBus>,
-    response_channels: Arc<Mutex<HashMap<String, oneshot::Sender<QuoteResponse>>>>,
+    response_channels: Arc<Mutex<HashMap<String, oneshot::Sender<QuoteResponseProto>>>>,
     connect: bool,
 }
 
@@ -36,6 +37,7 @@ impl QuoterClient {
 
         Self {
             quoter_url: params.config.quoter_grpc_url.clone(),
+            quoter_api_key: params.config.quoter_api_key.clone(),
             logger,
             solver_fee_bps: params.config.solver_fee_bps,
             event_bus: params.event_bus.clone(),
@@ -60,8 +62,14 @@ impl QuoterClient {
         let (response_tx, response_rx) = mpsc::channel::<QuoteResponseProto>(100);
         let response_stream = ReceiverStream::new(response_rx);
 
+        let mut request = tonic::Request::new(response_stream);
+        request.metadata_mut().insert(
+            "x-api-key",
+            self.quoter_api_key.parse().unwrap(),
+        );
+
         let mut request_stream = client
-            .subscribe_to_quotes(response_stream)
+            .subscribe_to_quotes(request)
             .await
             .map_err(|e| SolverError::Component(format!("gRPC subscription failed: {}", e)))?
             .into_inner();
@@ -118,23 +126,14 @@ impl QuoterClient {
                         };
 
                         // Create oneshot channel for response
-                        let (tx, rx) = oneshot::channel::<QuoteResponse>();
+                        let (tx, rx) = oneshot::channel::<QuoteResponseProto>();
                         {
                             let mut channels = response_channels_clone.lock().await;
                             channels.insert(request_id.clone(), tx);
                         }
 
-                        // Create and publish APIRequestQuote event
-                        let quote_request = QuoteRequest {
-                            input_token: request.input_token,
-                            input_chain_id: request.input_chain_id,
-                            output_token: request.output_token,
-                            output_chain_id: request.output_chain_id,
-                            amount_in: request.amount_in,
-                        };
-
                         let api_event = SolverEvent::RequestQuote(RequestQuoteEvent {
-                            request: quote_request,
+                            request,
                             id: request_id.clone(),
                             parsed_input_token: input_asset,
                             parsed_output_token: output_asset,
@@ -150,19 +149,7 @@ impl QuoterClient {
 
                         // Wait for response from event bus
                         match rx.await {
-                            Ok(quote) => {
-                                let response = QuoteResponseProto {
-                                    request_id: request_id.clone(),
-                                    quote_id: quote.quote_id,
-                                    fee_bps: quote.fee_bps,
-                                    output_amount: quote.output_amount,
-                                    est_fill_time_seconds: quote.est_fill_time_seconds,
-                                    expires_at: quote.expires_at,
-                                    rejected: quote.rejected,
-                                    reject_reason: quote.reject_reason.unwrap_or_default(),
-                                    solver_address: quote.solver_address,
-                                    requires_exclusivity: quote.requires_exclusivity,
-                                };
+                            Ok(response) => {
                                 if let Err(e) = response_tx_clone.send(response).await {
                                     error!(logger_clone, "Failed to send quote response"; "error" => %e);
                                 }
@@ -197,6 +184,7 @@ impl EventHandler for QuoterClient {
 
         let self_clone = Self {
             quoter_url: self.quoter_url.clone(),
+            quoter_api_key: self.quoter_api_key.clone(),
             logger: self.logger.clone(),
             solver_fee_bps: self.solver_fee_bps,
             event_bus: self.event_bus.clone(),

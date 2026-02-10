@@ -13,11 +13,13 @@ COPY solver/build.rs solver/build.rs
 COPY solver/proto solver/proto
 COPY svm/programs/order_book/Cargo.toml svm/programs/order_book/Cargo.toml
 COPY deployments/quoter/Cargo.toml deployments/quoter/Cargo.toml
+COPY deployments/substreams/Cargo.toml deployments/substreams/Cargo.toml
 
 # Create stub source files for workspace members
 RUN mkdir -p solver/src && echo "fn main() {}" > solver/src/main.rs
 RUN mkdir -p svm/programs/order_book/src && echo "" > svm/programs/order_book/src/lib.rs
 RUN mkdir -p deployments/quoter/src && echo "fn main() {}" > deployments/quoter/src/main.rs
+RUN mkdir -p deployments/substreams/src && echo "" > deployments/substreams/src/lib.rs
 
 RUN cargo chef prepare --recipe-path recipe.json
 
@@ -36,6 +38,7 @@ COPY Cargo.toml Cargo.lock ./
 COPY solver ./solver
 COPY svm ./svm
 COPY deployments/quoter ./deployments/quoter
+COPY deployments/substreams ./deployments/substreams
 # EVM contract ABIs are needed at compile time for alloy sol! macro
 COPY evm/out ./evm/out
 

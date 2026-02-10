@@ -7,7 +7,7 @@ network: devnet
 http_port: 3001
 
 # Quoter connection
-quoter_grpc_url: http://quoter.railway.internal:50051
+quoter_grpc_url: http://api-devnet.railway.internal:50051
 connect_to_quote_stream: true
 
 liquidity_api_url: http://api-devnet-devnet.up.railway.app
@@ -25,14 +25,11 @@ solver_fee_bps: 5
 auto_rebalance: false
 exclusive_mode: false
 
-evm_private_key: "5a4ee9382b2dcff9a2caa22b1087ff9dd2c3f7d4f72e4acba43bb75f9be5b426"
-svm_private_key: "2MqZwxzsfaEvQvnj4CgvUo2aknYXxJW2bBn5ewbftnbjU9DAtWX1XzCHy7Wd8dBSq5bmRwj6Ya5XTAnEe8sy2qS9"
-
 # Asset configuration
 supported_assets:
   third_party_whitelist: [
-    "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", # USDC Sepolia
-  ]
+      "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", # USDC Sepolia
+    ]
   first_party_blacklist: []
 
 # Chain configuration
