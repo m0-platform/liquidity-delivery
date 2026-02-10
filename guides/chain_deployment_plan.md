@@ -385,12 +385,10 @@ Each runbook (`deployment`, `initialize`, `add_destination`) has a `signers.main
 | Runbook           | `main.tx` references               | `signers.mainnet.tx` defines      |
 | ----------------- | ---------------------------------- | --------------------------------- |
 | `deployment`      | `signer.authority`, `signer.payer` | `payer`, `initiator`, `authority` |
-| `initialize`      | `signer.caller`                    | `payer`, `initiator`, `authority` |
+| `initialize`      | `signer.caller`                    | `initiator`, `caller`             |
 | `add_destination` | `signer.caller`                    | `initiator`, `caller`             |
 
-**ACTION REQUIRED:** `initialize/signers.mainnet.tx` defines `authority` but `initialize/main.tx` references `signer.caller`. If surfpool does not alias these, the signers file must be updated to define `caller` instead of `authority` (matching the pattern in `add_destination/signers.mainnet.tx`). **Verify this before running.**
-
-- [ ] Signer names in `signers.mainnet.tx` match what each `main.tx` expects, or surfpool handles the mismatch
+- [ ] Signer names in `signers.mainnet.tx` match what each `main.tx` expects
 
 ### Step 8: Team review
 
