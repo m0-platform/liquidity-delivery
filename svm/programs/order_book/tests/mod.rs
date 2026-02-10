@@ -142,7 +142,7 @@ impl OrderBookTest {
                 destination_account: self.ctx.svm.get_pda(
                     &[
                         order_book::state::DESTINATION_SEED_PREFIX,
-                        &DEST_CHAIN_ID.to_be_bytes(),
+                        &DEST_CHAIN_ID.to_le_bytes(),
                     ],
                     &order_book::ID,
                 ),
@@ -248,7 +248,7 @@ impl OrderBookTest {
         let destination_account = self.ctx.svm.get_pda(
             &[
                 order_book::state::DESTINATION_SEED_PREFIX,
-                &dest_chain_id.to_be_bytes(),
+                &dest_chain_id.to_le_bytes(),
             ],
             &order_book::ID,
         );
@@ -649,7 +649,7 @@ impl OrderBookTest {
             Some(self.ctx.svm.get_pda(
                 &[
                     order_book::state::DESTINATION_SEED_PREFIX,
-                    &order_params.dest_chain_id.to_be_bytes(),
+                    &order_params.dest_chain_id.to_le_bytes(),
                 ],
                 &order_book::ID,
             ))
@@ -717,7 +717,7 @@ impl OrderBookTest {
         let destination_account = self.ctx.svm.get_pda(
             &[
                 order_book::state::DESTINATION_SEED_PREFIX,
-                &dest_chain_id.to_be_bytes(),
+                &dest_chain_id.to_le_bytes(),
             ],
             &order_book::ID,
         );
@@ -751,7 +751,7 @@ impl OrderBookTest {
         let destination_account = self.ctx.svm.get_pda(
             &[
                 order_book::state::DESTINATION_SEED_PREFIX,
-                &dest_chain_id.to_be_bytes(),
+                &dest_chain_id.to_le_bytes(),
             ],
             &order_book::ID,
         );
