@@ -19,3 +19,7 @@ initialize:
 set-destination:
 	$(OP_RUN) surfpool run add_destination --env $(env) --unsupervised
 	@echo "Configuration complete"
+
+run-localnet:
+	$(OP_RUN) surfpool start -r deployment -r initialize \
+		-a test4MzZzYk2NAP1222FSuKqq83GuXY5tHakqREDHPo
