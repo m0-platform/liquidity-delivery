@@ -9,8 +9,11 @@ runbooks:
     description: Initialize programs
     location: runbooks/initialize
   - name: add_destination
-    description: Configure programs
+    description: Add destination configuration
     location: runbooks/add_destination
+  - name: remove_destination
+    description: Remove destination configuration
+    location: runbooks/remove_destination
 environments:
   localnet:
     network_id: localnet
