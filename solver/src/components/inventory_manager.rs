@@ -399,8 +399,8 @@ impl EventHandler for InventoryManager {
                         return Ok(events);
                     }
 
-                    // naively acquire inventory
-                    let swap_amount = e.amount - available;
+                    // naively acquire inventory with 5% buffer
+                    let swap_amount = (e.amount - available) * 105 / 100;
 
                     let largest_balance = balance
                         .iter()

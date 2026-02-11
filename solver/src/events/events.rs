@@ -30,7 +30,6 @@ pub enum SolverEvent {
     RequestFillOrder(RequestFillOrderEvent),
     FillOrderSuccessful(FillOrderSuccessfulEvent),
     RequestSwap(RequestSwapEvent),
-    SwapSuccessful(SwapSuccessfulEvent),
 
     // Quote requests from the grpc stream
     RequestQuote(RequestQuoteEvent),
@@ -106,16 +105,11 @@ impl OrderFillEvent {
 pub struct OrderRejectEvent {
     pub order_id: String,
     pub reason: String,
-    pub chain_id: u32,
 }
 
 impl OrderRejectEvent {
-    pub fn new(order_id: String, reason: String, chain_id: u32) -> Self {
-        Self {
-            order_id,
-            reason,
-            chain_id,
-        }
+    pub fn new(order_id: String, reason: String) -> Self {
+        Self { order_id, reason }
     }
 }
 
@@ -228,18 +222,11 @@ impl HoldSuccessfulEvent {
 #[derive(Debug, Clone)]
 pub struct InventoryUpdateEvent {
     pub balances: HashMap<Asset, u128>,
-    pub timestamp: u64,
 }
 
 impl InventoryUpdateEvent {
     pub fn new(balances: HashMap<Asset, u128>) -> Self {
-        Self {
-            balances,
-            timestamp: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-        }
+        Self { balances }
     }
 }
 
@@ -286,12 +273,6 @@ impl RequestSwapEvent {
             amount_in,
         }
     }
-}
-
-/// Event: Asset hold successful
-#[derive(Debug, Clone)]
-pub struct SwapSuccessfulEvent {
-    pub order_id: String,
 }
 
 #[derive(Debug, Clone)]

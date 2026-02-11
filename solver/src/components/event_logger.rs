@@ -125,13 +125,6 @@ impl EventHandler for EventLogger {
                     "amount" => %e.amount_in,
                 );
             }
-            SolverEvent::SwapSuccessful(e) => {
-                info!(
-                    self.logger,
-                    "SwapSuccessful";
-                    "order_id" => %e.order_id,
-                );
-            }
             _ => {}
         }
 
