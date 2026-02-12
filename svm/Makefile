@@ -10,15 +10,15 @@ CLEAN := rm raw.txtx.yml
 # Surfpool Runbooks
 
 deploy:
-	anchor build -p order_book
+# 	anchor build -p order_book
 	$(INJECT)
-	surfpool run deployment -m raw.txtx.yml --env $(env) --unsupervised
+	surfpool run deployment -m raw.txtx.yml --env $(env)
 	$(CLEAN)
 	@echo "Deployment complete"
 
 initialize:
 	$(INJECT)
-	surfpool run initialize -m raw.txtx.yml --env $(env) --unsupervised
+	surfpool run initialize -m raw.txtx.yml --env $(env)
 	$(CLEAN)
 	@echo "Initialization complete"
 
