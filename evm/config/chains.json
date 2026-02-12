@@ -1,5 +1,4 @@
 {
-  "portal": "0x50D65829Eae411B655bAA92539E4F8c46D20638C",
   "chains": {
     "sepolia": {
       "chainId": 11155111,
@@ -24,6 +23,12 @@
       "name": "Solana Devnet",
       "rpcAlias": "solana_devnet",
       "explorerAlias": "solana_devnet"
+    },
+    "base": {
+      "chainId": 8453,
+      "name": "Base",
+      "rpcAlias": "base",
+      "explorerAlias": "base"
     }
   }
 }
