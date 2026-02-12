@@ -380,13 +380,14 @@ The mainnet deployment and initialize runbooks use a Squads multisig as the auth
 
 ### Step 7: Verify signer files match runbook expectations
 
-Each runbook (`deployment`, `initialize`, `add_destination`) has a `signers.mainnet.tx` file that defines the signers used by `main.tx`. Verify the signer names match:
+Each runbook (`deployment`, `initialize`, `add_destination`, `remove_destination`) has a `signers.mainnet.tx` file that defines the signers used by `main.tx`. Verify the signer names match:
 
-| Runbook           | `main.tx` references               | `signers.mainnet.tx` defines      |
-| ----------------- | ---------------------------------- | --------------------------------- |
-| `deployment`      | `signer.authority`, `signer.payer` | `payer`, `initiator`, `authority` |
-| `initialize`      | `signer.caller`                    | `initiator`, `caller`             |
-| `add_destination` | `signer.caller`                    | `initiator`, `caller`             |
+| Runbook              | `main.tx` references               | `signers.mainnet.tx` defines      |
+| -------------------- | ---------------------------------- | --------------------------------- |
+| `deployment`         | `signer.authority`, `signer.payer` | `payer`, `initiator`, `authority` |
+| `initialize`         | `signer.caller`                    | `initiator`, `caller`             |
+| `add_destination`    | `signer.caller`                    | `initiator`, `caller`             |
+| `remove_destination` | `signer.caller`                    | `initiator`, `caller`             |
 
 - [ ] Signer names in `signers.mainnet.tx` match what each `main.tx` expects
 
@@ -399,7 +400,7 @@ Each runbook (`deployment`, `initialize`, `add_destination`) has a `signers.main
 
 ### Step 9: Verify 1Password authentication
 
-Secrets are injected at runtime by `op run` — there is no separate inject step. Verify you are authenticated:
+Secrets are injected at runtime by `op run` via `envsubst` into a temporary `raw.txtx.yml` file, which is cleaned up after each command. Verify you are authenticated:
 
 ```bash
 op whoami --account mzerolabs.1password.com
@@ -422,7 +423,7 @@ anchor build -p order_book
 make deploy env=mainnet
 ```
 
-This runs `surfpool run deployment --env mainnet --unsupervised`, which:
+This injects secrets from 1Password into a temporary `raw.txtx.yml` via `envsubst`, then runs `surfpool run deployment -m raw.txtx.yml --env mainnet --unsupervised`, which:
 
 1. Reads the built program from the Anchor project
 2. Uses the local keypair (`~/.config/solana/id.json`) as the fee payer
@@ -448,7 +449,7 @@ solana program show MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK --url mainnet-be
 make initialize env=mainnet
 ```
 
-This runs `surfpool run initialize --env mainnet --unsupervised`, which:
+This injects secrets from 1Password into a temporary `raw.txtx.yml` via `envsubst`, then runs `surfpool run initialize -m raw.txtx.yml --env mainnet --unsupervised`, which:
 
 1. Checks if the `OrderBookGlobal` account already exists (skips if so)
 2. Creates the global account with:
@@ -474,7 +475,7 @@ Query the global account on-chain and verify:
 - [ ] Deployed program address communicated to the team
 - [ ] Any config changes committed to the repository
 
-### Step 16: (When Ready) Configure destination chains
+### Step 16: (When Ready) Add destination chains
 
 This step is performed later when you are ready to enable cross-chain order flow. For each destination chain, edit the editable variables in `runbooks/add_destination/main.tx`:
 
@@ -484,13 +485,13 @@ This step is performed later when you are ready to enable cross-chain order flow
 Then run:
 
 ```bash
-make set-destination env=mainnet
+make add-destination env=mainnet
 ```
 
 Repeat for each destination chain that should be reachable.
 
 - [ ] `destination_chain_id` and `destination_chain_id_hex` set correctly
-- [ ] `make set-destination env=mainnet` succeeds for each destination
+- [ ] `make add-destination env=mainnet` succeeds for each destination
 - [ ] Approve Squads multisig transaction for each destination
 
 ### Step 17: (When Ready) Transfer admin to team multisig
