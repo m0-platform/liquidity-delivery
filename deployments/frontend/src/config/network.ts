@@ -6,8 +6,8 @@ export interface NetworkConfig {
   ordersApiUrl: string;
   ethereumRpc: string;
   solanaRpc: string;
-  baseRpc?: string;
-  arbitrumRpc?: string;
+  baseRpc: string;
+  arbitrumRpc: string;
 }
 
 const configs: Record<NetworkType, NetworkConfig> = {
@@ -18,6 +18,7 @@ const configs: Record<NetworkType, NetworkConfig> = {
     ethereumRpc: import.meta.env.VITE_LOCALNET_ETHEREUM_RPC,
     solanaRpc: import.meta.env.VITE_LOCALNET_SOLANA_RPC,
     baseRpc: import.meta.env.VITE_LOCALNET_BASE_RPC,
+    arbitrumRpc: import.meta.env.VITE_LOCALNET_ARBITRUM_RPC,
   },
   devnet: {
     quoterUrl: import.meta.env.VITE_QUOTER_URL_DEVNET,
@@ -31,11 +32,11 @@ const configs: Record<NetworkType, NetworkConfig> = {
   mainnet: {
     quoterUrl: import.meta.env.VITE_QUOTER_URL_MAINNET,
     assetsApiUrl: import.meta.env.VITE_LIQUIDITY_API_MAINNET,
-    ethereumRpc: import.meta.env.VITE_MAINNET_ETHEREUM_RPC,
-    ordersApiUrl: import.meta.env.VITE_ORDERS_API_LOCAL,
+    ordersApiUrl: import.meta.env.VITE_ORDERS_API_MAINNET,
     solanaRpc: import.meta.env.VITE_MAINNET_SOLANA_RPC,
     baseRpc: import.meta.env.VITE_MAINNET_BASE_RPC,
     arbitrumRpc: import.meta.env.VITE_MAINNET_ARBITRUM_RPC,
+    ethereumRpc: import.meta.env.VITE_MAINNET_ETHEREUM_RPC,
   },
 };
 

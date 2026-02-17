@@ -70,6 +70,7 @@ const chains = computed(() => {
     return [
       { id: 'ethereum', name: 'Ethereum', chainId: 1, rpc: config.ethereumRpc },
       { id: 'solana', name: 'Solana', chainId: 1399811149, rpc: config.solanaRpc },
+      { id: 'base', name: 'Base', chainId: 8453, rpc: config.baseRpc },
     ]
   }
 })

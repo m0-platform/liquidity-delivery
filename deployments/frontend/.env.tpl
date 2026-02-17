@@ -3,15 +3,15 @@
 # =============================================================================
 VITE_QUOTER_URL_LOCAL=http://localhost:5600
 VITE_QUOTER_URL_DEVNET=https://quoter-devnet.up.railway.app
-VITE_QUOTER_URL_MAINNET=https://quoter-mainnet.up.railway.app
+VITE_QUOTER_URL_MAINNET=https://orchestration-api.m0.xyz
 
 VITE_LIQUIDITY_API_LOCAL=http://localhost:5600
 VITE_LIQUIDITY_API_DEVNET=https://api-devnet-devnet.up.railway.app
-VITE_LIQUIDITY_API_MAINNET=https://swap-api-devnet.up.railway.app
+VITE_LIQUIDITY_API_MAINNET=https://orchestration-api.m0.xyz
 
 VITE_ORDERS_API_LOCAL=http://localhost:3001
 VITE_ORDERS_API_DEVNET=https://solver-devnet.up.railway.app
-VITE_ORDERS_API_MAINNET=https://solver-mainnet.up.railway.app
+VITE_ORDERS_API_MAINNET=https://solver-production-1934.up.railway.app
 
 # =============================================================================
 # LOCALNET RPC ENDPOINTS (Ethereum, Solana, Base)
@@ -30,7 +30,7 @@ VITE_DEVNET_ARBITRUM_RPC="op://Solana Dev/Alchemy/arbitrum-sepolia"
 # =============================================================================
 # MAINNET RPC ENDPOINTS (Ethereum, Solana)
 # =============================================================================
-VITE_MAINNET_ETHEREUM_RPC="op://Solana Dev/Alchemy/mainnet"
+VITE_MAINNET_BASE_RPC="op://Solana Dev/Alchemy/base"
 VITE_MAINNET_SOLANA_RPC="op://Solana Dev/Helius/prod rpc"
 
 # =============================================================================
