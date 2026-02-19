@@ -27,6 +27,7 @@ This document provides the technical details needed for solvers to integrate wit
 The M0 Liquidity Delivery protocol is an intent-based limit order system for cross-chain token swaps. Users create orders on an origin chain, specifying a destination chain, output token, and minimum amount. Solvers monitor these orders and fill them by providing the output tokens to recipients on the destination chain.
 
 **Solver Workflow:**
+
 1. Monitor `OrderOpened` events on origin chains
 2. Evaluate profitability and decide whether to fill
 3. Call `fillOrder` on the destination chain with output tokens
@@ -55,16 +56,16 @@ event OrderOpened(
 );
 ```
 
-| Field | Description |
-|-------|-------------|
-| `orderId` | Unique identifier for the order |
-| `sender` | Address that provided input tokens |
-| `tokenIn` | Input token address on origin chain |
-| `amountIn` | Amount of input tokens escrowed |
-| `destChainId` | Internal chain ID where order should be filled |
-| `tokenOut` | Output token address on destination (bytes32 for cross-chain compatibility) |
-| `amountOut` | Minimum output tokens expected by user |
-| `solver` | Exclusive solver address, or zero if any solver can fill |
+| Field         | Description                                                                 |
+| ------------- | --------------------------------------------------------------------------- |
+| `orderId`     | Unique identifier for the order                                             |
+| `sender`      | Address that provided input tokens                                          |
+| `tokenIn`     | Input token address on origin chain                                         |
+| `amountIn`    | Amount of input tokens escrowed                                             |
+| `destChainId` | Internal chain ID where order should be filled                              |
+| `tokenOut`    | Output token address on destination (bytes32 for cross-chain compatibility) |
+| `amountOut`   | Minimum output tokens expected by user                                      |
+| `solver`      | Exclusive solver address, or zero if any solver can fill                    |
 
 **OrderFilled** - Emitted when an order is filled on the destination chain
 
@@ -104,9 +105,9 @@ event OrderCancelled(
 );
 ```
 
-| Field | Description |
-|-------|-------------|
-| `orderId` | The order that was cancelled |
+| Field       | Description                                                                   |
+| ----------- | ----------------------------------------------------------------------------- |
+| `orderId`   | The order that was cancelled                                                  |
 | `messageId` | Cross-chain message ID reporting cancellation to origin (zero for same-chain) |
 
 **CancelReported** - Emitted on origin chain when a cancellation report is received
@@ -158,15 +159,16 @@ function fillOrder(
 
 **Parameters:**
 
-| Parameter | Description |
-|-----------|-------------|
-| `orderId_` | The order ID (keccak256 hash of OrderData) |
-| `orderData_` | Complete order information for verification |
-| `fillerParams_` | Solver-provided fill parameters |
-| `bridgeAdapter_` | (Optional) Specific bridge adapter address |
+| Parameter            | Description                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------ |
+| `orderId_`           | The order ID (keccak256 hash of OrderData)                                                 |
+| `orderData_`         | Complete order information for verification                                                |
+| `fillerParams_`      | Solver-provided fill parameters                                                            |
+| `bridgeAdapter_`     | (Optional) Specific bridge adapter address                                                 |
 | `bridgeAdapterArgs_` | (Optional) Bridge-specific arguments (see [Cross-Chain Messaging](#cross-chain-messaging)) |
 
 **msg.value Requirements:**
+
 - Same-chain fills: `0`
 - Cross-chain fills: Fee for cross-chain message delivery (see bridge adapter requirements)
 
@@ -311,7 +313,19 @@ The `msg.value` should match the `estimatedCost` returned by the quote endpoint.
 
 #### Hyperlane Routes
 
-Hyperlane routes do not require special bridge adapter arguments. The adapter builds metadata internally.
+Hyperlane routes do not require special bridge adapter arguments. The adapter builds metadata internally. The fee is determined onchain via the adapter's `quote()` function.
+
+**1. Get a fee quote from the adapter contract:**
+
+```solidity
+uint256 hyperlaneFee = IBridgeAdapter(hyperlaneAdapter).quote(
+    destinationChainId, // Internal chain ID (e.g., 11155111 for Sepolia)
+    gasLimit,           // Gas limit for destination execution (e.g., 250_000)
+    payload             // The message payload
+);
+```
+
+**2. Pass the fee as msg.value with empty bridgeAdapterArgs:**
 
 ```solidity
 bytes memory bridgeAdapterArgs = ""; // Empty for Hyperlane
@@ -327,6 +341,65 @@ orderBook.fillOrder{value: hyperlaneFee}(
 
 The `msg.value` covers the Hyperlane mailbox dispatch fee.
 
+#### LayerZero Routes
+
+LayerZero routes work the same as Hyperlane — no special bridge adapter arguments are needed. The fee is determined onchain via the adapter's `quote()` function.
+
+**1. Get a fee quote from the adapter contract:**
+
+```solidity
+uint256 layerZeroFee = IBridgeAdapter(layerZeroAdapter).quote(
+    destinationChainId, // Internal chain ID (e.g., 11155111 for Sepolia)
+    gasLimit,           // Gas limit for destination execution (e.g., 250_000)
+    payload             // The message payload
+);
+```
+
+**2. Pass the fee as msg.value with empty bridgeAdapterArgs:**
+
+```solidity
+bytes memory bridgeAdapterArgs = ""; // Empty for LayerZero
+
+orderBook.fillOrder{value: layerZeroFee}(
+    orderId,
+    orderData,
+    fillParams,
+    layerZeroAdapter,
+    bridgeAdapterArgs
+);
+```
+
+The `msg.value` covers the LayerZero endpoint dispatch fee. Any excess is refunded to the `refundAddress` specified in `FillParams`.
+
+#### Adapter Fee Quoting
+
+Both Hyperlane and LayerZero adapters support onchain fee quoting via the `IBridgeAdapter.quote()` function:
+
+```solidity
+interface IBridgeAdapter {
+    function quote(
+        uint32 destinationChainId,
+        uint256 gasLimit,
+        bytes memory payload
+    ) external view returns (uint256 fee);
+}
+```
+
+The `gasLimit` parameter can be obtained by calling `payloadGasLimit` on the Portal V2 contract with the appropriate `PayloadType`:
+
+```solidity
+uint256 gasLimit = IPortal(portal).payloadGasLimit(destinationChainId, payloadType);
+```
+
+The `PayloadType` enum is defined in the Portal V2 `PayloadEncoder` library. The relevant types for solvers are:
+
+| PayloadType     | Value | Usage            |
+|-----------------|-------|------------------|
+| `FillReport`    | `4`   | Order fills      |
+| `CancelReport`  | `6`   | Order cancellations |
+
+Wormhole uses a different quoting mechanism via its Executor API (see above).
+
 ---
 
 ## Testnet Deployments
@@ -335,27 +408,27 @@ The `msg.value` covers the Hyperlane mailbox dispatch fee.
 
 The OrderBook uses internal chain IDs for cross-chain routing. These match the standard EVM chain IDs for EVM networks.
 
-| Network | Internal Chain ID | Explorer |
-|---------|------------------|----------|
-| Sepolia | `11155111` | [Etherscan](https://sepolia.etherscan.io) |
-| Arbitrum Sepolia | `421614` | [Arbiscan](https://sepolia.arbiscan.io) |
-| Base Sepolia | `84532` | [Basescan](https://sepolia.basescan.org) |
-| Solana Devnet | `1399811150` | [Solana Explorer](https://explorer.solana.com/?cluster=devnet) |
+| Network          | Internal Chain ID | Explorer                                                       |
+| ---------------- | ----------------- | -------------------------------------------------------------- |
+| Sepolia          | `11155111`        | [Etherscan](https://sepolia.etherscan.io)                      |
+| Arbitrum Sepolia | `421614`          | [Arbiscan](https://sepolia.arbiscan.io)                        |
+| Base Sepolia     | `84532`           | [Basescan](https://sepolia.basescan.org)                       |
+| Solana Devnet    | `1399811150`      | [Solana Explorer](https://explorer.solana.com/?cluster=devnet) |
 
 ### OrderBook Contracts
 
 #### EVM
 
-| Network | Address |
-|---------|---------|
-| Sepolia | [`0xe39B012AB3b20E94a9beEa557eB0DE4171D4D3E4`](https://sepolia.etherscan.io/address/0xe39B012AB3b20E94a9beEa557eB0DE4171D4D3E4) |
-| Arbitrum Sepolia | [`0xe39B012AB3b20E94a9beEa557eB0DE4171D4D3E4`](https://sepolia.arbiscan.io/address/0xe39B012AB3b20E94a9beEa557eB0DE4171D4D3E4) |
-| Base Sepolia | [`0xe39B012AB3b20E94a9beEa557eB0DE4171D4D3E4`](https://sepolia.basescan.org/address/0xe39B012AB3b20E94a9beEa557eB0DE4171D4D3E4) |
+| Network          | Address                                                                                                                         |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Sepolia          | [`0xe39B012AB3b20E94a9beEa557eB0DE4171D4D3E4`](https://sepolia.etherscan.io/address/0xe39B012AB3b20E94a9beEa557eB0DE4171D4D3E4) |
+| Arbitrum Sepolia | [`0xe39B012AB3b20E94a9beEa557eB0DE4171D4D3E4`](https://sepolia.arbiscan.io/address/0xe39B012AB3b20E94a9beEa557eB0DE4171D4D3E4)  |
+| Base Sepolia     | [`0xe39B012AB3b20E94a9beEa557eB0DE4171D4D3E4`](https://sepolia.basescan.org/address/0xe39B012AB3b20E94a9beEa557eB0DE4171D4D3E4) |
 
 #### SVM
 
-| Network | Program ID |
-|---------|------------|
+| Network       | Program ID                                                                                                                                      |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | Solana Devnet | [`MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK`](https://explorer.solana.com/address/MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK?cluster=devnet) |
 
 ### Portal V2 Contracts
@@ -364,54 +437,57 @@ Portal V2 handles cross-chain message delivery for fill and cancel reports.
 
 #### Sepolia (Hub)
 
-| Contract | Address |
-|----------|---------|
-| Hub Portal | [`0x50D65829Eae411B655bAA92539E4F8c46D20638C`](https://sepolia.etherscan.io/address/0x50D65829Eae411B655bAA92539E4F8c46D20638C) |
+| Contract          | Address                                                                                                                         |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Hub Portal        | [`0x50D65829Eae411B655bAA92539E4F8c46D20638C`](https://sepolia.etherscan.io/address/0x50D65829Eae411B655bAA92539E4F8c46D20638C) |
 | Hyperlane Adapter | [`0xFc44dadD758A7737aC9200059e9FCd1521d75a07`](https://sepolia.etherscan.io/address/0xFc44dadD758A7737aC9200059e9FCd1521d75a07) |
-| Wormhole Adapter | [`0x6b2A7bFa5F1C03EbFae779Df6988b8aC14CA4155`](https://sepolia.etherscan.io/address/0x6b2A7bFa5F1C03EbFae779Df6988b8aC14CA4155) |
+| Wormhole Adapter  | [`0x6b2A7bFa5F1C03EbFae779Df6988b8aC14CA4155`](https://sepolia.etherscan.io/address/0x6b2A7bFa5F1C03EbFae779Df6988b8aC14CA4155) |
+| LayerZero Adapter | _Coming soon_                                                                                                                   |
 
 #### Arbitrum Sepolia (Spoke)
 
-| Contract | Address |
-|----------|---------|
-| Spoke Portal | [`0x50D65829Eae411B655bAA92539E4F8c46D20638C`](https://sepolia.arbiscan.io/address/0x50D65829Eae411B655bAA92539E4F8c46D20638C) |
+| Contract          | Address                                                                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Spoke Portal      | [`0x50D65829Eae411B655bAA92539E4F8c46D20638C`](https://sepolia.arbiscan.io/address/0x50D65829Eae411B655bAA92539E4F8c46D20638C) |
 | Hyperlane Adapter | [`0xFc44dadD758A7737aC9200059e9FCd1521d75a07`](https://sepolia.arbiscan.io/address/0xFc44dadD758A7737aC9200059e9FCd1521d75a07) |
-| Wormhole Adapter | [`0x6b2A7bFa5F1C03EbFae779Df6988b8aC14CA4155`](https://sepolia.arbiscan.io/address/0x6b2A7bFa5F1C03EbFae779Df6988b8aC14CA4155) |
+| Wormhole Adapter  | [`0x6b2A7bFa5F1C03EbFae779Df6988b8aC14CA4155`](https://sepolia.arbiscan.io/address/0x6b2A7bFa5F1C03EbFae779Df6988b8aC14CA4155) |
+| LayerZero Adapter | _Coming soon_                                                                                                                  |
 
 #### Base Sepolia (Spoke)
 
-| Contract | Address |
-|----------|---------|
-| Spoke Portal | [`0x50D65829Eae411B655bAA92539E4F8c46D20638C`](https://sepolia.basescan.org/address/0x50D65829Eae411B655bAA92539E4F8c46D20638C) |
+| Contract          | Address                                                                                                                         |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Spoke Portal      | [`0x50D65829Eae411B655bAA92539E4F8c46D20638C`](https://sepolia.basescan.org/address/0x50D65829Eae411B655bAA92539E4F8c46D20638C) |
 | Hyperlane Adapter | [`0xFc44dadD758A7737aC9200059e9FCd1521d75a07`](https://sepolia.basescan.org/address/0xFc44dadD758A7737aC9200059e9FCd1521d75a07) |
-| Wormhole Adapter | [`0x6b2A7bFa5F1C03EbFae779Df6988b8aC14CA4155`](https://sepolia.basescan.org/address/0x6b2A7bFa5F1C03EbFae779Df6988b8aC14CA4155) |
+| Wormhole Adapter  | [`0x6b2A7bFa5F1C03EbFae779Df6988b8aC14CA4155`](https://sepolia.basescan.org/address/0x6b2A7bFa5F1C03EbFae779Df6988b8aC14CA4155) |
+| LayerZero Adapter | _Coming soon_                                                                                                                   |
 
 #### Solana Devnet
 
-| Program | Program ID |
-|---------|------------|
-| Portal | [`MzBrgc8yXBj4P16GTkcSyDZkEQZB9qDqf3fh9bByJce`](https://explorer.solana.com/address/MzBrgc8yXBj4P16GTkcSyDZkEQZB9qDqf3fh9bByJce?cluster=devnet) |
-| Wormhole Adapter | [`mzp1q2j5Hr1QuLC3KFBCAUz5aUckT6qyuZKZ3WJnMmY`](https://explorer.solana.com/address/mzp1q2j5Hr1QuLC3KFBCAUz5aUckT6qyuZKZ3WJnMmY?cluster=devnet) |
+| Program           | Program ID                                                                                                                                      |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Portal            | [`MzBrgc8yXBj4P16GTkcSyDZkEQZB9qDqf3fh9bByJce`](https://explorer.solana.com/address/MzBrgc8yXBj4P16GTkcSyDZkEQZB9qDqf3fh9bByJce?cluster=devnet) |
+| Wormhole Adapter  | [`mzp1q2j5Hr1QuLC3KFBCAUz5aUckT6qyuZKZ3WJnMmY`](https://explorer.solana.com/address/mzp1q2j5Hr1QuLC3KFBCAUz5aUckT6qyuZKZ3WJnMmY?cluster=devnet) |
 | Hyperlane Adapter | [`mZhPGteS36G7FhMTcRofLQU8ocBNAsGq7u8SKSHfL2X`](https://explorer.solana.com/address/mZhPGteS36G7FhMTcRofLQU8ocBNAsGq7u8SKSHfL2X?cluster=devnet) |
 
 ### Token Addresses
 
 #### EVM Tokens
 
-| Network | Token | Address |
-|---------|-------|---------|
-| Sepolia | $M | [`0x866a2bf4e572cbcf37d5071a7a58503bfb36be1b`](https://sepolia.etherscan.io/address/0x866a2bf4e572cbcf37d5071a7a58503bfb36be1b) |
-| Sepolia | Wrapped $M | [`0x437cc33344a0B27A429f795ff6B469C72698B291`](https://sepolia.etherscan.io/address/0x437cc33344a0B27A429f795ff6B469C72698B291) |
-| Arbitrum Sepolia | $M | [`0x270Bd2498709A8e8332EA0Ce21B6AfE5E4Fcb385`](https://sepolia.arbiscan.io/address/0x270Bd2498709A8e8332EA0Ce21B6AfE5E4Fcb385) |
-| Arbitrum Sepolia | Wrapped $M | [`0x2C31dbfAecD6ed3EE43CeD5aEad97D1d309cC730`](https://sepolia.arbiscan.io/address/0x2C31dbfAecD6ed3EE43CeD5aEad97D1d309cC730) |
-| Base Sepolia | $M | [`0x270Bd2498709A8e8332EA0Ce21B6AfE5E4Fcb385`](https://sepolia.basescan.org/address/0x270Bd2498709A8e8332EA0Ce21B6AfE5E4Fcb385) |
-| Base Sepolia | Wrapped $M | [`0x2C31dbfAecD6ed3EE43CeD5aEad97D1d309cC730`](https://sepolia.basescan.org/address/0x2C31dbfAecD6ed3EE43CeD5aEad97D1d309cC730) |
+| Network          | Token      | Address                                                                                                                         |
+| ---------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Sepolia          | $M         | [`0x866a2bf4e572cbcf37d5071a7a58503bfb36be1b`](https://sepolia.etherscan.io/address/0x866a2bf4e572cbcf37d5071a7a58503bfb36be1b) |
+| Sepolia          | Wrapped $M | [`0x437cc33344a0B27A429f795ff6B469C72698B291`](https://sepolia.etherscan.io/address/0x437cc33344a0B27A429f795ff6B469C72698B291) |
+| Arbitrum Sepolia | $M         | [`0x270Bd2498709A8e8332EA0Ce21B6AfE5E4Fcb385`](https://sepolia.arbiscan.io/address/0x270Bd2498709A8e8332EA0Ce21B6AfE5E4Fcb385)  |
+| Arbitrum Sepolia | Wrapped $M | [`0x2C31dbfAecD6ed3EE43CeD5aEad97D1d309cC730`](https://sepolia.arbiscan.io/address/0x2C31dbfAecD6ed3EE43CeD5aEad97D1d309cC730)  |
+| Base Sepolia     | $M         | [`0x270Bd2498709A8e8332EA0Ce21B6AfE5E4Fcb385`](https://sepolia.basescan.org/address/0x270Bd2498709A8e8332EA0Ce21B6AfE5E4Fcb385) |
+| Base Sepolia     | Wrapped $M | [`0x2C31dbfAecD6ed3EE43CeD5aEad97D1d309cC730`](https://sepolia.basescan.org/address/0x2C31dbfAecD6ed3EE43CeD5aEad97D1d309cC730) |
 
 #### SVM Tokens
 
-| Network | Token | Mint Address |
-|---------|-------|--------------|
-| Solana Devnet | $M | [`mzeroZRGCah3j5xEWp2Nih3GDejSBbH1rbHoxDg8By6`](https://explorer.solana.com/address/mzeroZRGCah3j5xEWp2Nih3GDejSBbH1rbHoxDg8By6?cluster=devnet) |
+| Network       | Token      | Mint Address                                                                                                                                    |
+| ------------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Solana Devnet | $M         | [`mzeroZRGCah3j5xEWp2Nih3GDejSBbH1rbHoxDg8By6`](https://explorer.solana.com/address/mzeroZRGCah3j5xEWp2Nih3GDejSBbH1rbHoxDg8By6?cluster=devnet) |
 | Solana Devnet | Wrapped $M | [`mzeroXDoBpRVhnEXBra27qzAMdxgpWVY3DzQW7xMVJp`](https://explorer.solana.com/address/mzeroXDoBpRVhnEXBra27qzAMdxgpWVY3DzQW7xMVJp?cluster=devnet) |
 
 ---
@@ -435,6 +511,7 @@ The orchestration API enables permissionless solver participation. Solvers conne
 ```
 
 **Flow:**
+
 1. User requests a quote via REST API
 2. Quoter service broadcasts the request to all connected solvers via gRPC
 3. Solvers evaluate and respond with quotes
@@ -446,7 +523,7 @@ The orchestration API enables permissionless solver participation. Solvers conne
 
 Solvers must implement a gRPC service that handles quote requests. The connection is bidirectional - the quoter service initiates requests to connected solvers.
 
-**Endpoint:** *Coming soon*
+**Endpoint:** _Coming soon_
 
 ### Quote Request/Response
 
@@ -486,17 +563,17 @@ message QuoteResponse {
 
 #### Response Fields Explained
 
-| Field | Purpose |
-|-------|---------|
-| `quote_id` | For tracking and correlation between quote and fill |
-| `fee_bps` | Helps users understand the cost breakdown beyond just output amount |
-| `output_amount` | The amount the user will receive (may include slippage/impact) |
-| `est_fill_time_seconds` | Solvers may need time to source assets or segment large orders |
-| `expires_at` | Informs frontends when to refresh quotes for dynamic pricing |
-| `rejected` | Quick boolean check for quote acceptance |
-| `reject_reason` | User-friendly explanation (e.g., "Unsupported token pair") |
-| `solver_address` | Allows users to specify exclusivity if desired |
-| `requires_exclusivity` | Indicates if solver needs exclusive access to avoid being front-run |
+| Field                   | Purpose                                                             |
+| ----------------------- | ------------------------------------------------------------------- |
+| `quote_id`              | For tracking and correlation between quote and fill                 |
+| `fee_bps`               | Helps users understand the cost breakdown beyond just output amount |
+| `output_amount`         | The amount the user will receive (may include slippage/impact)      |
+| `est_fill_time_seconds` | Solvers may need time to source assets or segment large orders      |
+| `expires_at`            | Informs frontends when to refresh quotes for dynamic pricing        |
+| `rejected`              | Quick boolean check for quote acceptance                            |
+| `reject_reason`         | User-friendly explanation (e.g., "Unsupported token pair")          |
+| `solver_address`        | Allows users to specify exclusivity if desired                      |
+| `requires_exclusivity`  | Indicates if solver needs exclusive access to avoid being front-run |
 
 #### Important Notes
 
@@ -526,3 +603,4 @@ message QuoteResponse {
 - [M0 Documentation](https://docs.m0.org)
 - [Wormhole Executor Documentation](https://wormhole.com/docs/products/messaging/concepts/executor-overview/)
 - [Wormhole Executor Explorer (Testnet)](https://wormholelabs-xyz.github.io/executor-explorer/#/?endpoint=https%3A%2F%2Fexecutor-testnet.labsapis.com&env=Testnet)
+- [LayerZero V2 Documentation](https://docs.layerzero.network/v2)
