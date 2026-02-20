@@ -393,10 +393,10 @@ uint256 gasLimit = IPortal(portal).payloadGasLimit(destinationChainId, payloadTy
 
 The `PayloadType` enum is defined in the Portal V2 `PayloadEncoder` library. The relevant types for solvers are:
 
-| PayloadType     | Value | Usage            |
-|-----------------|-------|------------------|
-| `FillReport`    | `4`   | Order fills      |
-| `CancelReport`  | `6`   | Order cancellations |
+| PayloadType    | Value | Usage               |
+| -------------- | ----- | ------------------- |
+| `FillReport`   | `4`   | Order fills         |
+| `CancelReport` | `6`   | Order cancellations |
 
 Wormhole uses a different quoting mechanism via its Executor API (see above).
 
@@ -439,28 +439,28 @@ Portal V2 handles cross-chain message delivery for fill and cancel reports.
 
 | Contract          | Address                                                                                                                         |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Hub Portal        | [`0x50D65829Eae411B655bAA92539E4F8c46D20638C`](https://sepolia.etherscan.io/address/0x50D65829Eae411B655bAA92539E4F8c46D20638C) |
-| Hyperlane Adapter | [`0xFc44dadD758A7737aC9200059e9FCd1521d75a07`](https://sepolia.etherscan.io/address/0xFc44dadD758A7737aC9200059e9FCd1521d75a07) |
-| Wormhole Adapter  | [`0x6b2A7bFa5F1C03EbFae779Df6988b8aC14CA4155`](https://sepolia.etherscan.io/address/0x6b2A7bFa5F1C03EbFae779Df6988b8aC14CA4155) |
-| LayerZero Adapter | _Coming soon_                                                                                                                   |
+| Hub Portal        | [`0xD925C84b55E4e44a53749fF5F2a5A13F63D128fd`](https://sepolia.etherscan.io/address/0xD925C84b55E4e44a53749fF5F2a5A13F63D128fd) |
+| Hyperlane Adapter | [`0x408F6E7bDE5634160fda61b945DC9F41B965E406`](https://sepolia.etherscan.io/address/0x408F6E7bDE5634160fda61b945DC9F41B965E406) |
+| Wormhole Adapter  | [`0xeAae496BcDa93cCCd3fD6ff6096347979e87B153`](https://sepolia.etherscan.io/address/0xeAae496BcDa93cCCd3fD6ff6096347979e87B153) |
+| LayerZero Adapter | [`0x5206A69aa6092f7082b2F9F121F516b73233051E`](https://sepolia.etherscan.io/address/0x5206A69aa6092f7082b2F9F121F516b73233051E) |
 
 #### Arbitrum Sepolia (Spoke)
 
 | Contract          | Address                                                                                                                        |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Spoke Portal      | [`0x50D65829Eae411B655bAA92539E4F8c46D20638C`](https://sepolia.arbiscan.io/address/0x50D65829Eae411B655bAA92539E4F8c46D20638C) |
-| Hyperlane Adapter | [`0xFc44dadD758A7737aC9200059e9FCd1521d75a07`](https://sepolia.arbiscan.io/address/0xFc44dadD758A7737aC9200059e9FCd1521d75a07) |
-| Wormhole Adapter  | [`0x6b2A7bFa5F1C03EbFae779Df6988b8aC14CA4155`](https://sepolia.arbiscan.io/address/0x6b2A7bFa5F1C03EbFae779Df6988b8aC14CA4155) |
-| LayerZero Adapter | _Coming soon_                                                                                                                  |
+| Spoke Portal      | [`0xD925C84b55E4e44a53749fF5F2a5A13F63D128fd`](https://sepolia.arbiscan.io/address/0xD925C84b55E4e44a53749fF5F2a5A13F63D128fd) |
+| Hyperlane Adapter | [`0x408F6E7bDE5634160fda61b945DC9F41B965E406`](https://sepolia.arbiscan.io/address/0x408F6E7bDE5634160fda61b945DC9F41B965E406) |
+| Wormhole Adapter  | [`0xeAae496BcDa93cCCd3fD6ff6096347979e87B153`](https://sepolia.arbiscan.io/address/0xeAae496BcDa93cCCd3fD6ff6096347979e87B153) |
+| LayerZero Adapter | [`0x5206A69aa6092f7082b2F9F121F516b73233051E`](https://sepolia.arbiscan.io/address/0x5206A69aa6092f7082b2F9F121F516b73233051E) |
 
 #### Base Sepolia (Spoke)
 
 | Contract          | Address                                                                                                                         |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Spoke Portal      | [`0x50D65829Eae411B655bAA92539E4F8c46D20638C`](https://sepolia.basescan.org/address/0x50D65829Eae411B655bAA92539E4F8c46D20638C) |
-| Hyperlane Adapter | [`0xFc44dadD758A7737aC9200059e9FCd1521d75a07`](https://sepolia.basescan.org/address/0xFc44dadD758A7737aC9200059e9FCd1521d75a07) |
-| Wormhole Adapter  | [`0x6b2A7bFa5F1C03EbFae779Df6988b8aC14CA4155`](https://sepolia.basescan.org/address/0x6b2A7bFa5F1C03EbFae779Df6988b8aC14CA4155) |
-| LayerZero Adapter | _Coming soon_                                                                                                                   |
+| Spoke Portal      | [`0xD925C84b55E4e44a53749fF5F2a5A13F63D128fd`](https://sepolia.basescan.org/address/0xD925C84b55E4e44a53749fF5F2a5A13F63D128fd) |
+| Hyperlane Adapter | [`0x408F6E7bDE5634160fda61b945DC9F41B965E406`](https://sepolia.basescan.org/address/0x408F6E7bDE5634160fda61b945DC9F41B965E406) |
+| Wormhole Adapter  | [`0xeAae496BcDa93cCCd3fD6ff6096347979e87B153`](https://sepolia.basescan.org/address/0xeAae496BcDa93cCCd3fD6ff6096347979e87B153) |
+| LayerZero Adapter | [`0x5206A69aa6092f7082b2F9F121F516b73233051E`](https://sepolia.basescan.org/address/0x5206A69aa6092f7082b2F9F121F516b73233051E) |
 
 #### Solana Devnet
 
@@ -478,10 +478,10 @@ Portal V2 handles cross-chain message delivery for fill and cancel reports.
 | ---------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | Sepolia          | $M         | [`0x866a2bf4e572cbcf37d5071a7a58503bfb36be1b`](https://sepolia.etherscan.io/address/0x866a2bf4e572cbcf37d5071a7a58503bfb36be1b) |
 | Sepolia          | Wrapped $M | [`0x437cc33344a0B27A429f795ff6B469C72698B291`](https://sepolia.etherscan.io/address/0x437cc33344a0B27A429f795ff6B469C72698B291) |
-| Arbitrum Sepolia | $M         | [`0x270Bd2498709A8e8332EA0Ce21B6AfE5E4Fcb385`](https://sepolia.arbiscan.io/address/0x270Bd2498709A8e8332EA0Ce21B6AfE5E4Fcb385)  |
-| Arbitrum Sepolia | Wrapped $M | [`0x2C31dbfAecD6ed3EE43CeD5aEad97D1d309cC730`](https://sepolia.arbiscan.io/address/0x2C31dbfAecD6ed3EE43CeD5aEad97D1d309cC730)  |
-| Base Sepolia     | $M         | [`0x270Bd2498709A8e8332EA0Ce21B6AfE5E4Fcb385`](https://sepolia.basescan.org/address/0x270Bd2498709A8e8332EA0Ce21B6AfE5E4Fcb385) |
-| Base Sepolia     | Wrapped $M | [`0x2C31dbfAecD6ed3EE43CeD5aEad97D1d309cC730`](https://sepolia.basescan.org/address/0x2C31dbfAecD6ed3EE43CeD5aEad97D1d309cC730) |
+| Arbitrum Sepolia | $M         | [`0x866a2bf4e572cbcf37d5071a7a58503bfb36be1b`](https://sepolia.etherscan.io/address/0x866a2bf4e572cbcf37d5071a7a58503bfb36be1b) |
+| Arbitrum Sepolia | Wrapped $M | [`0x437cc33344a0B27A429f795ff6B469C72698B291`](https://sepolia.etherscan.io/address/0x437cc33344a0B27A429f795ff6B469C72698B291) |
+| Base Sepolia     | $M         | [`0x866a2bf4e572cbcf37d5071a7a58503bfb36be1b`](https://sepolia.etherscan.io/address/0x866a2bf4e572cbcf37d5071a7a58503bfb36be1b) |
+| Base Sepolia     | Wrapped $M | [`0x437cc33344a0B27A429f795ff6B469C72698B291`](https://sepolia.etherscan.io/address/0x437cc33344a0B27A429f795ff6B469C72698B291) |
 
 #### SVM Tokens
 
