@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EVM_DIR="$(dirname "$SCRIPT_DIR")"
-CONFIG_FILE="$EVM_DIR/config/chains.json"
+CONFIG_FILE=""  # Set after env is parsed: chains.dev.json or chains.prod.json
 
 # 1Password account
 OP_ACCOUNT="mzerolabs.1password.com"
@@ -226,6 +226,8 @@ main() {
     fi
 
     validate_env "$env"
+    CONFIG_FILE="$EVM_DIR/config/chains.${env}.json"
+
     transfer_roles "$env" "$chain" "$new_admin"
 }
 

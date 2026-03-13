@@ -176,7 +176,7 @@ contract FillOrder is ScriptBase {
 
     /// @notice Get Portal address from config
     function _getPortalAddress() internal view returns (address) {
-        string memory configPath_ = string.concat(vm.projectRoot(), "/config/chains.json");
+        string memory configPath_ = string.concat(vm.projectRoot(), "/config/chains.dev.json");
         string memory config_ = vm.readFile(configPath_);
         return vm.parseJsonAddress(config_, ".portal");
     }

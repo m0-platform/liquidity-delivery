@@ -36,7 +36,8 @@ The deployment system uses bash scripts with 1Password CLI (`op`) for secret man
 
 | File | Purpose |
 |------|---------|
-| `config/chains.json` | Chain registry (chainId, RPC alias, explorer alias) |
+| `config/chains.dev.json` | Testnet chain registry (chainId, RPC alias, explorer alias) |
+| `config/chains.prod.json` | Mainnet chain registry (chainId, RPC alias, explorer alias) |
 | `.env.dev` | Testnet secrets (1Password references) |
 | `.env.prod` | Mainnet secrets (1Password references) |
 | `deployments/{chainId}.json` | Deployed contract addresses per chain |
@@ -128,7 +129,7 @@ Scripts can also be called directly:
 
 ### Adding a New Chain
 
-1. Add chain entry to `config/chains.json`:
+1. Add chain entry to the appropriate config file (`config/chains.dev.json` for testnets, `config/chains.prod.json` for mainnets):
    ```json
    {
      "chains": {

@@ -75,8 +75,12 @@ ifndef ENV
 endif
 	@./ops/deploy.sh --env $(ENV) --all --verify
 
-deploy-list: ## List all configured chains and deployment status
-	@./ops/deploy.sh --list
+deploy-list: ## List all configured chains and deployment status (ENV=dev)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make deploy-list ENV=dev"
+	@exit 1
+endif
+	@./ops/deploy.sh --env $(ENV) --list
 
 ## Route Configuration Commands
 
@@ -144,8 +148,12 @@ ifndef ENV
 endif
 	@./ops/upgrade.sh --env $(ENV) --all
 
-upgrade-status: ## Show current deployment and implementation status
-	@./ops/upgrade.sh --status
+upgrade-status: ## Show current deployment and implementation status (ENV=dev)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make upgrade-status ENV=dev"
+	@exit 1
+endif
+	@./ops/upgrade.sh --env $(ENV) --status
 
 ## Admin Commands
 
@@ -170,8 +178,12 @@ endif
 
 .PHONY: status
 
-status: ## Show deployment status (alias for deploy-list)
-	@./ops/deploy.sh --list
+status: ## Show deployment status (alias for deploy-list, ENV=dev)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make status ENV=dev"
+	@exit 1
+endif
+	@./ops/deploy.sh --env $(ENV) --list
 
 ## Testing Commands
 
@@ -274,7 +286,7 @@ help: ## Show this help
 	@echo "  make deploy ENV=<dev|prod> CHAIN=<alias>         Deploy to a single chain"
 	@echo "  make deploy-verify ENV=<dev|prod> CHAIN=<alias>  Deploy with verification"
 	@echo "  make deploy-all ENV=<dev|prod>                   Deploy to all chains"
-	@echo "  make deploy-list                                 List configured chains"
+	@echo "  make deploy-list ENV=<dev|prod>                  List configured chains"
 	@echo ""
 	@echo "Configuration:"
 	@echo "  make configure-routes ENV=<dev|prod>             Configure all routes"
@@ -284,7 +296,7 @@ help: ## Show this help
 	@echo "Upgrades:"
 	@echo "  make upgrade ENV=<dev|prod> CHAIN=<alias>        Upgrade on a chain"
 	@echo "  make upgrade-all ENV=<dev|prod>                  Upgrade on all chains"
-	@echo "  make upgrade-status                              Show implementation status"
+	@echo "  make upgrade-status ENV=<dev|prod>               Show implementation status"
 	@echo ""
 	@echo "Admin:"
 	@echo "  make transfer-roles ENV=<dev|prod> CHAIN=<alias> \\  Transfer all roles to new admin"
@@ -300,7 +312,7 @@ help: ## Show this help
 	@echo "       ORDER_ID=0x... ORIGIN_CHAIN=<alias>"
 	@echo ""
 	@echo "Status:"
-	@echo "  make status                                      Show deployment status"
+	@echo "  make status ENV=<dev|prod>                       Show deployment status"
 	@echo ""
 	@echo "Options:"
 	@echo "  DRY_RUN=true  Simulate without broadcasting (logs JSON to console)"

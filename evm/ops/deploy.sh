@@ -7,7 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EVM_DIR="$(dirname "$SCRIPT_DIR")"
-CONFIG_FILE="$EVM_DIR/config/chains.json"
+CONFIG_FILE=""  # Set after env is parsed: chains.dev.json or chains.prod.json
 
 # 1Password account
 OP_ACCOUNT="mzerolabs.1password.com"
@@ -157,7 +157,7 @@ usage() {
     echo "  $0 --env <dev|prod> --chain <alias> --verify  Deploy and verify on explorer"
     echo "  $0 --env <dev|prod> --all                     Deploy to all configured chains"
     echo "  $0 --env <dev|prod> --all --verify            Deploy to all chains with verification"
-    echo "  $0 --list                                     List all configured chains"
+    echo "  $0 --env <dev|prod> --list                    List all configured chains"
     echo ""
     echo "Options:"
     echo "  DRY_RUN=true  Simulate deployment without broadcasting (logs JSON to console)"
@@ -239,11 +239,6 @@ main() {
         esac
     done
 
-    if [[ "$list" == "true" ]]; then
-        list_chains
-        exit 0
-    fi
-
     # Validate environment is specified
     if [[ -z "$env" ]]; then
         log_error "Environment is required. Use --env dev or --env prod"
@@ -252,6 +247,12 @@ main() {
     fi
 
     validate_env "$env"
+    CONFIG_FILE="$EVM_DIR/config/chains.${env}.json"
+
+    if [[ "$list" == "true" ]]; then
+        list_chains
+        exit 0
+    fi
 
     if [[ "$all" == "true" ]]; then
         log_info "Deploying to all configured chains [env: $env]..."
