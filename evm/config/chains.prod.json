@@ -11,6 +11,12 @@
       "name": "Mainnet",
       "rpcAlias": "mainnet",
       "explorerAlias": "mainnet"
+    },
+    "solana": {
+      "chainId": 1399811149,
+      "name": "Solana Mainnet",
+      "rpcAlias": "solana_mainnet",
+      "explorerAlias": "solana_mainnet"
     }
   }
 }

@@ -24,7 +24,7 @@ initialize:
 
 add-destination:
 	$(INJECT)
-	surfpool run add_destination -m raw.txtx.yml --env $(env) --unsupervised
+	surfpool run add_destination -m raw.txtx.yml --env $(env)
 	$(CLEAN)
 	@echo "Destination added"
 
