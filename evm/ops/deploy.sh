@@ -142,8 +142,6 @@ deploy_chain() {
         fi
     fi
 
-
-
     log_info "Forge command: $forge_cmd"
 
     log_info "Running with 1Password: op run --env-file=$env_file --account=$OP_ACCOUNT"
