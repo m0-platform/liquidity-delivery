@@ -39,6 +39,7 @@ arbitrum_sepolia = "${ARBITRUM_SEPOLIA_RPC_URL}"
 base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
 base = "${BASE_RPC_URL}"
 moca = "${MOCA_RPC_URL}"
+citrea = "${CITREA_RPC_URL}"
 
 [etherscan]
 mainnet = { key = "${ETHERSCAN_API_KEY}" }

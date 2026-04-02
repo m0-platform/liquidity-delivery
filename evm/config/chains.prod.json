@@ -26,6 +26,13 @@
       "rpcAlias": "moca",
       "explorerAlias": "moca",
       "explorerType": "blockscout"
+    },
+    "citrea": {
+      "chainId": 4114,
+      "name": "Citrea Mainnet",
+      "rpcAlias": "citrea",
+      "explorerAlias": "citrea",
+      "explorerType": "blockscout"
     }
   }
 }
