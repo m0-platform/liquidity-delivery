@@ -4,19 +4,28 @@
       "chainId": 8453,
       "name": "Base",
       "rpcAlias": "base",
-      "explorerAlias": "base"
+      "explorerAlias": "base",
+      "explorerType": "etherscan"
     },
     "mainnet": {
       "chainId": 1,
       "name": "Mainnet",
       "rpcAlias": "mainnet",
-      "explorerAlias": "mainnet"
+      "explorerAlias": "mainnet",
+      "explorerType": "etherscan"
     },
     "solana": {
       "chainId": 1399811149,
       "name": "Solana Mainnet",
       "rpcAlias": "solana_mainnet",
       "explorerAlias": "solana_mainnet"
+    },
+    "moca": {
+      "chainId": 2288,
+      "name": "Moca Chain Mainnet",
+      "rpcAlias": "moca",
+      "explorerAlias": "moca",
+      "explorerType": "blockscout"
     }
   }
 }
