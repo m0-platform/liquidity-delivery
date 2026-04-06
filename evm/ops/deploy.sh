@@ -74,6 +74,11 @@ get_explorer_alias() {
     jq -r --arg a "$alias" '.chains[$a].explorerAlias // empty' "$CONFIG_FILE"
 }
 
+get_explorer_type() {
+    local alias=$1
+    jq -r --arg a "$alias" '.chains[$a].explorerType // empty' "$CONFIG_FILE"
+}
+
 get_chain_name() {
     local alias=$1
     jq -r --arg a "$alias" '.chains[$a].name // empty' "$CONFIG_FILE"
@@ -93,6 +98,7 @@ deploy_chain() {
     local chain_id=$(get_chain_id "$alias")
     local rpc_alias=$(get_rpc_alias "$alias")
     local explorer_alias=$(get_explorer_alias "$alias")
+    local explorer_type=$(get_explorer_type "$alias")
     local chain_name=$(get_chain_name "$alias")
 
     if [[ -z "$chain_id" ]]; then
@@ -124,17 +130,25 @@ deploy_chain() {
         log_warn "DRY RUN MODE - Simulating deployment (no broadcast)"
     else
         forge_cmd="$forge_cmd --broadcast"
+
+        if [[ "$verify" == "true" ]]; then
+            forge_cmd="$forge_cmd --verify"
+
+            if [[ "$explorer_type" != "etherscan" ]]; then
+                local verifier_env_var="$(echo "${alias}_VERIFIER" | tr '[:lower:]' '[:upper:]')"
+                local verifier_url_env_var="$(echo "${alias}_VERIFIER_URL" | tr '[:lower:]' '[:upper:]')"
+                forge_cmd="$forge_cmd --verifier \$$verifier_env_var --verifier-url \$$verifier_url_env_var"
+            fi
+        fi
     fi
 
-    if [[ "$verify" == "true" ]]; then
-        forge_cmd="$forge_cmd --verify"
-    fi
+    log_info "Forge command: $forge_cmd"
 
     log_info "Running with 1Password: op run --env-file=$env_file --account=$OP_ACCOUNT"
 
     # Execute from EVM directory with op run
     cd "$EVM_DIR"
-    op run --env-file="$env_file" --account="$OP_ACCOUNT" -- bash -c "DRY_RUN=${DRY_RUN:-false} $forge_cmd"
+    op run --env-file="$env_file" --account="$OP_ACCOUNT" -- bash -c "$forge_cmd"
 
     # Verify deployment file was created (skip in dry-run mode)
     if [[ "${DRY_RUN:-false}" == "true" ]]; then

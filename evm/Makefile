@@ -157,22 +157,39 @@ endif
 
 ## Admin Commands
 
-.PHONY: transfer-roles
+.PHONY: transfer-admin-roles
 
-transfer-roles: ## Transfer all roles to a new admin (ENV=prod CHAIN=base NEW_ADMIN=0x...)
+transfer-admin-roles: ## Transfer admin roles to a new admin (ENV=prod CHAIN=base NEW_ADMIN=0x...)
 ifndef ENV
-	@echo "Error: ENV is required. Usage: make transfer-roles ENV=prod CHAIN=base NEW_ADMIN=0x..."
+	@echo "Error: ENV is required. Usage: make transfer-admin-roles ENV=prod CHAIN=base NEW_ADMIN=0x..."
 	@exit 1
 endif
 ifndef CHAIN
-	@echo "Error: CHAIN is required. Usage: make transfer-roles ENV=prod CHAIN=base NEW_ADMIN=0x..."
+	@echo "Error: CHAIN is required. Usage: make transfer-admin-roles ENV=prod CHAIN=base NEW_ADMIN=0x..."
 	@exit 1
 endif
 ifndef NEW_ADMIN
-	@echo "Error: NEW_ADMIN is required. Usage: make transfer-roles ENV=prod CHAIN=base NEW_ADMIN=0x..."
+	@echo "Error: NEW_ADMIN is required. Usage: make transfer-admin-roles ENV=prod CHAIN=base NEW_ADMIN=0x..."
 	@exit 1
 endif
-	@./ops/transfer-roles.sh --env $(ENV) --chain $(CHAIN) --new-admin $(NEW_ADMIN)
+	@./ops/transfer-admin-roles.sh --env $(ENV) --chain $(CHAIN) --new-admin $(NEW_ADMIN)
+
+.PHONY: transfer-pauser-role
+
+transfer-pauser-role: ## Transfer pauser role to a new address (ENV=prod CHAIN=base NEW_PAUSER=0x...)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make transfer-pauser-role ENV=prod CHAIN=base NEW_PAUSER=0x..."
+	@exit 1
+endif
+ifndef CHAIN
+	@echo "Error: CHAIN is required. Usage: make transfer-pauser-role ENV=prod CHAIN=base NEW_PAUSER=0x..."
+	@exit 1
+endif
+ifndef NEW_PAUSER
+	@echo "Error: NEW_PAUSER is required. Usage: make transfer-pauser-role ENV=prod CHAIN=base NEW_PAUSER=0x..."
+	@exit 1
+endif
+	@./ops/transfer-pauser-role.sh --env $(ENV) --chain $(CHAIN) --new-pauser $(NEW_PAUSER)
 
 ## Status Commands
 
@@ -300,8 +317,10 @@ help: ## Show this help
 	@echo "  make upgrade-status ENV=<dev|prod>               Show implementation status"
 	@echo ""
 	@echo "Admin:"
-	@echo "  make transfer-roles ENV=<dev|prod> CHAIN=<alias> \\  Transfer all roles to new admin"
+	@echo "  make transfer-admin-roles ENV=<dev|prod> CHAIN=<alias> \\  Transfer admin roles to new admin"
 	@echo "       NEW_ADMIN=0x..."
+	@echo "  make transfer-pauser-role ENV=<dev|prod> CHAIN=<alias> \\  Transfer pauser role to new address"
+	@echo "       NEW_PAUSER=0x..."
 	@echo ""
 	@echo "Testing:"
 	@echo "  make open-order ENV=<dev|prod> CHAIN=<alias> \\    Create a test order"

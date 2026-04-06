@@ -4,19 +4,22 @@
       "chainId": 11155111,
       "name": "Sepolia",
       "rpcAlias": "sepolia",
-      "explorerAlias": "sepolia"
+      "explorerAlias": "sepolia",
+      "explorerType": "etherscan"
     },
     "arbitrum_sepolia": {
       "chainId": 421614,
       "name": "Arbitrum Sepolia",
       "rpcAlias": "arbitrum_sepolia",
-      "explorerAlias": "arbitrum_sepolia"
+      "explorerAlias": "arbitrum_sepolia",
+      "explorerType": "etherscan"
     },
     "base_sepolia": {
       "chainId": 84532,
       "name": "Base Sepolia",
       "rpcAlias": "base_sepolia",
-      "explorerAlias": "base_sepolia"
+      "explorerAlias": "base_sepolia",
+      "explorerType": "etherscan"
     },
     "solana_devnet": {
       "chainId": 1399811150,
