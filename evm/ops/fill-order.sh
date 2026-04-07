@@ -208,6 +208,9 @@ main() {
         exit 1
     fi
 
+    validate_env "$env"
+    CONFIG_FILE="$EVM_DIR/config/chains.${env}.json"
+
     # Validate origin chain exists in config
     local origin_chain_id=$(get_chain_id "$origin_chain")
     local origin_chain_name=$(get_chain_name "$origin_chain")
@@ -215,9 +218,6 @@ main() {
         log_error "Origin chain alias '$origin_chain' not found in config"
         exit 1
     fi
-
-    validate_env "$env"
-    CONFIG_FILE="$EVM_DIR/config/chains.${env}.json"
 
     local env_file=$(get_env_file "$env")
     local chain_id=$(get_chain_id "$chain")
