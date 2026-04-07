@@ -266,7 +266,9 @@ endif
 	@./ops/fill-order.sh --env $(ENV) --chain $(CHAIN) \
 		--order-id $(ORDER_ID) --origin-chain $(ORIGIN_CHAIN) --amount-out $(AMOUNT_OUT) \
 		$(if $(ORIGIN_RECIPIENT),--origin-recipient $(ORIGIN_RECIPIENT)) \
-		$(if $(BRIDGE_ADAPTER_ARGS),--bridge-adapter-args $(BRIDGE_ADAPTER_ARGS))
+		$(if $(BRIDGE_ADAPTER),--bridge-adapter $(BRIDGE_ADAPTER)) \
+		$(if $(BRIDGE_ADAPTER_ARGS),--bridge-adapter-args $(BRIDGE_ADAPTER_ARGS)) \
+		$(if $(WORMHOLE),--wormhole)
 
 cancel-order: ## Cancel a test order (ENV=dev CHAIN=arbitrum_sepolia ORDER_ID=0x... ORIGIN_CHAIN=sepolia)
 ifndef ENV
@@ -287,7 +289,9 @@ ifndef ORIGIN_CHAIN
 endif
 	@./ops/cancel-order.sh --env $(ENV) --chain $(CHAIN) \
 		--order-id $(ORDER_ID) --origin-chain $(ORIGIN_CHAIN) \
-		$(if $(BRIDGE_ADAPTER_ARGS),--bridge-adapter-args $(BRIDGE_ADAPTER_ARGS))
+		$(if $(BRIDGE_ADAPTER),--bridge-adapter $(BRIDGE_ADAPTER)) \
+		$(if $(BRIDGE_ADAPTER_ARGS),--bridge-adapter-args $(BRIDGE_ADAPTER_ARGS)) \
+		$(if $(WORMHOLE),--wormhole)
 
 ## Help
 
