@@ -181,6 +181,7 @@ usage() {
     echo "  --bridge-adapter      Bridge adapter address for cross-chain messaging"
     echo "  --bridge-adapter-args Bridge adapter args (e.g., signed Wormhole quote)"
     echo "  --wormhole            Use Wormhole adapter (auto-fetches quote from executor API)"
+    echo "  --gas-limit           Override payload gas limit (skips Portal query)"
     echo ""
     echo "Environment variables:"
     echo "  DRY_RUN=true          Simulate without broadcasting"
@@ -212,6 +213,7 @@ main() {
     local bridge_adapter="0x0000000000000000000000000000000000000000"
     local bridge_adapter_args="0x"
     local use_wormhole=false
+    local gas_limit_override=""
 
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -250,6 +252,10 @@ main() {
             --wormhole)
                 use_wormhole=true
                 shift
+                ;;
+            --gas-limit)
+                gas_limit_override="$2"
+                shift 2
                 ;;
             --help|-h)
                 usage
@@ -342,18 +348,26 @@ main() {
         bridge_adapter="$wormhole_adapter"
         log_info "Bridge Adapter: Wormhole ($wormhole_adapter)"
 
-        # Get payload gas limit from Portal (PayloadType.FillReport = 4)
-        log_info "Querying payload gas limit from Portal..."
+        # Get payload gas limit — use override if provided, otherwise query Portal
         local gas_limit
-        gas_limit=$(op run --env-file="$env_file" --account="$OP_ACCOUNT" -- \
-            cast call "$portal_address" "payloadGasLimit(uint32,uint8)(uint256)" \
-            "$origin_chain_id" 4 --rpc-url "$rpc_alias" 2>/dev/null)
-        gas_limit=$(echo "$gas_limit" | grep -oE '^[0-9]+' | head -1)
-        log_info "Payload gas limit: $gas_limit"
+        if [[ -n "$gas_limit_override" ]]; then
+            gas_limit="$gas_limit_override"
+            log_info "Payload gas limit (override): $gas_limit"
+        else
+            log_info "Querying payload gas limit from Portal (PayloadType.FillReport=4)..."
+            local gas_limit_raw
+            gas_limit_raw=$(op run --env-file="$env_file" --account="$OP_ACCOUNT" -- \
+                cast call "$portal_address" "payloadGasLimit(uint32,uint8)(uint256)" \
+                "$origin_chain_id" 4 --rpc-url "$rpc_alias" 2>&1) || true
+            gas_limit=$(echo "$gas_limit_raw" | grep -oE '^[0-9]+' | head -1) || true
+            log_info "Payload gas limit: ${gas_limit:-<empty>}"
 
-        if [[ -z "$gas_limit" || "$gas_limit" == "0" ]]; then
-            log_error "Failed to read payload gas limit from Portal"
-            exit 1
+            if [[ -z "$gas_limit" || "$gas_limit" == "0" ]]; then
+                log_error "Failed to read payload gas limit from Portal on $chain_name for origin chain $origin_chain_id"
+                log_error "Raw output: $gas_limit_raw"
+                log_error "Use --gas-limit <value> to specify manually"
+                exit 1
+            fi
         fi
 
         # Encode relay instructions
@@ -371,16 +385,18 @@ main() {
 
         # Get core bridge fee
         log_info "Querying Wormhole core bridge fee..."
-        local core_bridge
-        core_bridge=$(op run --env-file="$env_file" --account="$OP_ACCOUNT" -- \
-            cast call "$wormhole_adapter" "coreBridge()(address)" --rpc-url "$rpc_alias" 2>/dev/null)
-        core_bridge=$(echo "$core_bridge" | grep -oE '0x[0-9a-fA-F]+' | head -1)
+        local core_bridge_raw core_bridge
+        core_bridge_raw=$(op run --env-file="$env_file" --account="$OP_ACCOUNT" -- \
+            cast call "$wormhole_adapter" "coreBridge()(address)" --rpc-url "$rpc_alias" 2>&1) || true
+        core_bridge=$(echo "$core_bridge_raw" | grep -oE '0x[0-9a-fA-F]+' | head -1) || true
+        log_info "Core bridge address: ${core_bridge:-<empty>}"
 
         local core_bridge_fee=0
         if [[ -n "$core_bridge" ]]; then
-            core_bridge_fee=$(op run --env-file="$env_file" --account="$OP_ACCOUNT" -- \
-                cast call "$core_bridge" "messageFee()(uint256)" --rpc-url "$rpc_alias" 2>/dev/null)
-            core_bridge_fee=$(echo "$core_bridge_fee" | grep -oE '^[0-9]+' | head -1)
+            local core_bridge_fee_raw
+            core_bridge_fee_raw=$(op run --env-file="$env_file" --account="$OP_ACCOUNT" -- \
+                cast call "$core_bridge" "messageFee()(uint256)" --rpc-url "$rpc_alias" 2>&1) || true
+            core_bridge_fee=$(echo "$core_bridge_fee_raw" | grep -oE '^[0-9]+' | head -1) || true
             core_bridge_fee=${core_bridge_fee:-0}
         fi
         log_info "Core bridge fee: $core_bridge_fee"
