@@ -57,6 +57,19 @@
         "hyperlane": "0xfCc1d596Ad6cAb0b5394eAa447d8626813180f32",
         "layerzero": "0x77EF4e9D37524069f81890C537a5c5d390bb4b4d"
       }
+    },
+    "arbitrum": {
+      "chainId": 42161,
+      "name": "Arbitrum One",
+      "rpcAlias": "arbitrum",
+      "explorerAlias": "arbitrum",
+      "explorerType": "etherscan",
+      "portal": "0xD925C84b55E4e44a53749fF5F2a5A13F63D128fd",
+      "adapters": {
+        "wormhole": "0xaCffEC28C4eEe21C889a4e6C0704c540Ed9D4fDd",
+        "hyperlane": "0xfCc1d596Ad6cAb0b5394eAa447d8626813180f32",
+        "layerzero": "0x77EF4e9D37524069f81890C537a5c5d390bb4b4d"
+      }
     }
   }
 }
