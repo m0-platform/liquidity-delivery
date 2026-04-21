@@ -75,8 +75,12 @@ ifndef ENV
 endif
 	@./ops/deploy.sh --env $(ENV) --all --verify
 
-deploy-list: ## List all configured chains and deployment status
-	@./ops/deploy.sh --list
+deploy-list: ## List all configured chains and deployment status (ENV=dev)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make deploy-list ENV=dev"
+	@exit 1
+endif
+	@./ops/deploy.sh --env $(ENV) --list
 
 ## Route Configuration Commands
 
@@ -144,34 +148,59 @@ ifndef ENV
 endif
 	@./ops/upgrade.sh --env $(ENV) --all
 
-upgrade-status: ## Show current deployment and implementation status
-	@./ops/upgrade.sh --status
+upgrade-status: ## Show current deployment and implementation status (ENV=dev)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make upgrade-status ENV=dev"
+	@exit 1
+endif
+	@./ops/upgrade.sh --env $(ENV) --status
 
 ## Admin Commands
 
-.PHONY: transfer-roles
+.PHONY: transfer-admin-roles
 
-transfer-roles: ## Transfer all roles to a new admin (ENV=prod CHAIN=base NEW_ADMIN=0x...)
+transfer-admin-roles: ## Transfer admin roles to a new admin (ENV=prod CHAIN=base NEW_ADMIN=0x...)
 ifndef ENV
-	@echo "Error: ENV is required. Usage: make transfer-roles ENV=prod CHAIN=base NEW_ADMIN=0x..."
+	@echo "Error: ENV is required. Usage: make transfer-admin-roles ENV=prod CHAIN=base NEW_ADMIN=0x..."
 	@exit 1
 endif
 ifndef CHAIN
-	@echo "Error: CHAIN is required. Usage: make transfer-roles ENV=prod CHAIN=base NEW_ADMIN=0x..."
+	@echo "Error: CHAIN is required. Usage: make transfer-admin-roles ENV=prod CHAIN=base NEW_ADMIN=0x..."
 	@exit 1
 endif
 ifndef NEW_ADMIN
-	@echo "Error: NEW_ADMIN is required. Usage: make transfer-roles ENV=prod CHAIN=base NEW_ADMIN=0x..."
+	@echo "Error: NEW_ADMIN is required. Usage: make transfer-admin-roles ENV=prod CHAIN=base NEW_ADMIN=0x..."
 	@exit 1
 endif
-	@./ops/transfer-roles.sh --env $(ENV) --chain $(CHAIN) --new-admin $(NEW_ADMIN)
+	@DRY_RUN=$(DRY_RUN) ./ops/transfer-admin-roles.sh --env $(ENV) --chain $(CHAIN) --new-admin $(NEW_ADMIN)
+
+.PHONY: transfer-pauser-role
+
+transfer-pauser-role: ## Transfer pauser role to a new address (ENV=prod CHAIN=base NEW_PAUSER=0x...)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make transfer-pauser-role ENV=prod CHAIN=base NEW_PAUSER=0x..."
+	@exit 1
+endif
+ifndef CHAIN
+	@echo "Error: CHAIN is required. Usage: make transfer-pauser-role ENV=prod CHAIN=base NEW_PAUSER=0x..."
+	@exit 1
+endif
+ifndef NEW_PAUSER
+	@echo "Error: NEW_PAUSER is required. Usage: make transfer-pauser-role ENV=prod CHAIN=base NEW_PAUSER=0x..."
+	@exit 1
+endif
+	@DRY_RUN=$(DRY_RUN) ./ops/transfer-pauser-role.sh --env $(ENV) --chain $(CHAIN) --new-pauser $(NEW_PAUSER)
 
 ## Status Commands
 
 .PHONY: status
 
-status: ## Show deployment status (alias for deploy-list)
-	@./ops/deploy.sh --list
+status: ## Show deployment status (alias for deploy-list, ENV=dev)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make status ENV=dev"
+	@exit 1
+endif
+	@./ops/deploy.sh --env $(ENV) --list
 
 ## Testing Commands
 
@@ -237,7 +266,10 @@ endif
 	@./ops/fill-order.sh --env $(ENV) --chain $(CHAIN) \
 		--order-id $(ORDER_ID) --origin-chain $(ORIGIN_CHAIN) --amount-out $(AMOUNT_OUT) \
 		$(if $(ORIGIN_RECIPIENT),--origin-recipient $(ORIGIN_RECIPIENT)) \
-		$(if $(BRIDGE_ADAPTER_ARGS),--bridge-adapter-args $(BRIDGE_ADAPTER_ARGS))
+		$(if $(BRIDGE_ADAPTER),--bridge-adapter $(BRIDGE_ADAPTER)) \
+		$(if $(BRIDGE_ADAPTER_ARGS),--bridge-adapter-args $(BRIDGE_ADAPTER_ARGS)) \
+		$(if $(WORMHOLE),--wormhole) \
+		$(if $(GAS_LIMIT),--gas-limit $(GAS_LIMIT))
 
 cancel-order: ## Cancel a test order (ENV=dev CHAIN=arbitrum_sepolia ORDER_ID=0x... ORIGIN_CHAIN=sepolia)
 ifndef ENV
@@ -258,7 +290,10 @@ ifndef ORIGIN_CHAIN
 endif
 	@./ops/cancel-order.sh --env $(ENV) --chain $(CHAIN) \
 		--order-id $(ORDER_ID) --origin-chain $(ORIGIN_CHAIN) \
-		$(if $(BRIDGE_ADAPTER_ARGS),--bridge-adapter-args $(BRIDGE_ADAPTER_ARGS))
+		$(if $(BRIDGE_ADAPTER),--bridge-adapter $(BRIDGE_ADAPTER)) \
+		$(if $(BRIDGE_ADAPTER_ARGS),--bridge-adapter-args $(BRIDGE_ADAPTER_ARGS)) \
+		$(if $(WORMHOLE),--wormhole) \
+		$(if $(GAS_LIMIT),--gas-limit $(GAS_LIMIT))
 
 ## Help
 
@@ -274,21 +309,28 @@ help: ## Show this help
 	@echo "  make deploy ENV=<dev|prod> CHAIN=<alias>         Deploy to a single chain"
 	@echo "  make deploy-verify ENV=<dev|prod> CHAIN=<alias>  Deploy with verification"
 	@echo "  make deploy-all ENV=<dev|prod>                   Deploy to all chains"
-	@echo "  make deploy-list                                 List configured chains"
+	@echo "  make deploy-list ENV=<dev|prod>                  List configured chains"
 	@echo ""
 	@echo "Configuration:"
 	@echo "  make configure-routes ENV=<dev|prod>             Configure all routes"
+	@echo "  make configure-routes ENV=<dev|prod> DRY_RUN=true  Dry run all routes"
 	@echo "  make configure-dest ENV=<dev|prod> CHAIN=x DEST=y  Configure single route"
 	@echo "  make verify-routes ENV=<dev|prod>                Verify on-chain config"
 	@echo ""
 	@echo "Upgrades:"
 	@echo "  make upgrade ENV=<dev|prod> CHAIN=<alias>        Upgrade on a chain"
 	@echo "  make upgrade-all ENV=<dev|prod>                  Upgrade on all chains"
-	@echo "  make upgrade-status                              Show implementation status"
+	@echo "  make upgrade-status ENV=<dev|prod>               Show implementation status"
 	@echo ""
 	@echo "Admin:"
-	@echo "  make transfer-roles ENV=<dev|prod> CHAIN=<alias> \\  Transfer all roles to new admin"
+	@echo "  make transfer-admin-roles ENV=<dev|prod> CHAIN=<alias> \\  Transfer admin roles to new admin"
 	@echo "       NEW_ADMIN=0x..."
+	@echo "  make transfer-admin-roles ENV=<dev|prod> CHAIN=<alias> \\  Dry run admin transfer"
+	@echo "       NEW_ADMIN=0x... DRY_RUN=true"
+	@echo "  make transfer-pauser-role ENV=<dev|prod> CHAIN=<alias> \\  Transfer pauser role to new address"
+	@echo "       NEW_PAUSER=0x..."
+	@echo "  make transfer-pauser-role ENV=<dev|prod> CHAIN=<alias> \\  Dry run pauser transfer"
+	@echo "       NEW_PAUSER=0x... DRY_RUN=true"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make open-order ENV=<dev|prod> CHAIN=<alias> \\    Create a test order"
@@ -300,7 +342,7 @@ help: ## Show this help
 	@echo "       ORDER_ID=0x... ORIGIN_CHAIN=<alias>"
 	@echo ""
 	@echo "Status:"
-	@echo "  make status                                      Show deployment status"
+	@echo "  make status ENV=<dev|prod>                       Show deployment status"
 	@echo ""
 	@echo "Options:"
 	@echo "  DRY_RUN=true  Simulate without broadcasting (logs JSON to console)"
@@ -323,5 +365,8 @@ help: ## Show this help
 	@echo "  3. make cancel-order ENV=dev CHAIN=arbitrum_sepolia ORDER_ID=0x... \\"
 	@echo "       ORIGIN_CHAIN=sepolia  (alternative to fill)"
 	@echo ""
-	@echo "Dry run example:"
+	@echo "Dry run examples:"
 	@echo "  make deploy ENV=dev CHAIN=sepolia DRY_RUN=true"
+	@echo "  make configure-routes ENV=dev DRY_RUN=true"
+	@echo "  make transfer-admin-roles ENV=prod CHAIN=base NEW_ADMIN=0x... DRY_RUN=true"
+	@echo "  make transfer-pauser-role ENV=prod CHAIN=base NEW_PAUSER=0x... DRY_RUN=true"

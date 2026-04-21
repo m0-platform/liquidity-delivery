@@ -1,7 +1,7 @@
 #!/bin/bash
-# Upgrade OrderBook implementation on one or all chains
-# Usage: ./ops/upgrade.sh --env dev --chain <alias>
-#        ./ops/upgrade.sh --env prod --all
+# Transfer PAUSER_ROLE from the current pauser to a new pauser on a single chain
+# Usage: ./ops/transfer-pauser-role.sh --env prod --chain base --new-pauser 0x...
+#        DRY_RUN=true ./ops/transfer-pauser-role.sh --env prod --chain base --new-pauser 0x...
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -68,18 +68,9 @@ get_rpc_alias() {
     jq -r --arg a "$alias" '.chains[$a].rpcAlias // empty' "$CONFIG_FILE"
 }
 
-get_explorer_alias() {
-    local alias=$1
-    jq -r --arg a "$alias" '.chains[$a].explorerAlias // empty' "$CONFIG_FILE"
-}
-
 get_chain_name() {
     local alias=$1
     jq -r --arg a "$alias" '.chains[$a].name // empty' "$CONFIG_FILE"
-}
-
-get_all_chain_aliases() {
-    jq -r '.chains | keys[]' "$CONFIG_FILE"
 }
 
 # Get deployed OrderBook address for a chain
@@ -91,16 +82,15 @@ get_orderbook_address() {
     fi
 }
 
-# Upgrade on a single chain
-upgrade_chain() {
+# Transfer pauser role on a single chain
+transfer_pauser_role() {
     local env=$1
     local alias=$2
-    local verify=${3:-false}
+    local new_pauser=$3
     local env_file=$(get_env_file "$env")
 
     local chain_id=$(get_chain_id "$alias")
     local rpc_alias=$(get_rpc_alias "$alias")
-    local explorer_alias=$(get_explorer_alias "$alias")
     local chain_name=$(get_chain_name "$alias")
 
     if [[ -z "$chain_id" ]]; then
@@ -115,24 +105,28 @@ upgrade_chain() {
         exit 1
     fi
 
-    log_step "Upgrading OrderBook on $chain_name (chainId: $chain_id) [env: $env]"
-    log_info "Proxy address: $orderbook"
+    # Validate new pauser address format
+    if [[ ! "$new_pauser" =~ ^0x[0-9a-fA-F]{40}$ ]]; then
+        log_error "Invalid new pauser address: $new_pauser"
+        exit 1
+    fi
+
+    log_step "Transferring pauser role on $chain_name (chainId: $chain_id) [env: $env]"
+    log_info "OrderBook proxy: $orderbook"
+    log_info "New pauser: $new_pauser"
 
     # Build forge command
-    local forge_cmd="FOUNDRY_PROFILE=production forge script script/deploy/Upgrade.s.sol"
+    local forge_cmd="FOUNDRY_PROFILE=production forge script script/admin/TransferPauserRole.s.sol"
     forge_cmd="$forge_cmd --rpc-url $rpc_alias"
+    forge_cmd="$forge_cmd --sig 'run(address)' $new_pauser"
     forge_cmd="$forge_cmd -vvv"
     # Ignore assembly NatSpec memory-safe deprecation warnings from forge-std
     forge_cmd="$forge_cmd --ignored-error-codes 2424"
 
     if [[ "${DRY_RUN:-false}" == "true" ]]; then
-        log_warn "DRY RUN MODE - Simulating upgrade (no broadcast)"
+        log_warn "DRY RUN MODE - Simulating transfer (no broadcast)"
     else
         forge_cmd="$forge_cmd --broadcast"
-    fi
-
-    if [[ "$verify" == "true" ]]; then
-        forge_cmd="$forge_cmd --verify"
     fi
 
     log_info "Running with 1Password: op run --env-file=$env_file --account=$OP_ACCOUNT"
@@ -141,65 +135,30 @@ upgrade_chain() {
     cd "$EVM_DIR"
     op run --env-file="$env_file" --account="$OP_ACCOUNT" -- bash -c "DRY_RUN=${DRY_RUN:-false} $forge_cmd"
 
-    # Show updated deployment info (skip file check in dry-run mode)
     if [[ "${DRY_RUN:-false}" == "true" ]]; then
         log_info "Dry run complete for $chain_name"
     else
-        local deployment_file="$EVM_DIR/deployments/$chain_id.json"
-        if [[ -f "$deployment_file" ]]; then
-            local new_impl=$(jq -r '.implementation // "unknown"' "$deployment_file")
-            log_info "Successfully upgraded OrderBook on $chain_name"
-            log_info "New implementation: $new_impl"
-        fi
+        log_info "Successfully transferred pauser role on $chain_name"
+        log_info "New pauser: $new_pauser"
     fi
-}
-
-# Show current implementation status
-show_status() {
-    log_info "Current deployment status:"
-    echo ""
-
-    for alias in $(get_all_chain_aliases); do
-        local chain_id=$(get_chain_id "$alias")
-        local chain_name=$(get_chain_name "$alias")
-        local deployment_file="$EVM_DIR/deployments/$chain_id.json"
-
-        if [[ -f "$deployment_file" ]]; then
-            local proxy=$(jq -r '.orderBook // "N/A"' "$deployment_file")
-            local impl=$(jq -r '.implementation // "N/A"' "$deployment_file")
-            local upgraded_at=$(jq -r '.upgradedAt // "N/A"' "$deployment_file")
-
-            echo "$chain_name (chainId: $chain_id):"
-            echo "  Proxy:          $proxy"
-            echo "  Implementation: $impl"
-            if [[ "$upgraded_at" != "N/A" && "$upgraded_at" != "null" ]]; then
-                echo "  Last upgraded:  $(date -r "$upgraded_at" 2>/dev/null || echo "$upgraded_at")"
-            fi
-        else
-            echo "$chain_name (chainId: $chain_id): NOT DEPLOYED"
-        fi
-        echo ""
-    done
 }
 
 # Show usage
 usage() {
-    echo "Upgrade OrderBook implementation on configured chains"
+    echo "Transfer PAUSER_ROLE from current pauser to a new pauser"
+    echo ""
+    echo "Transfers:"
+    echo "  1. PAUSER_ROLE on OrderBook (grant to new, revoke from signer)"
     echo ""
     echo "Usage:"
-    echo "  $0 --env <dev|prod> --chain <alias>           Upgrade on a specific chain"
-    echo "  $0 --env <dev|prod> --chain <alias> --verify  Upgrade and verify on explorer"
-    echo "  $0 --env <dev|prod> --all                     Upgrade on all deployed chains"
-    echo "  $0 --env <dev|prod> --status                  Show current deployment status"
+    echo "  $0 --env <dev|prod> --chain <alias> --new-pauser <0x...>"
     echo ""
     echo "Options:"
-    echo "  DRY_RUN=true  Simulate upgrade without broadcasting (logs JSON to console)"
+    echo "  DRY_RUN=true  Simulate transfer without broadcasting"
     echo ""
     echo "Examples:"
-    echo "  $0 --env dev --chain sepolia"
-    echo "  $0 --env dev --chain arbitrum_sepolia --verify"
-    echo "  $0 --env prod --all"
-    echo "  DRY_RUN=true $0 --env dev --chain sepolia    # Dry run"
+    echo "  $0 --env prod --chain base --new-pauser 0x1234...abcd"
+    echo "  DRY_RUN=true $0 --env prod --chain mainnet --new-pauser 0x1234...abcd"
     echo ""
     echo "Environment files:"
     echo "  .env.dev   - Development/testnet configuration"
@@ -208,8 +167,7 @@ usage() {
     echo "Secrets are managed via 1Password CLI (op)."
     echo "Account: $OP_ACCOUNT"
     echo ""
-    echo "Note: The PRIVATE_KEY in the env file must be the owner of the ProxyAdmin,"
-    echo "      which is typically the ADMIN_ADDRESS used during deployment."
+    echo "Requires ADMIN_PRIVATE_KEY in the environment file."
 }
 
 # Main
@@ -218,9 +176,7 @@ main() {
 
     local env=""
     local chain=""
-    local all=false
-    local verify=false
-    local status=false
+    local new_pauser=""
 
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -232,17 +188,9 @@ main() {
                 chain="$2"
                 shift 2
                 ;;
-            --all|-a)
-                all=true
-                shift
-                ;;
-            --verify|-v)
-                verify=true
-                shift
-                ;;
-            --status|-s)
-                status=true
-                shift
+            --new-pauser|-p)
+                new_pauser="$2"
+                shift 2
                 ;;
             --help|-h)
                 usage
@@ -256,9 +204,21 @@ main() {
         esac
     done
 
-    # Validate environment is specified
+    # Validate required arguments
     if [[ -z "$env" ]]; then
         log_error "Environment is required. Use --env dev or --env prod"
+        usage
+        exit 1
+    fi
+
+    if [[ -z "$chain" ]]; then
+        log_error "Chain is required. Use --chain <alias>"
+        usage
+        exit 1
+    fi
+
+    if [[ -z "$new_pauser" ]]; then
+        log_error "New pauser address is required. Use --new-pauser <0x...>"
         usage
         exit 1
     fi
@@ -266,37 +226,7 @@ main() {
     validate_env "$env"
     CONFIG_FILE="$EVM_DIR/config/chains.${env}.json"
 
-    if [[ "$status" == "true" ]]; then
-        show_status
-        exit 0
-    fi
-
-    if [[ "$all" == "true" ]]; then
-        log_info "Upgrading all deployed chains [env: $env]..."
-        local upgraded=0
-        for alias in $(get_all_chain_aliases); do
-            local chain_id=$(get_chain_id "$alias")
-            if [[ -n "$(get_orderbook_address "$chain_id")" ]]; then
-                upgrade_chain "$env" "$alias" "$verify"
-                echo ""
-                ((upgraded++))
-            else
-                log_warn "Skipping $alias - not deployed"
-            fi
-        done
-
-        if [[ $upgraded -eq 0 ]]; then
-            log_error "No chains have been deployed yet"
-            exit 1
-        fi
-        log_info "Upgraded $upgraded chains"
-    elif [[ -n "$chain" ]]; then
-        upgrade_chain "$env" "$chain" "$verify"
-    else
-        log_error "Must specify --chain <alias>, --all, or --status"
-        usage
-        exit 1
-    fi
+    transfer_pauser_role "$env" "$chain" "$new_pauser"
 }
 
 main "$@"

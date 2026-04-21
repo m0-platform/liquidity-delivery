@@ -25,9 +25,11 @@ Fill in the chain parameters below, then work through each step in order.
 - [ ] Authenticated to 1Password: `op signin --account mzerolabs.1password.com`
 - [ ] On the correct git commit (audited release)
 
-### Step 2: Add chain to `evm/config/chains.json`
+### Step 2: Add chain to the appropriate chain config
 
-Add an entry under `"chains"`:
+Add an entry under `"chains"` in the environment-specific config file:
+- **Testnets:** `evm/config/chains.dev.json`
+- **Mainnets:** `evm/config/chains.prod.json`
 
 ```json
 "<chain_alias>": {
@@ -38,7 +40,7 @@ Add an entry under `"chains"`:
 }
 ```
 
-- [ ] Entry added to `evm/config/chains.json`
+- [ ] Entry added to the appropriate `evm/config/chains.<env>.json`
 
 ### Step 3: Add RPC endpoint to `evm/foundry.toml`
 
@@ -194,7 +196,7 @@ cast call <orderbook_proxy> "paused()(bool)" --rpc-url <rpc_url>
 ### Step 12: Commit deployment artifact
 
 - [ ] `evm/deployments/<chain_id>.json` committed to the repository
-- [ ] Config file changes (`chains.json`, `foundry.toml`, `.env.prod`) committed to the repository
+- [ ] Config file changes (`chains.<env>.json`, `foundry.toml`, `.env.prod`) committed to the repository
 - [ ] Deployed proxy address communicated to the team
 
 ### Step 13: (When Ready) Configure destination routes and upgrades
@@ -565,6 +567,6 @@ After an upgrade, the same file is overwritten with the new implementation addre
 
 | File                     | Change                                          |
 | ------------------------ | ----------------------------------------------- |
-| `evm/config/chains.json` | Add chain entry                                 |
+| `evm/config/chains.<env>.json` | Add chain entry                           |
 | `evm/foundry.toml`       | Add `[rpc_endpoints]` and `[etherscan]` entries |
 | `evm/.env.prod`          | Add RPC URL and verifier URL references         |

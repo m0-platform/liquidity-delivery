@@ -7,7 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EVM_DIR="$(dirname "$SCRIPT_DIR")"
-CONFIG_FILE="$EVM_DIR/config/chains.json"
+CONFIG_FILE=""  # Set after env is parsed: chains.dev.json or chains.prod.json
 
 # 1Password account
 OP_ACCOUNT="mzerolabs.1password.com"
@@ -132,17 +132,29 @@ configure_route() {
 
     log_step "Configuring route: $source_name -> $dest_name [env: $env]"
 
+    # Build forge command
+    local forge_cmd="FOUNDRY_PROFILE=production forge script script/config/ConfigureDestination.s.sol"
+    forge_cmd="$forge_cmd --rpc-url $source_rpc"
+    forge_cmd="$forge_cmd --sig 'run(address,uint32,bool)'"
+    forge_cmd="$forge_cmd $orderbook $dest_chain_id true"
+    forge_cmd="$forge_cmd -vvv"
+
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        log_warn "DRY RUN MODE - Simulating route configuration (no broadcast)"
+    else
+        forge_cmd="$forge_cmd --broadcast"
+    fi
+
     # Run the forge script with op run
     cd "$EVM_DIR"
     op run --env-file="$env_file" --account="$OP_ACCOUNT" -- \
-        bash -c "FOUNDRY_PROFILE=production forge script script/config/ConfigureDestination.s.sol \
-            --rpc-url $source_rpc \
-            --broadcast \
-            --sig 'run(address,uint32,bool)' \
-            $orderbook $dest_chain_id true \
-            -vvv"
+        bash -c "$forge_cmd"
 
-    log_info "Route $source_name -> $dest_name configured"
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        log_info "Dry run complete for route $source_name -> $dest_name"
+    else
+        log_info "Route $source_name -> $dest_name configured"
+    fi
 }
 
 # Verify all routes on-chain
@@ -195,10 +207,14 @@ usage() {
     echo "  $0 --env <dev|prod> --source <alias> --dest <alias>  Configure a single route"
     echo "  $0 --env <dev|prod> --verify                     Verify on-chain route configuration"
     echo ""
+    echo "Options:"
+    echo "  DRY_RUN=true  Simulate without broadcasting (logs JSON to console)"
+    echo ""
     echo "Examples:"
     echo "  $0 --env dev"
     echo "  $0 --env dev --source sepolia --dest arbitrum_sepolia"
     echo "  $0 --env prod --verify"
+    echo "  DRY_RUN=true $0 --env dev                    # Dry run"
     echo ""
     echo "Environment files:"
     echo "  .env.dev   - Development/testnet configuration"
@@ -255,6 +271,7 @@ main() {
     fi
 
     validate_env "$env"
+    CONFIG_FILE="$EVM_DIR/config/chains.${env}.json"
 
     if [[ "$verify_only" == "true" ]]; then
         verify_routes "$env"
@@ -283,9 +300,13 @@ main() {
         done
 
         echo ""
-        log_info "All routes configured!"
-        echo ""
-        verify_routes "$env"
+        if [[ "${DRY_RUN:-false}" == "true" ]]; then
+            log_info "Dry run complete for all routes!"
+        else
+            log_info "All routes configured!"
+            echo ""
+            verify_routes "$env"
+        fi
     fi
 }
 

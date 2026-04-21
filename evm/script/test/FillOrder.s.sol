@@ -10,8 +10,8 @@ import { IOrderBook } from "../../src/interfaces/IOrderBook.sol";
 /// @title FillOrder
 /// @notice Script to fill test orders on testnets with partial fill support
 /// @dev Usage: forge script script/test/FillOrder.s.sol --rpc-url <dest_rpc> --broadcast \
-///             --sig "run(bytes32,string,uint128,bytes32,bytes)" \
-///             <orderId> <originChainAlias> <amountOutToFill> <originRecipient> <bridgeAdapterArgs>
+///             --sig "run(bytes32,string,uint128,bytes32,address,bytes)" \
+///             <orderId> <originChainAlias> <amountOutToFill> <originRecipient> <bridgeAdapter> <bridgeAdapterArgs>
 /// @dev Uses Forge's multichain fork support to query OrderData from the origin chain
 contract FillOrder is ScriptBase {
     /// @notice Portal interface for getting quote
@@ -24,6 +24,7 @@ contract FillOrder is ScriptBase {
         bytes32 orderId;
         uint128 amountOutToFill;
         bytes32 originRecipient;
+        address bridgeAdapter;
         uint256 portalFee;
         bool isSameChain;
     }
@@ -33,6 +34,7 @@ contract FillOrder is ScriptBase {
     /// @param originChainAlias_ Chain alias (e.g., "sepolia") to query OrderData from
     /// @param amountOutToFill_ Amount of output token to provide (supports partial fills)
     /// @param originRecipient_ Address on origin chain to receive released funds (defaults to solver if zero)
+    /// @param bridgeAdapter_ Bridge adapter address (zero = default adapter)
     /// @param bridgeAdapterArgs_ Optional bridge adapter args (e.g., signed Wormhole quote)
     /// @return messageId_ The cross-chain message ID (zero for same-chain fills)
     function run(
@@ -40,6 +42,7 @@ contract FillOrder is ScriptBase {
         string calldata originChainAlias_,
         uint128 amountOutToFill_,
         bytes32 originRecipient_,
+        address bridgeAdapter_,
         bytes calldata bridgeAdapterArgs_
     ) external returns (bytes32 messageId_) {
         // Store destination fork ID (the current --rpc-url)
@@ -57,7 +60,8 @@ contract FillOrder is ScriptBase {
             orderData_,
             amountOutToFill_,
             originRecipient_,
-            bridgeAdapterArgs_.length == 0
+            bridgeAdapter_,
+            bridgeAdapterArgs_.length == 0 && bridgeAdapter_ == address(0)
         );
 
         // Execute fill
@@ -73,12 +77,14 @@ contract FillOrder is ScriptBase {
         IOrderBook.OrderData memory orderData_,
         uint128 amountOutToFill_,
         bytes32 originRecipient_,
-        bool needsQuote_
+        address bridgeAdapter_,
+        bool needsPortalQuote_
     ) internal returns (FillConfig memory config_) {
         config_.solver = vm.rememberKey(vm.envUint("SOLVER_PRIVATE_KEY"));
         config_.orderBook = _readDeployment(block.chainid);
         config_.orderId = orderId_;
         config_.amountOutToFill = amountOutToFill_;
+        config_.bridgeAdapter = bridgeAdapter_;
         config_.isSameChain = orderData_.originChainId == block.chainid;
 
         // Verify order ID matches computed ID
@@ -90,12 +96,20 @@ contract FillOrder is ScriptBase {
             ? bytes32(uint256(uint160(config_.solver)))
             : originRecipient_;
 
-        // Determine Portal fee for cross-chain fills
-        if (!config_.isSameChain && needsQuote_) {
-            address portal_ = _getPortalAddress();
-            config_.portalFee = _getPortalQuote(portal_, orderData_.originChainId);
-            // solhint-disable-next-line no-console
-            console2.log("Portal fee (wei):", config_.portalFee);
+        // Determine fee for cross-chain fills
+        if (!config_.isSameChain) {
+            if (needsPortalQuote_) {
+                // Default adapter (Hyperlane): get quote from Portal on-chain
+                address portal_ = _getPortalAddress();
+                config_.portalFee = _getPortalQuote(portal_, orderData_.originChainId);
+                // solhint-disable-next-line no-console
+                console2.log("Portal fee (wei):", config_.portalFee);
+            } else {
+                // Non-default adapter (e.g., Wormhole): read fee from env var set by shell script
+                config_.portalFee = vm.envOr("BRIDGE_FEE", uint256(0));
+                // solhint-disable-next-line no-console
+                console2.log("Bridge fee from env (wei):", config_.portalFee);
+            }
         }
     }
 
@@ -124,8 +138,18 @@ contract FillOrder is ScriptBase {
             refundAddress: bytes32(uint256(uint160(config_.solver)))
         });
 
-        // Fill order
-        if (bridgeAdapterArgs_.length > 0) {
+        // Fill order — select overload based on bridge adapter and args
+        if (config_.bridgeAdapter != address(0)) {
+            // Explicit bridge adapter (e.g., Wormhole)
+            messageId_ = IOrderBook(config_.orderBook).fillOrder{ value: config_.portalFee }(
+                config_.orderId,
+                orderData_,
+                fillParams_,
+                config_.bridgeAdapter,
+                bridgeAdapterArgs_
+            );
+        } else if (bridgeAdapterArgs_.length > 0) {
+            // Default adapter with extra args
             messageId_ = IOrderBook(config_.orderBook).fillOrder{ value: config_.portalFee }(
                 config_.orderId,
                 orderData_,
@@ -133,6 +157,7 @@ contract FillOrder is ScriptBase {
                 bridgeAdapterArgs_
             );
         } else {
+            // Default adapter, no args
             messageId_ = IOrderBook(config_.orderBook).fillOrder{ value: config_.portalFee }(
                 config_.orderId,
                 orderData_,
@@ -174,11 +199,9 @@ contract FillOrder is ScriptBase {
         console2.log("Origin OrderBook:", originOrderBook_);
     }
 
-    /// @notice Get Portal address from config
+    /// @notice Get Portal address from PORTAL_ADDRESS env var (set by shell script from chain config)
     function _getPortalAddress() internal view returns (address) {
-        string memory configPath_ = string.concat(vm.projectRoot(), "/config/chains.json");
-        string memory config_ = vm.readFile(configPath_);
-        return vm.parseJsonAddress(config_, ".portal");
+        return vm.envAddress("PORTAL_ADDRESS");
     }
 
     /// @notice Get Portal quote for fill report
