@@ -42,7 +42,7 @@ pub struct CloseOrderTokenAccount<'info> {
         seeds = [ORDER_SEED_PREFIX, &order_id],
         bump = order.bump,
     )]
-    pub order: Account<'info, Order::<NativeOrder>>,
+    pub order: Box<Account<'info, Order::<NativeOrder>>>,
 
     /// The token mint for validation
     #[account(

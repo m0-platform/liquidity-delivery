@@ -1,0 +1,45 @@
+addon "svm" {
+    rpc_api_url = input.rpc_api_url
+    network_id = input.network_id
+}
+
+variable "orderbook_program" {
+    value = svm::get_program_from_anchor_project("order_book")
+}
+variable "orderbook_global" {
+    value = svm::find_pda("MzLoYnJ6sF6eeejs4vV95TNmXqS3W4cAtLGKkjT4ZrK", ["global"])
+}
+variable "portal_authority" {
+    value = svm::find_pda("MzBrgc8yXBj4P16GTkcSyDZkEQZB9qDqf3fh9bByJce", ["authority"])
+}
+
+action "orderbook_global_account" "std::send_http_request" {
+  url = input.rpc_api_url
+  method = "POST"
+  body = {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "getAccountInfo",
+    "params": [
+        variable.orderbook_global.pda,
+        { "encoding": "base64" }
+    ]
+  }
+}
+
+action "initialize_orderbook" "svm::process_instructions" {
+    description = "Initializes the order_book program"
+    signers = [signer.caller]
+    instruction {
+        program_idl = variable.orderbook_program.idl
+        instruction_name = "initialize"
+        admin {
+            public_key = signer.caller.public_key
+        }
+        instruction_args = [input.chain_id, variable.portal_authority.pda]
+    }
+    pre_condition {
+        behavior = "skip"
+        assertion = jq(action.orderbook_global_account.response_body, ".result.value") == null
+    }
+}

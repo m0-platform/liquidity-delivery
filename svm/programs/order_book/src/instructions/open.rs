@@ -48,7 +48,7 @@ pub struct OpenOrder<'info> {
     pub global_account: Account<'info, OrderBookGlobal>,
 
     #[account(
-        seeds = [DESTINATION_SEED_PREFIX, &params.dest_chain_id.to_be_bytes()],
+        seeds = [DESTINATION_SEED_PREFIX, &params.dest_chain_id.to_le_bytes()],
         bump = destination_account.bump,
     )]
     pub destination_account: Option<Account<'info, Destination>>,
@@ -94,7 +94,7 @@ pub struct OpenOrder<'info> {
             ],
             bump
         )]
-    pub order: Account<'info, Order::<NativeOrder>>,
+    pub order: Box<Account<'info, Order::<NativeOrder>>>,
 
     #[account(
         init_if_needed,

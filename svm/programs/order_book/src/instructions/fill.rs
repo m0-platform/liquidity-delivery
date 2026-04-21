@@ -131,7 +131,7 @@ pub struct FillNativeOrder<'info> {
         bump = order.bump,
         constraint = order.order_type == OrderType::Native @ OrderBookError::InvalidOrderType
     )]
-    pub order: Account<'info, Order::<NativeOrder>>,
+    pub order: Box<Account<'info, Order::<NativeOrder>>>,
 
     #[account(
         mint::token_program = token_in_program,
@@ -308,7 +308,7 @@ pub struct FillForeignOrder<'info> {
         seeds = [ORDER_SEED_PREFIX, &order_id],
         bump
     )]
-    pub order: Account<'info, Order::<ForeignOrder>>,
+    pub order: Box<Account<'info, Order::<ForeignOrder>>>,
 
     pub portal_program: Program<'info, Portal>,
 
@@ -536,7 +536,7 @@ pub struct ReportOrderFill<'info> {
         bump = order.bump,
         constraint = order.data.dest_chain_id == source_chain_id @ OrderBookError::InvalidReportSource,
     )]
-    pub order: Account<'info, Order::<NativeOrder>>,
+    pub order: Box<Account<'info, Order::<NativeOrder>>>,
 
     #[account(
         address = order.data.token_in @ OrderBookError::InvalidTokenMint,

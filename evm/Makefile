@@ -147,12 +147,118 @@ endif
 upgrade-status: ## Show current deployment and implementation status
 	@./ops/upgrade.sh --status
 
+## Admin Commands
+
+.PHONY: transfer-roles
+
+transfer-roles: ## Transfer all roles to a new admin (ENV=prod CHAIN=base NEW_ADMIN=0x...)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make transfer-roles ENV=prod CHAIN=base NEW_ADMIN=0x..."
+	@exit 1
+endif
+ifndef CHAIN
+	@echo "Error: CHAIN is required. Usage: make transfer-roles ENV=prod CHAIN=base NEW_ADMIN=0x..."
+	@exit 1
+endif
+ifndef NEW_ADMIN
+	@echo "Error: NEW_ADMIN is required. Usage: make transfer-roles ENV=prod CHAIN=base NEW_ADMIN=0x..."
+	@exit 1
+endif
+	@./ops/transfer-roles.sh --env $(ENV) --chain $(CHAIN) --new-admin $(NEW_ADMIN)
+
 ## Status Commands
 
 .PHONY: status
 
 status: ## Show deployment status (alias for deploy-list)
 	@./ops/deploy.sh --list
+
+## Testing Commands
+
+.PHONY: open-order fill-order cancel-order
+
+open-order: ## Open a test order (ENV=dev CHAIN=sepolia TOKEN_IN=0x... AMOUNT_IN=... DEST_CHAIN=arbitrum_sepolia TOKEN_OUT=0x... AMOUNT_OUT=...)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make open-order ENV=dev CHAIN=sepolia TOKEN_IN=0x... AMOUNT_IN=1000000 DEST_CHAIN=arbitrum_sepolia TOKEN_OUT=0x... AMOUNT_OUT=1000000"
+	@exit 1
+endif
+ifndef CHAIN
+	@echo "Error: CHAIN is required."
+	@exit 1
+endif
+ifndef TOKEN_IN
+	@echo "Error: TOKEN_IN is required."
+	@exit 1
+endif
+ifndef AMOUNT_IN
+	@echo "Error: AMOUNT_IN is required."
+	@exit 1
+endif
+ifndef DEST_CHAIN
+	@echo "Error: DEST_CHAIN is required."
+	@exit 1
+endif
+ifndef TOKEN_OUT
+	@echo "Error: TOKEN_OUT is required."
+	@exit 1
+endif
+ifndef AMOUNT_OUT
+	@echo "Error: AMOUNT_OUT is required."
+	@exit 1
+endif
+	@./ops/open-order.sh --env $(ENV) --chain $(CHAIN) \
+		--token-in $(TOKEN_IN) --amount-in $(AMOUNT_IN) \
+		--dest-chain $(DEST_CHAIN) --token-out $(TOKEN_OUT) --amount-out $(AMOUNT_OUT) \
+		$(if $(RECIPIENT),--recipient $(RECIPIENT)) \
+		$(if $(SOLVER),--solver $(SOLVER)) \
+		$(if $(DEADLINE),--deadline $(DEADLINE))
+
+fill-order: ## Fill a test order (ENV=dev CHAIN=arbitrum_sepolia ORDER_ID=0x... ORIGIN_CHAIN=sepolia AMOUNT_OUT=...)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make fill-order ENV=dev CHAIN=arbitrum_sepolia ORDER_ID=0x... ORIGIN_CHAIN=sepolia AMOUNT_OUT=1000000"
+	@exit 1
+endif
+ifndef CHAIN
+	@echo "Error: CHAIN is required."
+	@exit 1
+endif
+ifndef ORDER_ID
+	@echo "Error: ORDER_ID is required."
+	@exit 1
+endif
+ifndef ORIGIN_CHAIN
+	@echo "Error: ORIGIN_CHAIN is required."
+	@exit 1
+endif
+ifndef AMOUNT_OUT
+	@echo "Error: AMOUNT_OUT is required."
+	@exit 1
+endif
+	@./ops/fill-order.sh --env $(ENV) --chain $(CHAIN) \
+		--order-id $(ORDER_ID) --origin-chain $(ORIGIN_CHAIN) --amount-out $(AMOUNT_OUT) \
+		$(if $(ORIGIN_RECIPIENT),--origin-recipient $(ORIGIN_RECIPIENT)) \
+		$(if $(BRIDGE_ADAPTER_ARGS),--bridge-adapter-args $(BRIDGE_ADAPTER_ARGS))
+
+cancel-order: ## Cancel a test order (ENV=dev CHAIN=arbitrum_sepolia ORDER_ID=0x... ORIGIN_CHAIN=sepolia)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make cancel-order ENV=dev CHAIN=arbitrum_sepolia ORDER_ID=0x... ORIGIN_CHAIN=sepolia"
+	@exit 1
+endif
+ifndef CHAIN
+	@echo "Error: CHAIN is required."
+	@exit 1
+endif
+ifndef ORDER_ID
+	@echo "Error: ORDER_ID is required."
+	@exit 1
+endif
+ifndef ORIGIN_CHAIN
+	@echo "Error: ORIGIN_CHAIN is required."
+	@exit 1
+endif
+	@./ops/cancel-order.sh --env $(ENV) --chain $(CHAIN) \
+		--order-id $(ORDER_ID) --origin-chain $(ORIGIN_CHAIN) \
+		$(if $(BRIDGE_ADAPTER_ARGS),--bridge-adapter-args $(BRIDGE_ADAPTER_ARGS))
 
 ## Help
 
@@ -180,8 +286,24 @@ help: ## Show this help
 	@echo "  make upgrade-all ENV=<dev|prod>                  Upgrade on all chains"
 	@echo "  make upgrade-status                              Show implementation status"
 	@echo ""
+	@echo "Admin:"
+	@echo "  make transfer-roles ENV=<dev|prod> CHAIN=<alias> \\  Transfer all roles to new admin"
+	@echo "       NEW_ADMIN=0x..."
+	@echo ""
+	@echo "Testing:"
+	@echo "  make open-order ENV=<dev|prod> CHAIN=<alias> \\    Create a test order"
+	@echo "       TOKEN_IN=0x... AMOUNT_IN=... \\"
+	@echo "       DEST_CHAIN=<alias> TOKEN_OUT=0x... AMOUNT_OUT=..."
+	@echo "  make fill-order ENV=<dev|prod> CHAIN=<alias> \\    Fill a test order"
+	@echo "       ORDER_ID=0x... ORIGIN_CHAIN=<alias> AMOUNT_OUT=..."
+	@echo "  make cancel-order ENV=<dev|prod> CHAIN=<alias> \\  Cancel a test order"
+	@echo "       ORDER_ID=0x... ORIGIN_CHAIN=<alias>"
+	@echo ""
 	@echo "Status:"
 	@echo "  make status                                      Show deployment status"
+	@echo ""
+	@echo "Options:"
+	@echo "  DRY_RUN=true  Simulate without broadcasting (logs JSON to console)"
 	@echo ""
 	@echo "Environment files:"
 	@echo "  .env.dev   - Development/testnet (Sepolia, Arbitrum Sepolia)"
@@ -192,3 +314,14 @@ help: ## Show this help
 	@echo "  2. make deploy ENV=dev CHAIN=arbitrum_sepolia"
 	@echo "  3. make configure-routes ENV=dev"
 	@echo "  4. make verify-routes ENV=dev"
+	@echo ""
+	@echo "Testing workflow:"
+	@echo "  1. make open-order ENV=dev CHAIN=sepolia TOKEN_IN=0x... AMOUNT_IN=1e18 \\"
+	@echo "       DEST_CHAIN=arbitrum_sepolia TOKEN_OUT=0x... AMOUNT_OUT=1e18"
+	@echo "  2. make fill-order ENV=dev CHAIN=arbitrum_sepolia ORDER_ID=0x... \\"
+	@echo "       ORIGIN_CHAIN=sepolia AMOUNT_OUT=1e18"
+	@echo "  3. make cancel-order ENV=dev CHAIN=arbitrum_sepolia ORDER_ID=0x... \\"
+	@echo "       ORIGIN_CHAIN=sepolia  (alternative to fill)"
+	@echo ""
+	@echo "Dry run example:"
+	@echo "  make deploy ENV=dev CHAIN=sepolia DRY_RUN=true"

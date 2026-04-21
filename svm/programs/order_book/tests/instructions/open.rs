@@ -729,7 +729,7 @@ mod xchain_orders {
             &order_params,
         )?;
 
-        ix.data[8..12].copy_from_slice(&999u32.to_be_bytes()); // mismatched chain id
+        ix.data[8..12].copy_from_slice(&999u32.to_le_bytes()); // mismatched chain id
 
         test.ctx
             .execute_instruction(ix, &[alice])?

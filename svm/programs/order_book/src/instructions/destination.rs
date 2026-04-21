@@ -30,7 +30,7 @@ pub struct AddDestination<'info> {
         init,
         payer = admin,
         space = ANCHOR_DISCRIMINATOR_SIZE + Destination::INIT_SPACE,
-        seeds = [DESTINATION_SEED_PREFIX, &dest_chain_id.to_be_bytes()],
+        seeds = [DESTINATION_SEED_PREFIX, &dest_chain_id.to_le_bytes()],
         bump,
     )]
     pub destination_account: Account<'info, Destination>,
@@ -83,7 +83,7 @@ pub struct RemoveDestination<'info> {
     #[account(
         mut,
         close = admin,
-        seeds = [DESTINATION_SEED_PREFIX, &dest_chain_id.to_be_bytes()],
+        seeds = [DESTINATION_SEED_PREFIX, &dest_chain_id.to_le_bytes()],
         bump = destination_account.bump,
     )]
     pub destination_account: Account<'info, Destination>,

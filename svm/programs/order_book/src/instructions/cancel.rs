@@ -90,7 +90,7 @@ pub struct CancelNativeOrder<'info> {
         constraint = order.data.dest_chain_id == global_account.chain_id @ OrderBookError::InvalidDestChainId,
         constraint = order.order_type == OrderType::Native @ OrderBookError::InvalidOrderType
     )]
-    pub order: Account<'info, Order::<NativeOrder>>,
+    pub order: Box<Account<'info, Order::<NativeOrder>>>,
 
     #[account(
         address = order.data.token_in @ OrderBookError::InvalidTokenMint,
@@ -219,7 +219,7 @@ pub struct CancelForeignOrder {
         seeds = [ORDER_SEED_PREFIX, order_id.as_ref()],
         bump,
     )]
-    pub order: Account<'info, Order::<ForeignOrder>>,
+    pub order: Box<Account<'info, Order::<ForeignOrder>>>,
 
     pub portal_program: Program<'info, Portal>,
 
@@ -371,7 +371,7 @@ pub struct ReportOrderCancel<'info> {
         bump = order.bump,
         constraint = order.data.dest_chain_id == source_chain_id @ OrderBookError::InvalidReportSource,
     )]
-    pub order: Account<'info, Order::<NativeOrder>>,
+    pub order: Box<Account<'info, Order::<NativeOrder>>>,
 
     #[account(
         address = order.data.token_in @ OrderBookError::InvalidTokenMint,

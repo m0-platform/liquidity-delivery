@@ -1,0 +1,5 @@
+signer "caller" "svm::secret_key" {
+    description = "Program admin"
+    keypair_json = "~/.config/solana/id.json"
+    expected_address = "D76ySoHPwD8U2nnTTDqXeUJQg5UkD9UD1PUE1rnvPAGm"
+}

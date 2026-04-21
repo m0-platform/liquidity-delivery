@@ -102,9 +102,9 @@ deploy_chain() {
 
     log_step "Deploying to $chain_name (chainId: $chain_id) [env: $env]"
 
-    # Check if already deployed
+    # Check if already deployed (skip in dry-run mode)
     local deployment_file="$EVM_DIR/deployments/$chain_id.json"
-    if [[ -f "$deployment_file" ]]; then
+    if [[ "${DRY_RUN:-false}" != "true" && -f "$deployment_file" ]]; then
         local existing_addr=$(jq -r '.orderBook // empty' "$deployment_file")
         if [[ -n "$existing_addr" ]]; then
             log_warn "OrderBook already deployed at $existing_addr"
@@ -116,8 +116,15 @@ deploy_chain() {
     # Build forge command
     local forge_cmd="FOUNDRY_PROFILE=production forge script script/deploy/Deploy.s.sol"
     forge_cmd="$forge_cmd --rpc-url $rpc_alias"
-    forge_cmd="$forge_cmd --broadcast"
     forge_cmd="$forge_cmd -vvv"
+    # Ignore assembly NatSpec memory-safe deprecation warnings from forge-std
+    forge_cmd="$forge_cmd --ignored-error-codes 2424"
+
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        log_warn "DRY RUN MODE - Simulating deployment (no broadcast)"
+    else
+        forge_cmd="$forge_cmd --broadcast"
+    fi
 
     if [[ "$verify" == "true" ]]; then
         forge_cmd="$forge_cmd --verify"
@@ -127,10 +134,12 @@ deploy_chain() {
 
     # Execute from EVM directory with op run
     cd "$EVM_DIR"
-    op run --env-file="$env_file" --account="$OP_ACCOUNT" -- bash -c "$forge_cmd"
+    op run --env-file="$env_file" --account="$OP_ACCOUNT" -- bash -c "DRY_RUN=${DRY_RUN:-false} $forge_cmd"
 
-    # Verify deployment file was created
-    if [[ -f "$deployment_file" ]]; then
+    # Verify deployment file was created (skip in dry-run mode)
+    if [[ "${DRY_RUN:-false}" == "true" ]]; then
+        log_info "Dry run complete for $chain_name"
+    elif [[ -f "$deployment_file" ]]; then
         local deployed_addr=$(jq -r '.orderBook' "$deployment_file")
         log_info "Successfully deployed OrderBook to $deployed_addr on $chain_name"
     else
@@ -150,10 +159,14 @@ usage() {
     echo "  $0 --env <dev|prod> --all --verify            Deploy to all chains with verification"
     echo "  $0 --list                                     List all configured chains"
     echo ""
+    echo "Options:"
+    echo "  DRY_RUN=true  Simulate deployment without broadcasting (logs JSON to console)"
+    echo ""
     echo "Examples:"
     echo "  $0 --env dev --chain sepolia"
     echo "  $0 --env dev --chain arbitrum_sepolia --verify"
     echo "  $0 --env prod --all"
+    echo "  DRY_RUN=true $0 --env dev --chain sepolia    # Dry run"
     echo ""
     echo "Environment files:"
     echo "  .env.dev   - Development/testnet configuration"

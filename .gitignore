@@ -33,3 +33,4 @@ target
 svm/target
 **/*.rs.bk
 test-ledger
+.surfpool/
