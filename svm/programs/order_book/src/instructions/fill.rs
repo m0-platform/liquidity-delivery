@@ -110,9 +110,14 @@ pub struct FillNativeOrder<'info> {
     )]
     pub recipient: UncheckedAccount<'info>,
 
+    /// Note: ATA for the recipient must exist to be filled.
+    /// It should be created by the recipient, perhaps bundled
+    /// with the "open_order" instruction.
+    /// The solver can optionally do this as part of the fill
+    /// transaction, but they will end up donating the rent
+    /// to the recipient.
     #[account(
-        init_if_needed,
-        payer = solver,
+        mut,
         associated_token::mint = token_out_mint,
         associated_token::authority = recipient,
         associated_token::token_program = token_out_program,
@@ -286,9 +291,13 @@ pub struct FillForeignOrder<'info> {
     )]
     pub recipient: UncheckedAccount<'info>,
 
+    /// Note: ATA for the recipient must exist to be filled.
+    /// It should be created by the recipient.
+    /// The solver can optionally do this as part of the fill
+    /// transaction, but they will end up donating the rent
+    /// to the recipient.
     #[account(
-        init_if_needed,
-        payer = solver,
+        mut,
         associated_token::mint = token_out_mint,
         associated_token::authority = recipient,
         associated_token::token_program = token_out_program,
