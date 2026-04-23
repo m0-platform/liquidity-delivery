@@ -72,19 +72,24 @@ impl OrderBookTest {
         );
 
         // Create ATAs for alice and the solver and mint them tokens
+        // Bob's ATAs are created so he can be used as a recipient
+        // (recipients must have an ATA prior to fill)
         let alice = users.get("alice").unwrap();
+        let bob = users.get("bob").unwrap();
         let carol = users.get("carol").unwrap();
         let solver = users.get("solver").unwrap();
         let mut atas: HashMap<(&str, &str), Pubkey> = HashMap::new();
 
         for (token_name, token_mint) in mints.iter() {
             let alice_ata = ctx.svm.create_associated_token_account(token_mint, alice)?;
+            let bob_ata = ctx.svm.create_associated_token_account(token_mint, bob)?;
             let carol_ata = ctx.svm.create_associated_token_account(token_mint, carol)?;
             let solver_ata = ctx
                 .svm
                 .create_associated_token_account(token_mint, solver)?;
 
             atas.insert((token_name, "alice"), alice_ata);
+            atas.insert((token_name, "bob"), bob_ata);
             atas.insert((token_name, "carol"), carol_ata);
             atas.insert((token_name, "solver"), solver_ata);
 
