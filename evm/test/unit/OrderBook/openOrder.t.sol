@@ -432,4 +432,26 @@ contract OpenOrderTest is OrderBookTestBase {
         order = orderBook.getOrder(orderId);
         assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Cancelled));
     }
+
+    // =========== openOrderWithPermit Sender Restriction Tests ========== //
+
+    function test_openOrderWithPermit_callerNotSender_reverts() public {
+        // Bob (msg.sender) calls openOrderWithPermit naming Alice as sender — should revert.
+        // The permit only authorizes Bob's allowance; allowing Bob to assign ownership to Alice
+        // would create an order whose owner never authorized the underlying approval.
+        params.sender = users["alice"];
+
+        vm.prank(users["bob"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidSender.selector));
+        orderBook.openOrderWithPermit(params, block.timestamp + 1 hours, 0, bytes32(0), bytes32(0));
+    }
+
+    function test_openOrderWithPermit_packedSignature_callerNotSender_reverts() public {
+        // Same restriction applies to the packed-signature overload.
+        params.sender = users["alice"];
+
+        vm.prank(users["bob"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidSender.selector));
+        orderBook.openOrderWithPermit(params, block.timestamp + 1 hours, new bytes(0));
+    }
 }

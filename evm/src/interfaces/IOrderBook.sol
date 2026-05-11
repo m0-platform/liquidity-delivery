@@ -112,6 +112,7 @@ interface IOrderBook {
     error InvalidOrderVersion();
     error InvalidOriginChain();
     error InvalidRecipient();
+    error InvalidSender();
     error InvalidSolver();
     error InvalidReport();
     error InvalidTimestamp();
@@ -347,7 +348,10 @@ interface IOrderBook {
 
     /**
      * @notice Opens an order with an EIP-2612 permit signature for token approval
-     * @dev Tokens are pulled from msg.sender (the "funder"); orderParams_.sender becomes the order owner
+     * @dev orderParams_.sender must equal msg.sender. The permit only authorizes msg.sender's
+     *      allowance, so naming a different address as sender would assign ownership of an order
+     *      to someone who never authorized the underlying approval. Use openOrder (without permit)
+     *      for funder != sender wrapper flows.
      * @param orderParams_ order creation parameters (see OrderParams definition)
      * @param deadline_ deadline for the permit signature
      * @param v_ v parameter of the permit signature
@@ -365,7 +369,10 @@ interface IOrderBook {
 
     /**
      * @notice Opens an order with an EIP-2612 permit signature for token approval
-     * @dev Tokens are pulled from msg.sender (the "funder"); orderParams_.sender becomes the order owner
+     * @dev orderParams_.sender must equal msg.sender. The permit only authorizes msg.sender's
+     *      allowance, so naming a different address as sender would assign ownership of an order
+     *      to someone who never authorized the underlying approval. Use openOrder (without permit)
+     *      for funder != sender wrapper flows.
      * @param orderParams_ order creation parameters (see OrderParams definition)
      * @param deadline_ deadline for the permit signature
      * @param permitSignature_ packed encoding of the permit signature

@@ -104,6 +104,9 @@ contract OrderBook is
         bytes32 r_,
         bytes32 s_
     ) external override returns (bytes32 orderId_) {
+        // The permit only authorizes msg.sender's allowance, so the order owner must also be msg.sender.
+        // For funder != sender flows (e.g. an ERC-7683 wrapper), use openOrder with a pre-existing allowance.
+        if (orderParams_.sender != msg.sender) revert InvalidSender();
         try
             IERC20Extended(orderParams_.tokenIn).permit(
                 msg.sender,
@@ -124,6 +127,9 @@ contract OrderBook is
         uint256 deadline_,
         bytes memory permitSignature_
     ) external override returns (bytes32 orderId_) {
+        // The permit only authorizes msg.sender's allowance, so the order owner must also be msg.sender.
+        // For funder != sender flows (e.g. an ERC-7683 wrapper), use openOrder with a pre-existing allowance.
+        if (orderParams_.sender != msg.sender) revert InvalidSender();
         try
             IERC20Extended(orderParams_.tokenIn).permit(
                 msg.sender,
