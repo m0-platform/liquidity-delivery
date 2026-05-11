@@ -104,7 +104,23 @@ Both implementations center on an OrderBook contract/program that manages limit 
 
 ### Order ID Computation
 
-Order IDs are computed identically on both chains using keccak256 hash of packed order data. The `OrderData` struct encoding must match exactly between EVM and SVM - see `svm/programs/order_book/src/state/orders.rs` for the cross-chain compatibility test.
+Order IDs are computed identically on both chains using keccak256 hash of packed order data. The `OrderData` struct encoding must match exactly between EVM and SVM - see `svm/programs/order_book/src/state/orders.rs` for the cross-chain compatibility test. The hash binds `(sender, funder, nonce, ...)` — see "Funder vs Sender" below for why both addresses appear.
+
+### Funder vs Sender
+
+The EVM `OrderParams` carries two distinct address roles:
+
+- **`sender`** — the order owner. Holds cancellation rights and is the refund destination. May be any address; the caller chooses who owns the resulting order.
+- **`funder`** — `msg.sender` of the `openOrder*` call (or the EIP-712 signer in the gasless flow). Pays the input tokens and is the key for the per-funder nonce counter (`funderNonces[funder]`).
+
+This split exists to support wrapper contracts (e.g. an ERC-7683 origin settler at `artifacts/erc7683/spec.md`): the wrapper is the funder, the user is the sender.
+
+Key invariants enforced by this design:
+
+- **Order IDs include funder.** The `OrderData` hash binds both `sender` and `funder`, so two different funders opening identical params for the same sender produce different order IDs.
+- **Nonces are keyed on funder, not sender.** A third party cannot bump a victim's nonce by naming the victim as `sender` — `senderNonces` does not exist; only `funderNonces[msg.sender]` advances. This protects pre-signed gasless orders from DoS.
+- **`openOrderWithPermit` requires `msg.sender == orderParams_.sender`.** The EIP-2612 permit only authorizes `msg.sender`'s allowance, so the funder!=sender split is not permitted on this entrypoint (`InvalidSender` revert). Wrappers must use plain `openOrder` after pre-approving the OrderBook.
+- **SVM enforces `funder == sender` by SPL semantics.** The SPL token program requires the source token account's owner to authorize the transfer, so on SVM the two are always equal. The `funder` field in SVM `OrderData` exists only for cross-chain hash compatibility with EVM and is set equal to `sender`.
 
 ### EVM Structure (`evm/src/`)
 
