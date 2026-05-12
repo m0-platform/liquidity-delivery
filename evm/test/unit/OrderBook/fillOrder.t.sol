@@ -646,7 +646,7 @@ contract FillOrderTest is OrderBookTestBase {
     function _test_crossChainOrderFullFill_success() internal {
         // Create order data for a cross-chain order (originated on chain 2, destined for chain 1)
         IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
-            version: 1,
+            version: 2,
             originChainId: DEST_CHAIN_ID, // Order was created on chain 2
             sender: users["alice"].toBytes32(),
             funder: users["alice"].toBytes32(),
@@ -741,7 +741,7 @@ contract FillOrderTest is OrderBookTestBase {
     function _testFuzz_crossChainOrderOverfill_success(uint128 fillAmount) internal {
         // Create order data for a cross-chain order (originated on chain 2, destined for chain 1)
         IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
-            version: 1,
+            version: 2,
             originChainId: DEST_CHAIN_ID, // Order was created on chain 2
             sender: users["alice"].toBytes32(),
             funder: users["alice"].toBytes32(),
@@ -831,7 +831,7 @@ contract FillOrderTest is OrderBookTestBase {
     function _testFuzz_crossChainOrderPartialFill_success(uint128 fillAmount) public {
         // Create order data for a cross-chain order (originated on chain 2, destined for chain 1)
         IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
-            version: 1,
+            version: 2,
             originChainId: DEST_CHAIN_ID, // Order was created on chain 2
             sender: users["alice"].toBytes32(),
             funder: users["alice"].toBytes32(),
@@ -926,7 +926,7 @@ contract FillOrderTest is OrderBookTestBase {
 
         // Create order data for a cross-chain order (originated on chain 2, destined for chain 1)
         IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
-            version: 1,
+            version: 2,
             originChainId: DEST_CHAIN_ID, // Order was created on chain 2
             sender: users["alice"].toBytes32(),
             funder: users["alice"].toBytes32(),
@@ -1243,7 +1243,7 @@ contract FillOrderTest is OrderBookTestBase {
     function test_crossChainFill_refundAddressDefaultsToMsgSender() public {
         // Create order data for a cross-chain order (originated on chain 2, destined for chain 1)
         IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
-            version: 1,
+            version: 2,
             originChainId: DEST_CHAIN_ID, // Order was created on chain 2
             sender: users["alice"].toBytes32(),
             funder: users["alice"].toBytes32(),
@@ -1284,7 +1284,7 @@ contract FillOrderTest is OrderBookTestBase {
     function test_crossChainFill_explicitRefundAddressIsForwarded() public {
         // Create order data for a cross-chain order (originated on chain 2, destined for chain 1)
         IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
-            version: 1,
+            version: 2,
             originChainId: DEST_CHAIN_ID, // Order was created on chain 2
             sender: users["alice"].toBytes32(),
             funder: users["alice"].toBytes32(),

@@ -160,7 +160,7 @@ contract OpenOrderTest is OrderBookTestBase {
         // It stores the order against the correct order ID
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
         assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Created));
-        assertEq(order.version, uint16(1));
+        assertEq(order.version, VERSION);
         assertEq(order.destChainId, params.destChainId);
         assertEq(order.fillDeadline, params.fillDeadline);
         assertEq(order.nonce, 0);

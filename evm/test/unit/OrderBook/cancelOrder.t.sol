@@ -75,7 +75,7 @@ contract CancelOrderTest is OrderBookTestBase {
 
         // create order data for cross-chain order that originates on another chain and is destined for this chain
         xchainOrderData = IOrderBook.OrderData({
-            version: 1,
+            version: 2,
             originChainId: DEST_CHAIN_ID,
             sender: users["alice"].toBytes32(),
             funder: users["alice"].toBytes32(),
@@ -224,7 +224,7 @@ contract CancelOrderTest is OrderBookTestBase {
     function test_givenLocalOrder_givenChainIsNotDestinationChain_reverts() public {
         // Create order data for a local order on another chain
         IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
-            version: 1,
+            version: 2,
             originChainId: DEST_CHAIN_ID,
             sender: users["alice"].toBytes32(),
             funder: users["alice"].toBytes32(),
@@ -400,7 +400,7 @@ contract CancelOrderTest is OrderBookTestBase {
         // Set the recipient to be different from the sender
 
         IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
-            version: 1,
+            version: 2,
             originChainId: DEST_CHAIN_ID, // Order originated from another chain
             sender: users["alice"].toBytes32(),
             funder: users["alice"].toBytes32(),
@@ -589,7 +589,7 @@ contract CancelOrderTest is OrderBookTestBase {
     function test_givenXchainOrder_msgValueForwardedToPortal() public {
         // Create a new cross-chain order to test msg.value forwarding
         IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
-            version: 1,
+            version: 2,
             originChainId: DEST_CHAIN_ID,
             sender: users["alice"].toBytes32(),
             funder: users["alice"].toBytes32(),
@@ -619,7 +619,7 @@ contract CancelOrderTest is OrderBookTestBase {
     function test_givenXchainOrder_withBridgeAdapter_msgValueForwardedToPortal() public {
         // Create a new cross-chain order to test msg.value forwarding with bridge adapter
         IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
-            version: 1,
+            version: 2,
             originChainId: DEST_CHAIN_ID,
             sender: users["alice"].toBytes32(),
             funder: users["alice"].toBytes32(),

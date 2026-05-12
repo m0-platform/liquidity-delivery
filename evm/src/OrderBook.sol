@@ -55,7 +55,7 @@ contract OrderBook is
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     /// @notice Version of the limit order system
-    uint16 public constant VERSION = 1;
+    uint16 public constant VERSION = 2;
 
     /// @notice the type hash used for gasless order submission
     /// @dev keccak256("GaslessOrderParams(uint16 version,address sender,uint64 nonce,uint32 originChainId,uint32 destChainId,uint32 fillDeadline,address tokenIn,bytes32 tokenOut,uint128 amountIn,uint128 amountOut,bytes32 recipient,bytes32 solver)")

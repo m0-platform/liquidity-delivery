@@ -17,7 +17,7 @@ abstract contract OrderBookTestBase is Test {
     OrderBook internal orderBook;
     MockPortalV2 internal portal;
 
-    uint16 internal constant VERSION = 1;
+    uint16 internal constant VERSION = 2;
     uint32 internal CHAIN_ID = block.chainid.safe32();
     uint32 internal constant DEST_CHAIN_ID = 2;
     uint256 internal constant MINT_AMOUNT = 1000;
@@ -137,7 +137,7 @@ abstract contract OrderBookTestBase is Test {
         return
             orderBook.getOrderId(
                 IOrderBook.OrderData({
-                    version: 1,
+                    version: 2,
                     originChainId: CHAIN_ID,
                     sender: sender_.toBytes32(),
                     funder: funder_.toBytes32(),

@@ -156,7 +156,7 @@ mod tests {
     #[test]
     fn test_order_id_hash() {
         let evm_order_data = IOrderBook::OrderData {
-            version: 1u16,
+            version: 2u16,
             sender: FixedBytes::<32>::new([1u8; 32]),
             funder: FixedBytes::<32>::new([6u8; 32]),
             nonce: 42u64,
@@ -180,7 +180,7 @@ mod tests {
         let expected_hash = keccak256(evm_order_data.abi_encode_packed()).0;
 
         let order_data = OrderData {
-            version: 1u16,
+            version: 2u16,
             sender: [1u8; 32],
             funder: [6u8; 32],
             nonce: 42u64,
