@@ -22,8 +22,10 @@ abstract contract OrderBookStorageLayout {
         mapping(bytes32 orderId => IOrderBook.Order) orders;
         // store fill amounts for both origin and destination orders
         mapping(bytes32 orderId => IOrderBook.FilledAmounts) filledAmounts;
-        // track nonces for each sender to ensure unique order IDs
-        mapping(address sender => uint64 nonce) senderNonces;
+        // track nonces for each funder to ensure unique order IDs
+        // keyed on the funder (msg.sender on openOrder; signer on openOrderFor), not the order owner,
+        // so a third party cannot bump a victim's nonce and invalidate their pre-signed gasless orders
+        mapping(address funder => uint64 nonce) funderNonces;
     }
 
     // keccak256(abi.encode(uint256(keccak256("M0.storage.OrderBook")) - 1)) & ~bytes32(uint256(0xff))
@@ -53,7 +55,7 @@ contract OrderBook is
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 
     /// @notice Version of the limit order system
-    uint16 public constant VERSION = 1;
+    uint16 public constant VERSION = 2;
 
     /// @notice the type hash used for gasless order submission
     /// @dev keccak256("GaslessOrderParams(uint16 version,address sender,uint64 nonce,uint32 originChainId,uint32 destChainId,uint32 fillDeadline,address tokenIn,bytes32 tokenOut,uint128 amountIn,uint128 amountOut,bytes32 recipient,bytes32 solver)")
@@ -102,6 +104,9 @@ contract OrderBook is
         bytes32 r_,
         bytes32 s_
     ) external override returns (bytes32 orderId_) {
+        // The permit only authorizes msg.sender's allowance, so the order owner must also be msg.sender.
+        // For funder != sender flows (e.g. an ERC-7683 wrapper), use openOrder with a pre-existing allowance.
+        if (orderParams_.sender != msg.sender) revert InvalidSender();
         try
             IERC20Extended(orderParams_.tokenIn).permit(
                 msg.sender,
@@ -122,6 +127,9 @@ contract OrderBook is
         uint256 deadline_,
         bytes memory permitSignature_
     ) external override returns (bytes32 orderId_) {
+        // The permit only authorizes msg.sender's allowance, so the order owner must also be msg.sender.
+        // For funder != sender flows (e.g. an ERC-7683 wrapper), use openOrder with a pre-existing allowance.
+        if (orderParams_.sender != msg.sender) revert InvalidSender();
         try
             IERC20Extended(orderParams_.tokenIn).permit(
                 msg.sender,
@@ -206,13 +214,14 @@ contract OrderBook is
 
         // Create order
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-        uint64 nonce_ = $.senderNonces[orderParams_.sender]++;
+        uint64 nonce_ = $.funderNonces[funder_]++;
 
         orderId_ = getOrderId(
             OrderData({
                 version: VERSION, // origin contract version
                 originChainId: chainId,
                 sender: orderParams_.sender.toBytes32(),
+                funder: funder_.toBytes32(),
                 nonce: nonce_,
                 destChainId: orderParams_.destChainId,
                 createdAt: uint64(block.timestamp),
@@ -244,11 +253,12 @@ contract OrderBook is
             recipient: orderParams_.recipient,
             amountIn: orderParams_.amountIn,
             amountOut: orderParams_.amountOut,
-            solver: orderParams_.solver
+            solver: orderParams_.solver,
+            funder: funder_
         });
 
         // Transfer tokens in from the funder, ensuring the required amount is received
-        // Note: sender_ is the order owner (for cancellation/refunds), funder_ provides the tokens
+        // Note: orderParams_.sender owns the order (cancel rights, refunds); funder_ pays tokens and owns the nonce
         IERC20(orderParams_.tokenIn).safeTransferExactFrom(funder_, address(this), uint256(orderParams_.amountIn));
 
         emit OrderOpened(
@@ -276,11 +286,12 @@ contract OrderBook is
             _revertIfInvalidSignature(orderParams_.sender, getGaslessOrderDigest(orderParams_), signature_);
         }
 
-        // Verify origin chain and sender nonce
+        // Verify origin chain and funder nonce
         if (orderParams_.originChainId != block.chainid) revert InvalidOriginChain();
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-        // Requiring a nonce in the order provides replay protection for the sender
-        if (orderParams_.nonce != $.senderNonces[orderParams_.sender]) revert InvalidNonce();
+        // In the gasless flow, funder == sender (the signer). The nonce is keyed on the signer's funder
+        // counter, providing replay protection that only the signer's own transactions can advance.
+        if (orderParams_.nonce != $.funderNonces[orderParams_.sender]) revert InvalidNonce();
         // Verify version matches the current version
         if (orderParams_.version != VERSION) revert InvalidOrderVersion();
 
@@ -740,6 +751,7 @@ contract OrderBook is
                 abi.encodePacked(
                     orderData_.version,
                     orderData_.sender,
+                    orderData_.funder,
                     orderData_.nonce,
                     orderData_.originChainId,
                     orderData_.destChainId,
@@ -770,6 +782,7 @@ contract OrderBook is
             OrderData({
                 version: order_.version,
                 sender: order_.sender.toBytes32(),
+                funder: order_.funder.toBytes32(),
                 nonce: order_.nonce,
                 originChainId: uint32(block.chainid),
                 destChainId: order_.destChainId,
@@ -791,9 +804,9 @@ contract OrderBook is
     }
 
     /// @inheritdoc IOrderBook
-    function getSenderNonce(address sender_) external view override returns (uint64) {
+    function getFunderNonce(address funder_) external view override returns (uint64) {
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-        return $.senderNonces[sender_];
+        return $.funderNonces[funder_];
     }
 
     /// @inheritdoc IOrderBook

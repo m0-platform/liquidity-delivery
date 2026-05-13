@@ -79,6 +79,8 @@ pub struct OpenOrder<'info> {
         seeds = [ORDER_SEED_PREFIX, &compute_order_id(&OrderData {
                     version: VERSION as u16,
                     sender: sender_token_in_account.deref().owner.to_bytes(),
+                    // SVM: funder == sender (SPL requires the token-account owner to authorize the transfer)
+                    funder: sender_token_in_account.deref().owner.to_bytes(),
                     nonce: sender_nonce_account.value,
                     origin_chain_id: global_account.chain_id,
                     dest_chain_id: params.dest_chain_id,
@@ -196,6 +198,8 @@ impl OpenOrder<'_> {
         let order_id = compute_order_id(&OrderData {
             version: VERSION,
             sender: sender.to_bytes(),
+            // SVM: funder == sender (SPL requires the token-account owner to authorize the transfer)
+            funder: sender.to_bytes(),
             nonce: ctx.accounts.sender_nonce_account.value,
             origin_chain_id: ctx.accounts.global_account.chain_id,
             dest_chain_id: params.dest_chain_id,

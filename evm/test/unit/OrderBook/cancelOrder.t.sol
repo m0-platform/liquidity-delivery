@@ -75,9 +75,10 @@ contract CancelOrderTest is OrderBookTestBase {
 
         // create order data for cross-chain order that originates on another chain and is destined for this chain
         xchainOrderData = IOrderBook.OrderData({
-            version: 1,
+            version: 2,
             originChainId: DEST_CHAIN_ID,
             sender: users["alice"].toBytes32(),
+            funder: users["alice"].toBytes32(),
             nonce: 0,
             destChainId: CHAIN_ID, // current chain ID
             createdAt: uint64(block.timestamp),
@@ -223,9 +224,10 @@ contract CancelOrderTest is OrderBookTestBase {
     function test_givenLocalOrder_givenChainIsNotDestinationChain_reverts() public {
         // Create order data for a local order on another chain
         IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
-            version: 1,
+            version: 2,
             originChainId: DEST_CHAIN_ID,
             sender: users["alice"].toBytes32(),
+            funder: users["alice"].toBytes32(),
             nonce: 0,
             destChainId: DEST_CHAIN_ID, // Local order on another chain
             createdAt: uint64(block.timestamp),
@@ -398,9 +400,10 @@ contract CancelOrderTest is OrderBookTestBase {
         // Set the recipient to be different from the sender
 
         IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
-            version: 1,
+            version: 2,
             originChainId: DEST_CHAIN_ID, // Order originated from another chain
             sender: users["alice"].toBytes32(),
+            funder: users["alice"].toBytes32(),
             nonce: 0,
             destChainId: CHAIN_ID, // This chain is the destination
             createdAt: uint64(block.timestamp),
@@ -586,9 +589,10 @@ contract CancelOrderTest is OrderBookTestBase {
     function test_givenXchainOrder_msgValueForwardedToPortal() public {
         // Create a new cross-chain order to test msg.value forwarding
         IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
-            version: 1,
+            version: 2,
             originChainId: DEST_CHAIN_ID,
             sender: users["alice"].toBytes32(),
+            funder: users["alice"].toBytes32(),
             nonce: 1, // Use different nonce than setUp
             destChainId: CHAIN_ID,
             createdAt: uint64(block.timestamp),
@@ -615,9 +619,10 @@ contract CancelOrderTest is OrderBookTestBase {
     function test_givenXchainOrder_withBridgeAdapter_msgValueForwardedToPortal() public {
         // Create a new cross-chain order to test msg.value forwarding with bridge adapter
         IOrderBook.OrderData memory orderData = IOrderBook.OrderData({
-            version: 1,
+            version: 2,
             originChainId: DEST_CHAIN_ID,
             sender: users["alice"].toBytes32(),
+            funder: users["alice"].toBytes32(),
             nonce: 2, // Use different nonce than other tests
             destChainId: CHAIN_ID,
             createdAt: uint64(block.timestamp),

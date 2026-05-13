@@ -55,11 +55,13 @@ contract OpenOrderTest is OrderBookTestBase {
     // [X] given the funder (msg.sender) is different from the sender field
     //   [X] it pulls tokens from the funder
     //   [X] it stores the order with sender as the owner
-    //   [X] it increments the nonce for sender (not funder)
+    //   [X] it increments the nonce for the funder (not the sender)
     //   [X] it emits OrderOpened with both funder and sender
     //   [X] the sender can cancel before deadline
     //   [X] the funder cannot cancel before deadline (if not sender or recipient)
     //   [X] the sender receives refunds on cancellation (not funder)
+    //   [X] a third-party funder cannot bump the sender's nonce (DoS regression)
+    //   [X] two different funders opening the same sender + params produce different order IDs
 
     function test_fillDeadlineBeforeCurrentTime_reverts() public {
         params.fillDeadline = uint32(block.timestamp - 1);
@@ -158,7 +160,7 @@ contract OpenOrderTest is OrderBookTestBase {
         // It stores the order against the correct order ID
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
         assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Created));
-        assertEq(order.version, uint16(1));
+        assertEq(order.version, VERSION);
         assertEq(order.destChainId, params.destChainId);
         assertEq(order.fillDeadline, params.fillDeadline);
         assertEq(order.nonce, 0);
@@ -238,8 +240,8 @@ contract OpenOrderTest is OrderBookTestBase {
         address sender = users["alice"];
         params.sender = sender;
 
-        // Calculate expected order ID (using Alice as sender, nonce 0)
-        bytes32 expOrderId = _getOrderIdFromParams(sender, 0, params);
+        // Calculate expected order ID (sender = Alice, funder = Bob, Bob's funder nonce = 0)
+        bytes32 expOrderId = _getOrderIdFromParams(sender, funder, 0, params);
 
         // Bob approves and opens the order
         vm.prank(funder);
@@ -269,42 +271,86 @@ contract OpenOrderTest is OrderBookTestBase {
         assertEq(tokenIn.balanceOf(funder), funderBalanceBefore - params.amountIn);
         assertEq(tokenIn.balanceOf(sender), senderBalanceBefore); // unchanged
 
-        // Order stored with Alice as sender
+        // Order stored with Alice as sender and Bob as funder
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
         assertEq(order.sender, sender);
+        assertEq(order.funder, funder);
 
-        // Nonce incremented for sender (Alice), not funder (Bob)
-        assertEq(orderBook.getSenderNonce(sender), 1);
-        assertEq(orderBook.getSenderNonce(funder), 0);
+        // Nonce incremented for funder (Bob), not sender (Alice)
+        assertEq(orderBook.getFunderNonce(funder), 1);
+        assertEq(orderBook.getFunderNonce(sender), 0);
     }
 
-    function test_funderDifferentFromSender_nonceIncrementsForSender() public {
+    function test_funderDifferentFromSender_nonceIncrementsForFunder() public {
         address sender = users["alice"];
         params.sender = sender;
 
         // Initial nonces should be 0
-        assertEq(orderBook.getSenderNonce(sender), 0);
-        assertEq(orderBook.getSenderNonce(users["bob"]), 0);
-        assertEq(orderBook.getSenderNonce(users["carol"]), 0);
+        assertEq(orderBook.getFunderNonce(sender), 0);
+        assertEq(orderBook.getFunderNonce(users["bob"]), 0);
+        assertEq(orderBook.getFunderNonce(users["carol"]), 0);
 
-        // Bob opens an order for Alice (Alice's nonce: 0 -> 1)
+        // Bob opens an order for Alice (Bob's nonce: 0 -> 1, Alice's nonce unaffected)
         vm.prank(users["bob"]);
         tokenIn.approve(address(orderBook), params.amountIn);
         vm.prank(users["bob"]);
         orderBook.openOrder(params);
 
-        assertEq(orderBook.getSenderNonce(sender), 1);
-        assertEq(orderBook.getSenderNonce(users["bob"]), 0);
+        assertEq(orderBook.getFunderNonce(sender), 0);
+        assertEq(orderBook.getFunderNonce(users["bob"]), 1);
+        assertEq(orderBook.getFunderNonce(users["carol"]), 0);
 
-        // Carol opens an order for Alice (Alice's nonce: 1 -> 2)
+        // Carol opens an order for Alice (Carol's nonce: 0 -> 1, Alice's nonce still unaffected)
         vm.prank(users["carol"]);
         tokenIn.approve(address(orderBook), params.amountIn);
         vm.prank(users["carol"]);
         orderBook.openOrder(params);
 
-        assertEq(orderBook.getSenderNonce(sender), 2);
-        assertEq(orderBook.getSenderNonce(users["bob"]), 0);
-        assertEq(orderBook.getSenderNonce(users["carol"]), 0);
+        assertEq(orderBook.getFunderNonce(sender), 0);
+        assertEq(orderBook.getFunderNonce(users["bob"]), 1);
+        assertEq(orderBook.getFunderNonce(users["carol"]), 1);
+    }
+
+    function test_funderDifferentFromSender_thirdPartyCannotBumpSenderNonce() public {
+        // DoS regression: Bob opening orders with sender=Alice must not advance Alice's nonce counter,
+        // because Alice may have a pre-signed gasless order bound to her current nonce value.
+        address attacker = users["bob"];
+        address victim = users["alice"];
+        params.sender = victim;
+
+        assertEq(orderBook.getFunderNonce(victim), 0);
+
+        // Attacker (Bob) opens 5 junk orders naming Alice as sender
+        for (uint256 i = 0; i < 5; i++) {
+            vm.prank(attacker);
+            tokenIn.approve(address(orderBook), params.amountIn);
+            vm.prank(attacker);
+            orderBook.openOrder(params);
+        }
+
+        // Alice's funder nonce remains 0 — her pre-signed gasless order is still valid.
+        // Bob's funder nonce has advanced to 5.
+        assertEq(orderBook.getFunderNonce(victim), 0);
+        assertEq(orderBook.getFunderNonce(attacker), 5);
+    }
+
+    function test_funderDifferentFromSender_twoFundersProduceDistinctOrderIds() public {
+        // Two different funders open the same sender + identical params.
+        // The funder is part of the OrderData hash, so order IDs must differ — preventing collisions.
+        address sender = users["alice"];
+        params.sender = sender;
+
+        vm.prank(users["bob"]);
+        tokenIn.approve(address(orderBook), params.amountIn);
+        vm.prank(users["bob"]);
+        bytes32 orderIdFromBob = orderBook.openOrder(params);
+
+        vm.prank(users["carol"]);
+        tokenIn.approve(address(orderBook), params.amountIn);
+        vm.prank(users["carol"]);
+        bytes32 orderIdFromCarol = orderBook.openOrder(params);
+
+        assertTrue(orderIdFromBob != orderIdFromCarol, "order IDs collided across different funders");
     }
 
     function test_funderDifferentFromSender_senderReceivesRefund() public {
@@ -385,5 +431,27 @@ contract OpenOrderTest is OrderBookTestBase {
         // Verify order is cancelled
         order = orderBook.getOrder(orderId);
         assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Cancelled));
+    }
+
+    // =========== openOrderWithPermit Sender Restriction Tests ========== //
+
+    function test_openOrderWithPermit_callerNotSender_reverts() public {
+        // Bob (msg.sender) calls openOrderWithPermit naming Alice as sender — should revert.
+        // The permit only authorizes Bob's allowance; allowing Bob to assign ownership to Alice
+        // would create an order whose owner never authorized the underlying approval.
+        params.sender = users["alice"];
+
+        vm.prank(users["bob"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidSender.selector));
+        orderBook.openOrderWithPermit(params, block.timestamp + 1 hours, 0, bytes32(0), bytes32(0));
+    }
+
+    function test_openOrderWithPermit_packedSignature_callerNotSender_reverts() public {
+        // Same restriction applies to the packed-signature overload.
+        params.sender = users["alice"];
+
+        vm.prank(users["bob"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.InvalidSender.selector));
+        orderBook.openOrderWithPermit(params, block.timestamp + 1 hours, new bytes(0));
     }
 }

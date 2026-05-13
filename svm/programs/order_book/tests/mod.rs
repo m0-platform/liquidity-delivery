@@ -660,6 +660,7 @@ impl OrderBookTest {
         let order_id = order_book::state::compute_order_id(&order_book::state::OrderData {
             version: order_book::constants::VERSION,
             sender: sender.to_bytes(),
+            funder: sender.to_bytes(),
             nonce: sender_nonce_data.value,
             origin_chain_id: global_data.chain_id,
             dest_chain_id: order_params.dest_chain_id,

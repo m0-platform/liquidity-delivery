@@ -191,6 +191,7 @@ fn test_report_fill_foreign_order_type_reverts() -> Result<(), Box<dyn Error>> {
     let order_data = order_book::OrderData {
         version: order_book::VERSION,
         sender: test.get_user("alice").pubkey().to_bytes(),
+        funder: test.get_user("alice").pubkey().to_bytes(),
         nonce: 0,
         origin_chain_id: DEST_CHAIN_ID, // Foreign origin
         dest_chain_id: CHAIN_ID,        // Settles here

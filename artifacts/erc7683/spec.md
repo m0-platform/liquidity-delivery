@@ -101,7 +101,7 @@ ERC-7683's `OnchainCrossChainOrder` is an envelope containing opaque `orderData`
 | `orderDataType` | `keccak256("OrderParams(...)")` typehash |
 | `orderData` | `abi.encode(OrderParams)` |
 
-The wrapper decodes `orderData` into our `OrderParams` struct. The `sender` field in `OrderParams` will be set to `msg.sender` (the caller of `open()`).
+The wrapper decodes `orderData` into our `OrderParams` struct and overrides `sender = msg.sender` (the user calling the wrapper's `open()`). The wrapper itself becomes the OrderBook's "funder" (the account that pays input tokens and owns the nonce), while the user is recorded as the order's `sender` (owner) with cancellation rights and refund destination. See [Funder vs Sender](#funder-vs-sender) below.
 
 ### GaslessCrossChainOrder → GaslessOrderParams
 
@@ -191,14 +191,17 @@ function open(OnchainCrossChainOrder calldata order) external override {
 
     IOrderBook.OrderParams memory params = abi.decode(order.orderData, (IOrderBook.OrderParams));
 
-    // Override sender to be the actual caller
+    // The user (msg.sender of this wrapper call) becomes the order's `sender` (owner).
+    // The wrapper itself will be the OrderBook's funder (pays tokens, owns the nonce).
     params.sender = msg.sender;
 
     // Transfer tokens: user → wrapper → OrderBook
+    // We cannot use openOrderWithPermit here: it requires msg.sender == orderParams.sender,
+    // but our msg.sender to OrderBook will be the wrapper, not the user.
     IERC20(params.tokenIn).safeTransferFrom(msg.sender, address(this), params.amountIn);
     IERC20(params.tokenIn).approve(address(orderBook), params.amountIn);
 
-    // Open order (tokens pulled from wrapper, ownership to msg.sender)
+    // Open order (tokens pulled from wrapper, ownership credited to the user via params.sender)
     bytes32 orderId = orderBook.openOrder(params);
 
     // Emit ERC-7683 event
@@ -265,7 +268,9 @@ function resolve(OnchainCrossChainOrder calldata order)
     external view override returns (ResolvedCrossChainOrder memory)
 {
     IOrderBook.OrderParams memory params = abi.decode(order.orderData, (IOrderBook.OrderParams));
-    bytes32 orderId = _computeOrderId(params, msg.sender);
+    // OrderData hash binds (sender, funder). At open() time the wrapper is the funder,
+    // so resolve() must use address(this) — NOT msg.sender, which here is the caller of resolve().
+    bytes32 orderId = _computeOrderId(params, msg.sender /* sender */, address(this) /* funder */);
     return _resolveOnchain(order, msg.sender, orderId);
 }
 
@@ -279,6 +284,19 @@ function resolveFor(
 }
 ```
 
+## Funder vs Sender
+
+The OrderBook distinguishes two address roles on every open:
+
+- **`sender`** (in `OrderParams.sender`, recorded as `Order.sender`): the order owner. Holds cancellation rights and is the refund destination.
+- **`funder`** (`msg.sender` of the `openOrder` call): pays the input tokens, owns the per-funder nonce counter (`funderNonces[funder]`), and is included in the OrderData hash.
+
+This wrapper uses that split: the user is the `sender`; the wrapper is the `funder`. Implications:
+
+- The wrapper's per-funder nonce (`orderBook.getFunderNonce(address(this))`) advances on every onchain open.
+- `resolve()` must compute the order ID using the wrapper as funder (see implementation above).
+- The wrapper cannot use `openOrderWithPermit`: that entrypoint reverts with `InvalidSender` when `msg.sender != orderParams.sender`. The user must approve the wrapper directly (or use Permit2 / a deposit step).
+
 ## Token Flow
 
 ### open() Flow
@@ -288,7 +306,7 @@ function resolveFor(
 3. Wrapper pulls tokens from user via `transferFrom`
 4. Wrapper approves tokens to OrderBook
 5. Wrapper calls `orderBook.openOrder(params)` where `params.sender = user`
-6. OrderBook pulls tokens from wrapper (msg.sender), records user as owner
+6. OrderBook pulls tokens from wrapper (the funder), records user as the order's sender (owner)
 
 ### openFor() Flow (Gasless)
 
@@ -316,7 +334,9 @@ The wrapper performs safe casts for type mismatches:
 | `uint256 nonce` | `uint64 nonce` | `uint64(order.nonce)` |
 | `uint256 originChainId` | `uint32 originChainId` | `uint32(order.originChainId)` |
 
-These casts are safe because our OrderBook values will always fit within the smaller types.
+These casts are safe because our OrderBook values will always fit within the smaller types. The wrapper should reject (rather than silently truncate) inputs whose high bits are non-zero, to satisfy ERC-7683 round-tripping.
+
+Note: the OrderBook `OrderData` struct also carries a `bytes32 funder` field (set to the wrapper address for orders opened via `open()`, and to the signer for orders opened via `openFor()`). This field is part of the order ID hash and must be supplied correctly to `_computeOrderId` in `resolve()` / `resolveFor()`.
 
 ## Open Deadline Handling
 
@@ -352,6 +372,9 @@ This is emitted after the underlying `OrderBook.openOrder()` or `OrderBook.openO
    - Invalid orderDataType reverts
    - Expired openDeadline reverts
    - Type overflow handling (should not occur with our values)
+   - `resolve()` returns the same order ID that `open()` actually produces (regression for the funder-in-hash binding)
+   - Wrapper-as-funder nonce advances correctly when the same user opens multiple orders concurrently
+   - Direct call to `orderBook.openOrderWithPermit` with the wrapper's signature would revert (`InvalidSender`); confirm we never invoke this path
 
 ## Future Considerations
 

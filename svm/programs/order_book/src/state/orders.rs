@@ -60,10 +60,15 @@ pub struct ForeignOrder {
 
 // Note: this must match the EVM version exactly
 // We derive the Order ID from the hash of this struct
+//
+// On SVM, `funder` is always equal to `sender` (the SPL token-account owner that must sign
+// the transfer authorization). The field exists for cross-chain hash compatibility with EVM,
+// where a wrapper contract may act as funder while naming a different address as the order owner.
 #[derive(AnchorDeserialize, AnchorSerialize, Clone)]
 pub struct OrderData {
     pub version: u16,
     pub sender: [u8; 32],
+    pub funder: [u8; 32],
     pub nonce: u64,
     pub origin_chain_id: u32,
     pub dest_chain_id: u32,
@@ -83,6 +88,7 @@ fn encode_order_data(order_data: &OrderData) -> Vec<u8> {
 
     encoded.extend_from_slice(&order_data.version.to_be_bytes());
     encoded.extend_from_slice(&order_data.sender);
+    encoded.extend_from_slice(&order_data.funder);
     encoded.extend_from_slice(&order_data.nonce.to_be_bytes());
     encoded.extend_from_slice(&order_data.origin_chain_id.to_be_bytes());
     encoded.extend_from_slice(&order_data.dest_chain_id.to_be_bytes());
@@ -115,6 +121,9 @@ impl OrderData {
         Self {
             version: VERSION,
             sender: native_order.sender.to_bytes(),
+            // SVM invariant: SPL requires the source token-account owner to authorize the transfer,
+            // so the funder is always equal to the sender for orders originated on this chain.
+            funder: native_order.sender.to_bytes(),
             nonce: native_order.nonce,
             origin_chain_id,
             dest_chain_id: native_order.dest_chain_id,
@@ -147,8 +156,9 @@ mod tests {
     #[test]
     fn test_order_id_hash() {
         let evm_order_data = IOrderBook::OrderData {
-            version: 1u16,
+            version: 2u16,
             sender: FixedBytes::<32>::new([1u8; 32]),
+            funder: FixedBytes::<32>::new([6u8; 32]),
             nonce: 42u64,
             originChainId: 1u32,
             destChainId: 2u32,
@@ -170,8 +180,9 @@ mod tests {
         let expected_hash = keccak256(evm_order_data.abi_encode_packed()).0;
 
         let order_data = OrderData {
-            version: 1u16,
+            version: 2u16,
             sender: [1u8; 32],
+            funder: [6u8; 32],
             nonce: 42u64,
             origin_chain_id: 1u32,
             dest_chain_id: 2u32,

@@ -17,7 +17,7 @@ abstract contract OrderBookTestBase is Test {
     OrderBook internal orderBook;
     MockPortalV2 internal portal;
 
-    uint16 internal constant VERSION = 1;
+    uint16 internal constant VERSION = 2;
     uint32 internal CHAIN_ID = block.chainid.safe32();
     uint32 internal constant DEST_CHAIN_ID = 2;
     uint256 internal constant MINT_AMOUNT = 1000;
@@ -123,12 +123,24 @@ abstract contract OrderBookTestBase is Test {
         uint64 nonce_,
         IOrderBook.OrderParams memory params_
     ) internal view returns (bytes32) {
+        // Default helper: assumes funder == sender (the common case). Tests that exercise
+        // funder != sender should call orderBook.getOrderId directly with the explicit funder.
+        return _getOrderIdFromParams(sender_, sender_, nonce_, params_);
+    }
+
+    function _getOrderIdFromParams(
+        address sender_,
+        address funder_,
+        uint64 nonce_,
+        IOrderBook.OrderParams memory params_
+    ) internal view returns (bytes32) {
         return
             orderBook.getOrderId(
                 IOrderBook.OrderData({
-                    version: 1,
+                    version: 2,
                     originChainId: CHAIN_ID,
                     sender: sender_.toBytes32(),
+                    funder: funder_.toBytes32(),
                     nonce: nonce_,
                     destChainId: params_.destChainId,
                     createdAt: uint64(block.timestamp),
@@ -205,6 +217,7 @@ abstract contract OrderBookTestBase is Test {
                 version: order_.version,
                 originChainId: CHAIN_ID,
                 sender: order_.sender.toBytes32(),
+                funder: order_.funder.toBytes32(),
                 nonce: order_.nonce,
                 destChainId: order_.destChainId,
                 createdAt: uint64(order_.createdAt),

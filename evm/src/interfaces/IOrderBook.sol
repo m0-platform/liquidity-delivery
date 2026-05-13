@@ -8,7 +8,8 @@ interface IOrderBook {
      * @notice Emitted when a new order is opened
      * @dev This event is emitted on the origin chain
      * @param orderId The ID of the order
-     * @param sender The address that provided the funds on the origin (this) chain
+     * @param funder The address that provided the input tokens (msg.sender on openOrder; signer on openOrderFor)
+     * @param sender The address that owns the order (cancellation rights, refund destination)
      * @param tokenIn The address of the input token on the origin (this) chain
      * @param amountIn The amount of input token provided
      * @param destChainId The internal chain ID where the order will be filled
@@ -49,7 +50,7 @@ interface IOrderBook {
      * @notice Emitted when a refund is claimed for an order
      * @dev This event is emitted on the origin chain
      * @param orderId The ID of the order being refunded
-     * @param sender The address that the refund is sent to
+     * @param sender The address that the refund is sent to (the order owner, not necessarily the original funder)
      * @param amountInRefunded The amount of input token that was refunded
      */
     event RefundClaimed(bytes32 indexed orderId, address indexed sender, uint128 amountInRefunded);
@@ -111,6 +112,7 @@ interface IOrderBook {
     error InvalidOrderVersion();
     error InvalidOriginChain();
     error InvalidRecipient();
+    error InvalidSender();
     error InvalidSolver();
     error InvalidReport();
     error InvalidTimestamp();
@@ -138,7 +140,10 @@ interface IOrderBook {
      * @param amountOut Amount of output token expected
      * @param recipient Address to receive the funds on the destination chain
      * @param solver Address of the solver that will fill the order, or zero address if any solver can fill
-     * @param sender Address that will own the order (for cancellation rights and refunds). Tokens are pulled from msg.sender.
+     * @param sender Address that will own the order (cancellation rights, refund destination). Tokens are
+     *               pulled from msg.sender (the "funder"). Any caller may name any address as sender — gasless
+     *               replay protection is keyed on the funder, not the sender, so naming a victim as sender
+     *               cannot invalidate that victim's pre-signed gasless orders.
      */
     struct OrderParams {
         uint32 destChainId;
@@ -200,8 +205,8 @@ interface IOrderBook {
      * @dev Addresses on the destination chain are stored as bytes32 to support non-EVM chains
      * @param status Current status of the order
      * @param version Version of the contract when the order was created
-     * @param sender Address that provided the funds on the origin chain
-     * @param nonce A counter tied to the sender to allow unique orders
+     * @param sender Address that owns the order (cancellation rights, refund destination)
+     * @param nonce A counter tied to the funder to allow unique order IDs
      * @param destChainId Destination chain ID where the order is to be filled
      * @param createdAt Timestamp when the order was created
      * @param fillDeadline Timestamp by which the order must be filled on the destination chain
@@ -211,6 +216,7 @@ interface IOrderBook {
      * @param amountOut Amount of output token expected
      * @param recipient Address to receive the funds on the destination chain
      * @param solver Address of the solver that will fill the order, or zero address if any approved solver can fill
+     * @param funder Address that provided the input tokens (msg.sender at open time; equals sender for gasless orders)
      */
     struct Order {
         OrderStatus status; // slot 1: 1 +
@@ -226,6 +232,7 @@ interface IOrderBook {
         uint128 amountOut; //          16 = 32 bytes
         bytes32 recipient; //  slot 5
         bytes32 solver; //     slot 6
+        address funder; //     slot 7: 20 (12 bytes padding)
     }
 
     /**
@@ -234,8 +241,9 @@ interface IOrderBook {
      *      information to fill the order on the destination chain
      *      The order ID is computed as the keccak256 hash of the packed-encoding of this struct
      * @param version Version of the contract when the order was created
-     * @param sender Address that provided the funds on the origin chain
-     * @param nonce A counter tied to the sender to allow unique orders
+     * @param sender Address that owns the order (cancellation rights, refund destination)
+     * @param funder Address that provided the input tokens (msg.sender at open time; equals sender for gasless orders)
+     * @param nonce A counter tied to the funder to allow unique order IDs
      * @param originChainId internal chain ID where the order was created
      * @param destChainId Destination chain ID where the order is to be filled
      * @param createdAt Timestamp when the order was created
@@ -250,6 +258,7 @@ interface IOrderBook {
     struct OrderData {
         uint16 version;
         bytes32 sender;
+        bytes32 funder;
         uint64 nonce;
         uint32 originChainId;
         uint32 destChainId;
@@ -331,7 +340,7 @@ interface IOrderBook {
 
     /**
      * @notice Opens an order
-     * @dev Must be called by the user providing the input funds
+     * @dev Tokens are pulled from msg.sender (the "funder"); orderParams_.sender becomes the order owner
      * @param orderParams_ order creation parameters (see OrderParams definition)
      * @return orderId_ The unique ID of the opened order
      */
@@ -339,7 +348,10 @@ interface IOrderBook {
 
     /**
      * @notice Opens an order with an EIP-2612 permit signature for token approval
-     * @dev Must be called by the user providing the input funds
+     * @dev orderParams_.sender must equal msg.sender. The permit only authorizes msg.sender's
+     *      allowance, so naming a different address as sender would assign ownership of an order
+     *      to someone who never authorized the underlying approval. Use openOrder (without permit)
+     *      for funder != sender wrapper flows.
      * @param orderParams_ order creation parameters (see OrderParams definition)
      * @param deadline_ deadline for the permit signature
      * @param v_ v parameter of the permit signature
@@ -357,7 +369,10 @@ interface IOrderBook {
 
     /**
      * @notice Opens an order with an EIP-2612 permit signature for token approval
-     * @dev Must be called by the user providing the input funds
+     * @dev orderParams_.sender must equal msg.sender. The permit only authorizes msg.sender's
+     *      allowance, so naming a different address as sender would assign ownership of an order
+     *      to someone who never authorized the underlying approval. Use openOrder (without permit)
+     *      for funder != sender wrapper flows.
      * @param orderParams_ order creation parameters (see OrderParams definition)
      * @param deadline_ deadline for the permit signature
      * @param permitSignature_ packed encoding of the permit signature
@@ -660,8 +675,10 @@ interface IOrderBook {
      */
     function getFilledAmounts(bytes32 orderId_) external view returns (FilledAmounts memory);
 
-    /// @notice Returns the next nonce for the provided sender address
-    function getSenderNonce(address sender_) external view returns (uint64);
+    /// @notice Returns the next nonce for the provided funder address
+    /// @dev Nonces are keyed on the funder (msg.sender on openOrder; signer on openOrderFor),
+    ///      not on the order owner (sender). This prevents third-party DoS of pre-signed gasless orders.
+    function getFunderNonce(address funder_) external view returns (uint64);
 
     /// @notice Returns whether orders can be created with the provided chain ID as the destination
     function isDestinationSupported(uint32 destChainId_) external view returns (bool);

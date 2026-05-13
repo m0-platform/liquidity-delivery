@@ -77,9 +77,10 @@ contract CancelOrderForTest is OrderBookTestBase {
 
         // Create xchain order data that originates on another chain and is destined for this chain
         xchainOrderData = IOrderBook.OrderData({
-            version: 1,
+            version: 2,
             originChainId: DEST_CHAIN_ID, // Order originated from another chain
             sender: sender.addr.toBytes32(),
+            funder: sender.addr.toBytes32(),
             nonce: 0,
             destChainId: CHAIN_ID, // This chain is the destination
             createdAt: uint64(block.timestamp),

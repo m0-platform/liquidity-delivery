@@ -43,6 +43,7 @@ mod xchain_orders {
         OrderData {
             version: order_book::constants::VERSION,
             sender: test.get_user("alice").pubkey().to_bytes(), // sender on origin chain
+            funder: test.get_user("alice").pubkey().to_bytes(),
             nonce: 0,
             origin_chain_id: DEST_CHAIN_ID, // order originated on chain 2
             dest_chain_id: CHAIN_ID,        // this chain (1) is the destination

@@ -48,7 +48,7 @@ contract OpenOrderForTest is OrderBookTestBase {
         gaslessParams = IOrderBook.GaslessOrderParams({
             version: VERSION,
             sender: sender.addr,
-            nonce: orderBook.getSenderNonce(sender.addr),
+            nonce: orderBook.getFunderNonce(sender.addr),
             originChainId: CHAIN_ID,
             destChainId: params.destChainId,
             fillDeadline: params.fillDeadline,
