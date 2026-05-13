@@ -86,9 +86,8 @@ contract FillOrder is ScriptBase {
         require(orderId_ == computedOrderId_, "Order ID mismatch");
 
         // Default origin recipient to solver if not specified
-        config_.originRecipient = originRecipient_ == bytes32(0)
-            ? bytes32(uint256(uint160(config_.solver)))
-            : originRecipient_;
+        config_.originRecipient =
+            originRecipient_ == bytes32(0) ? bytes32(uint256(uint160(config_.solver))) : originRecipient_;
 
         // Determine Portal fee for cross-chain fills
         if (!config_.isSameChain && needsQuote_) {

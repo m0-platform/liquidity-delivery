@@ -101,7 +101,8 @@ contract OpenOrder is ScriptBase {
                 amountIn: amountIn_,
                 amountOut: amountOut_,
                 recipient: recipient,
-                solver: solver_
+                solver: solver_,
+                sender: sender_
             });
     }
 

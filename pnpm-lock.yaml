@@ -16,8 +16,8 @@ catalogs:
       specifier: ^3.7.4
       version: 3.7.4
     prettier-plugin-solidity:
-      specifier: ^2.1.0
-      version: 2.1.0
+      specifier: ^2.3.0
+      version: 2.3.1
     solhint:
       specifier: ^6.0.0
       version: 6.0.1
@@ -82,13 +82,13 @@ importers:
         version: 3.7.4
       prettier-plugin-solidity:
         specifier: 'catalog:'
-        version: 2.1.0(prettier@3.7.4)
+        version: 2.3.1(prettier@3.7.4)
       solhint:
         specifier: 'catalog:'
         version: 6.0.1(typescript@5.9.3)
       solhint-plugin-prettier:
         specifier: 'catalog:'
-        version: 0.1.0(prettier-plugin-solidity@2.1.0(prettier@3.7.4))(prettier@3.7.4)
+        version: 0.1.0(prettier-plugin-solidity@2.3.1(prettier@3.7.4))(prettier@3.7.4)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -264,9 +264,6 @@ packages:
   '@bcoe/v8-coverage@0.2.3':
     resolution: {integrity: sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==}
 
-  '@bytecodealliance/preview2-shim@0.17.2':
-    resolution: {integrity: sha512-mNm/lblgES8UkVle8rGImXOz4TtL3eU3inHay/7TVchkKrb/lgcVvTK0+VAw8p5zQ0rgQsXm1j5dOlAAd+MeoA==}
-
   '@bytecodealliance/preview2-shim@0.17.5':
     resolution: {integrity: sha512-F4WYVC6aHOiOXSsG3WDGFALrkpb952+9/EIX119qIzDtYgE5tvbOnKeBb0Y+NMzGEsu3334GdHIRXQ6wibY0MA==}
 
@@ -386,11 +383,11 @@ packages:
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
     engines: {node: ^14.21.3 || >=16}
 
-  '@nomicfoundation/slang@1.2.0':
-    resolution: {integrity: sha512-+04Z1RHbbz0ldDbHKQFOzveCdI9Rd3TZZu7fno5hHy3OsqTo9UK5Jgqo68wMvRovCO99POv6oCEyO7+urGeN8Q==}
-
   '@nomicfoundation/slang@1.3.1':
     resolution: {integrity: sha512-gh0+JDjazmevEYCcwVgtuyfBJcV1209gIORZNRjUxbGzbQN0MOhQO9T0ptkzHKCf854gUy27SMxPbAyAu63fvQ==}
+
+  '@nomicfoundation/slang@1.3.4':
+    resolution: {integrity: sha512-ghzrPSYH1sZO65id6+Bq2Ood87HT54QP3RGC8EkmpcrJ6tT9Ky0RtaJfrzV5G4jpDsnNua6+YEDpzOMori04hQ==}
 
   '@pnpm/config.env-replace@1.1.0':
     resolution: {integrity: sha512-htyl8TWnKL7K/ESFa1oW2UB5lVDxuF5DpM7tBi6Hu2LNL3mWkIzNLG6N4zoCUP1lCKNxWy/3iu8mS8MvToGd6w==}
@@ -1507,14 +1504,14 @@ packages:
     resolution: {integrity: sha512-GbK2cP9nraSSUF9N2XwUwqfzlAFlMNYYl+ShE/V+H8a9uNl/oUqB1w2EL54Jh0OlyRSd8RfWYJ3coVS4TROP2w==}
     engines: {node: '>=6.0.0'}
 
-  prettier-plugin-solidity@2.1.0:
-    resolution: {integrity: sha512-O5HX4/PCE5aqiaEiNGbSRLbSBZQ6kLswAav5LBSewwzhT+sZlN6iAaLZlZcJzPEnIAxwLEHP03xKEg92fflT9Q==}
+  prettier-plugin-solidity@2.2.1:
+    resolution: {integrity: sha512-LOHfxECJ/gHsY7qi4D7vanz8cVsCf6yFotBapJ5O0qaX0ZR1sGUzbWfMd4JeQYOItFl+wXW9IcjZOdfr6bmSvQ==}
     engines: {node: '>=20'}
     peerDependencies:
       prettier: '>=3.0.0'
 
-  prettier-plugin-solidity@2.2.1:
-    resolution: {integrity: sha512-LOHfxECJ/gHsY7qi4D7vanz8cVsCf6yFotBapJ5O0qaX0ZR1sGUzbWfMd4JeQYOItFl+wXW9IcjZOdfr6bmSvQ==}
+  prettier-plugin-solidity@2.3.1:
+    resolution: {integrity: sha512-71sZM5oqgq6pnTlf+RH23U6Ej710APfCiMWO2Z/pHNjrXyvn9Nr0vTS1AUVaSf4GRW0V6hj6Djt0MyWudJUJbQ==}
     engines: {node: '>=20'}
     peerDependencies:
       prettier: '>=3.0.0'
@@ -1621,6 +1618,11 @@ packages:
 
   semver@7.7.3:
     resolution: {integrity: sha512-SdsKMrI9TdgjdweUSR9MweHA4EJ8YxHn8DFaDisvhVlUOe4BF1tLD7GAj0lIqWVl+dPb/rExr0Btby5loQm20Q==}
+    engines: {node: '>=10'}
+    hasBin: true
+
+  semver@7.8.0:
+    resolution: {integrity: sha512-AcM7dV/5ul4EekoQ29Agm5vri8JNqRyj39o0qpX6vDF2GZrtutZl5RwgD1XnZjiTAfncsJhMI48QQH3sN87YNA==}
     engines: {node: '>=10'}
     hasBin: true
 
@@ -2132,8 +2134,6 @@ snapshots:
 
   '@bcoe/v8-coverage@0.2.3': {}
 
-  '@bytecodealliance/preview2-shim@0.17.2': {}
-
   '@bytecodealliance/preview2-shim@0.17.5': {}
 
   '@coral-xyz/anchor-errors@0.31.1': {}
@@ -2364,11 +2364,11 @@ snapshots:
 
   '@noble/hashes@1.8.0': {}
 
-  '@nomicfoundation/slang@1.2.0':
-    dependencies:
-      '@bytecodealliance/preview2-shim': 0.17.2
-
   '@nomicfoundation/slang@1.3.1':
+    dependencies:
+      '@bytecodealliance/preview2-shim': 0.17.5
+
+  '@nomicfoundation/slang@1.3.4':
     dependencies:
       '@bytecodealliance/preview2-shim': 0.17.5
 
@@ -3664,19 +3664,19 @@ snapshots:
     dependencies:
       fast-diff: 1.3.0
 
-  prettier-plugin-solidity@2.1.0(prettier@3.7.4):
-    dependencies:
-      '@nomicfoundation/slang': 1.2.0
-      '@solidity-parser/parser': 0.20.2
-      prettier: 3.7.4
-      semver: 7.7.3
-
   prettier-plugin-solidity@2.2.1(prettier@3.7.4):
     dependencies:
       '@nomicfoundation/slang': 1.3.1
       '@solidity-parser/parser': 0.20.2
       prettier: 3.7.4
       semver: 7.7.3
+
+  prettier-plugin-solidity@2.3.1(prettier@3.7.4):
+    dependencies:
+      '@nomicfoundation/slang': 1.3.4
+      '@solidity-parser/parser': 0.20.2
+      prettier: 3.7.4
+      semver: 7.8.0
 
   prettier@2.8.8:
     optional: true
@@ -3771,6 +3771,8 @@ snapshots:
 
   semver@7.7.3: {}
 
+  semver@7.8.0: {}
+
   shebang-command@2.0.0:
     dependencies:
       shebang-regex: 3.0.0
@@ -3796,19 +3798,19 @@ snapshots:
       ansi-styles: 6.2.3
       is-fullwidth-code-point: 5.1.0
 
-  solhint-plugin-prettier@0.1.0(prettier-plugin-solidity@2.1.0(prettier@3.7.4))(prettier@3.7.4):
-    dependencies:
-      '@prettier/sync': 0.3.0(prettier@3.7.4)
-      prettier: 3.7.4
-      prettier-linter-helpers: 1.0.0
-      prettier-plugin-solidity: 2.1.0(prettier@3.7.4)
-
   solhint-plugin-prettier@0.1.0(prettier-plugin-solidity@2.2.1(prettier@3.7.4))(prettier@3.7.4):
     dependencies:
       '@prettier/sync': 0.3.0(prettier@3.7.4)
       prettier: 3.7.4
       prettier-linter-helpers: 1.0.0
       prettier-plugin-solidity: 2.2.1(prettier@3.7.4)
+
+  solhint-plugin-prettier@0.1.0(prettier-plugin-solidity@2.3.1(prettier@3.7.4))(prettier@3.7.4):
+    dependencies:
+      '@prettier/sync': 0.3.0(prettier@3.7.4)
+      prettier: 3.7.4
+      prettier-linter-helpers: 1.0.0
+      prettier-plugin-solidity: 2.3.1(prettier@3.7.4)
 
   solhint@6.0.1(typescript@5.9.3):
     dependencies:

@@ -101,35 +101,6 @@ contract InitializationTest is Test {
         assertEq(orderBook.portal(), address(portal));
     }
 
-    function test_proxyInitialization_erc712DomainIsCorrectlyInitialized() public {
-        // Deploy implementation
-        address implementation = address(new OrderBook(address(portal)));
-
-        // Deploy proxy with initialization
-        OrderBook orderBook = OrderBook(
-            address(
-                new ERC1967Proxy(implementation, abi.encodeWithSelector(OrderBook.initialize.selector, admin, pauser))
-            )
-        );
-
-        // Verify ERC712 domain is correctly initialized
-        (
-            ,
-            // bytes1 fields
-            string memory name,
-            string memory version,
-            uint256 chainId,
-            address verifyingContract,
-            ,
-
-        ) = orderBook.eip712Domain();
-
-        assertEq(name, "M0 OrderBook");
-        assertEq(version, "1");
-        assertEq(chainId, block.chainid);
-        assertEq(verifyingContract, address(orderBook));
-    }
-
     function test_proxyCannotBeReinitialized() public {
         // Deploy implementation
         address implementation = address(new OrderBook(address(portal)));
