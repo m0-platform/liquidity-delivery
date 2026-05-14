@@ -289,21 +289,20 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
                 amountInToRefund: amountInRemaining_
             });
 
-            messageId_ =
-                bridgeAdapter_ == address(0)
-                    ? IPortalV2Like(portal).sendCancelReport{ value: msg.value }(
-                        orderData_.originChainId,
-                        report_,
-                        msg.sender.toBytes32(), // refundAddress
-                        bridgeAdapterArgs_
-                    )
-                    : IPortalV2Like(portal).sendCancelReport{ value: msg.value }(
-                        orderData_.originChainId,
-                        report_,
-                        msg.sender.toBytes32(), // refundAddress
-                        bridgeAdapter_,
-                        bridgeAdapterArgs_
-                    );
+            messageId_ = bridgeAdapter_ == address(0)
+                ? IPortalV2Like(portal).sendCancelReport{ value: msg.value }(
+                    orderData_.originChainId,
+                    report_,
+                    msg.sender.toBytes32(), // refundAddress
+                    bridgeAdapterArgs_
+                )
+                : IPortalV2Like(portal).sendCancelReport{ value: msg.value }(
+                    orderData_.originChainId,
+                    report_,
+                    msg.sender.toBytes32(), // refundAddress
+                    bridgeAdapter_,
+                    bridgeAdapterArgs_
+                );
         }
 
         emit OrderCancelled(orderId_, messageId_);
@@ -430,23 +429,23 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
             // Send fill report to the origin chain and pass along msg.value
             // to the portal for crosschain message fee
-            bytes32 refundAddress =
-                fillerParams_.refundAddress == bytes32(0) ? msg.sender.toBytes32() : fillerParams_.refundAddress;
-            messageId_ =
-                bridgeAdapter_ == address(0)
-                    ? IPortalV2Like(portal).sendFillReport{ value: msg.value }(
-                        orderData_.originChainId, // destinationChainId (of this message)
-                        report_,
-                        refundAddress,
-                        bridgeAdapterArgs_
-                    )
-                    : IPortalV2Like(portal).sendFillReport{ value: msg.value }(
-                        orderData_.originChainId, // destinationChainId (of this message)
-                        report_,
-                        refundAddress,
-                        bridgeAdapter_,
-                        bridgeAdapterArgs_
-                    );
+            bytes32 refundAddress = fillerParams_.refundAddress == bytes32(0)
+                ? msg.sender.toBytes32()
+                : fillerParams_.refundAddress;
+            messageId_ = bridgeAdapter_ == address(0)
+                ? IPortalV2Like(portal).sendFillReport{ value: msg.value }(
+                    orderData_.originChainId, // destinationChainId (of this message)
+                    report_,
+                    refundAddress,
+                    bridgeAdapterArgs_
+                )
+                : IPortalV2Like(portal).sendFillReport{ value: msg.value }(
+                    orderData_.originChainId, // destinationChainId (of this message)
+                    report_,
+                    refundAddress,
+                    bridgeAdapter_,
+                    bridgeAdapterArgs_
+                );
         }
 
         emit OrderFilled(orderId_, msg.sender, amountInToRelease_, amountOutToFill_, messageId_);
@@ -685,10 +684,9 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
         amountOutToFill_ = fullFill_ ? amountOutRemaining_ : amountOutToFill_;
 
         // Calculate the corresponding amount of token in to release to the filler
-        uint128 amountInToRelease_ =
-            fullFill_
-                ? totalAmountIn_ - amountInReleased_ // remaining amount
-                : ((uint256(totalAmountIn_) * amountOutToFill_) / totalAmountOut_).toUint128();
+        uint128 amountInToRelease_ = fullFill_
+            ? totalAmountIn_ - amountInReleased_ // remaining amount
+            : ((uint256(totalAmountIn_) * amountOutToFill_) / totalAmountOut_).toUint128();
 
         return (fullFill_, amountInToRelease_, amountOutToFill_);
     }
