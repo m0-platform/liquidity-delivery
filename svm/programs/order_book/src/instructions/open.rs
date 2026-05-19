@@ -239,6 +239,7 @@ impl OpenOrder<'_> {
             token_out: params.token_out,
             amount_out: params.amount_out,
             solver: params.solver,
+            fill_deadline: params.fill_deadline
         });
 
         Ok(())
@@ -256,4 +257,5 @@ pub struct OrderOpened {
     pub token_out: [u8; 32],
     pub amount_out: u128,
     pub solver: [u8; 32],
+    pub fill_deadline: u64
 }

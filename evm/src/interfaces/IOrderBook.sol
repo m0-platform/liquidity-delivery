@@ -8,13 +8,15 @@ interface IOrderBook {
      * @notice Emitted when a new order is opened
      * @dev This event is emitted on the origin chain
      * @param orderId The ID of the order
-     * @param sender The address that provided the funds on the origin (this) chain
+     * @param funder The address that provided the input funds for the order
+     * @param sender The address that owns the order on the origin (this) chain
      * @param tokenIn The address of the input token on the origin (this) chain
      * @param amountIn The amount of input token provided
      * @param destChainId The internal chain ID where the order will be filled
      * @param tokenOut The address of the output token on the destination chain
      * @param amountOut The amount of output token expected
      * @param solver The address of the solver that will fill the order, or zero address if any solver can fill
+     * @param fillDeadline Timestamp by which the order must be filled on the destination chain
      */
     event OrderOpened(
         bytes32 orderId,
@@ -25,7 +27,8 @@ interface IOrderBook {
         uint32 indexed destChainId,
         bytes32 tokenOut,
         uint128 amountOut,
-        bytes32 indexed solver
+        bytes32 indexed solver,
+        uint32 fillDeadline
     );
 
     /**
