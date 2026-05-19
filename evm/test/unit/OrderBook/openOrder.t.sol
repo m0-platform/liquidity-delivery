@@ -145,7 +145,8 @@ contract OpenOrderTest is OrderBookTestBase {
             params.destChainId,
             params.tokenOut,
             params.amountOut,
-            params.solver
+            params.solver,
+            params.fillDeadline
         );
         bytes32 orderId = orderBook.openOrder(params);
 
@@ -259,7 +260,8 @@ contract OpenOrderTest is OrderBookTestBase {
             params.destChainId,
             params.tokenOut,
             params.amountOut,
-            params.solver
+            params.solver,
+            params.fillDeadline
         );
         bytes32 orderId = orderBook.openOrder(params);
 
