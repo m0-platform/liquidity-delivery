@@ -2129,6 +2129,10 @@
             }
           },
           {
+            "name": "funder",
+            "type": "pubkey"
+          },
+          {
             "name": "sender",
             "type": "pubkey"
           },
@@ -2159,6 +2163,10 @@
             "type": {
               "array": ["u8", 32]
             }
+          },
+          {
+            "name": "fill_deadline",
+            "type": "u64"
           }
         ]
       }
