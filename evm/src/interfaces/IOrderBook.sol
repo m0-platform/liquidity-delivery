@@ -397,7 +397,7 @@ interface IOrderBook {
      * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelOrderDigest)
      * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
-     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        This should be 0 for same chain cancels. For crosschain cancels, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
     function cancelOrderFor(
@@ -415,7 +415,7 @@ interface IOrderBook {
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
      * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
-     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        This should be 0 for same chain cancels. For crosschain cancels, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
     function cancelOrderFor(
@@ -435,7 +435,7 @@ interface IOrderBook {
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
      * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
-     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        This should be 0 for same chain cancels. For crosschain cancels, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
     function cancelOrderFor(
