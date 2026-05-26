@@ -389,6 +389,63 @@ interface IOrderBook {
         bytes calldata bridgeAdapterArgs_
     ) external payable returns (bytes32 messageId_);
 
+    /**
+     * @notice Cancel an order on behalf of the recipient
+     * @dev Can be called by anyone with a valid signature from the order's recipient
+     * @param orderId_ ID of the order to cancel
+     * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
+     * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelOrderDigest)
+     * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
+     * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
+     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        getting a quote for the required fee
+     */
+    function cancelOrderFor(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        bytes calldata signature_
+    ) external payable returns (bytes32 messageId_);
+
+    /**
+     * @notice Cancel an order on behalf of the recipient with additional message data required by some crosschain messages
+     * @dev Can be called by anyone with a valid signature from the order's recipient
+     * @param orderId_ ID of the order to cancel
+     * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
+     * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelOrderDigest)
+     * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
+     * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
+     * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
+     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        getting a quote for the required fee
+     */
+    function cancelOrderFor(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        bytes calldata signature_,
+        bytes calldata bridgeAdapterArgs_
+    ) external payable returns (bytes32 messageId_);
+
+    /**
+     * @notice Cancel an order on behalf of the recipient with additional message data required by some crosschain messages
+     * @dev Can be called by anyone with a valid signature from the order's recipient
+     * @param orderId_ ID of the order to cancel
+     * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
+     * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelOrderDigest)
+     * @param bridgeAdapter_ Address of the bridge adapter to use for crosschain messages (must be supported by Portal V2)
+     * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
+     * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
+     * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
+     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        getting a quote for the required fee
+     */
+    function cancelOrderFor(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        bytes calldata signature_,
+        address bridgeAdapter_,
+        bytes calldata bridgeAdapterArgs_
+    ) external payable returns (bytes32 messageId_);
+
     /* ========== Filling Orders ========== */
 
     /**
@@ -524,4 +581,20 @@ interface IOrderBook {
 
     /// @notice Returns whether orders can be created with the provided chain ID as the destination
     function isDestinationSupported(uint32 destChainId_) external view returns (bool);
+
+    /* ========== EIP-712 Digest Functions ========== */
+
+    /**
+     * @notice Returns the EIP-712 digest that a user must sign to cancel orders gaslessly
+     * @param orderId_ ID of the order to cancel
+     * @param bridgeAdapter_ Address of the bridge adapter to use for crosschain messages (see Portal V2 for more info).
+     *                       It can be zero address to use default or for same-chain cancels.
+     * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info).
+     *                       It can be empty for no additional args or for same-chain cancels.
+     */
+    function getCancelOrderDigest(
+        bytes32 orderId_,
+        address bridgeAdapter_,
+        bytes memory bridgeAdapterArgs_
+    ) external view returns (bytes32);
 }
