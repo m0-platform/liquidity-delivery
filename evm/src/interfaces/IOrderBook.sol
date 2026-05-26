@@ -59,7 +59,6 @@ interface IOrderBook {
 
     /**
      * @notice Emitted when an order is completed (fully filled)
-     * @dev This event is emitted on the destination chain
      * @param orderId The ID of the completed order
      */
     event OrderCompleted(bytes32 orderId);
@@ -168,7 +167,7 @@ interface IOrderBook {
      * @dev Addresses on the destination chain are stored as bytes32 to support non-EVM chains
      * @param status Current status of the order
      * @param version Version of the contract when the order was created
-     * @param sender Address that provided the funds on the origin chain
+     * @param sender Address that owns the order on the origin chain for cancellation rights and refunds
      * @param nonce A counter tied to the sender to allow unique orders
      * @param destChainId Destination chain ID where the order is to be filled
      * @param createdAt Timestamp when the order was created
@@ -202,7 +201,7 @@ interface IOrderBook {
      *      information to fill the order on the destination chain
      *      The order ID is computed as the keccak256 hash of the packed-encoding of this struct
      * @param version Version of the contract when the order was created
-     * @param sender Address that provided the funds on the origin chain
+     * @param sender Address that owns the order on the origin chain for cancellation rights and refunds
      * @param nonce A counter tied to the sender to allow unique orders
      * @param originChainId internal chain ID where the order was created
      * @param destChainId Destination chain ID where the order is to be filled
@@ -347,7 +346,7 @@ interface IOrderBook {
      * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
      * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
-     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        This should be 0 for same chain cancels. For crosschain cancels, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
     function cancelOrder(bytes32 orderId_, OrderData calldata orderData_) external payable returns (bytes32 messageId_);
@@ -361,7 +360,7 @@ interface IOrderBook {
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
      * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
-     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        This should be 0 for same chain cancels. For crosschain cancels, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
     function cancelOrder(
@@ -380,7 +379,7 @@ interface IOrderBook {
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
      * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
-     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        This should be 0 for same chain cancels. For crosschain cancels, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
     function cancelOrder(
