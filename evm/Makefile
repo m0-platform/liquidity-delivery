@@ -211,7 +211,8 @@ endif
 		--dest-chain $(DEST_CHAIN) --token-out $(TOKEN_OUT) --amount-out $(AMOUNT_OUT) \
 		$(if $(RECIPIENT),--recipient $(RECIPIENT)) \
 		$(if $(SOLVER),--solver $(SOLVER)) \
-		$(if $(DEADLINE),--deadline $(DEADLINE))
+		$(if $(DEADLINE),--deadline $(DEADLINE)) \
+		$(if $(SENDER),--sender $(SENDER))
 
 fill-order: ## Fill a test order (ENV=dev CHAIN=arbitrum_sepolia ORDER_ID=0x... ORIGIN_CHAIN=sepolia AMOUNT_OUT=...)
 ifndef ENV
