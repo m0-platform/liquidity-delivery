@@ -1,6 +1,6 @@
 [package]
 name = "order_book"
-version = "0.1.0"
+version = "0.1.1"
 description = "SVM implementation of the M0 limit order specification for cross-chain liquidity delivery"
 edition = "2021"
 
