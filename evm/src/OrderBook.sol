@@ -56,8 +56,8 @@ contract OrderBook is
     uint16 public constant VERSION = 1;
 
     /// @notice the type hash used for cancel order signatures
-    /// @dev keccak256("CancelOrder(bytes32 orderId, address bridgeAdapter, bytes bridgeAdapterArgs)")
-    bytes32 public constant CANCEL_ORDER_TYPEHASH = 0x6919f4958bcd1b5b4e13b800c6d41c4792cfc2a12d0bd9ad19da6e0bfe8ac04f;
+    /// @dev keccak256("CancelOrder(bytes32 orderId,address bridgeAdapter,bytes bridgeAdapterArgs)")
+    bytes32 public constant CANCEL_ORDER_TYPEHASH = 0xd7cf6d47f97dd3a3fc3f51421ddc4df9388bdfe3897719dccae3180a7a5a52e3;
 
     /// @notice the portal contract used for cross-chain communication
     /// @dev sends crosschain messages to report fills and cancels on this chain to other chains
