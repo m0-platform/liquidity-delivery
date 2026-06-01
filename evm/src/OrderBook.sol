@@ -5,6 +5,7 @@ import { IERC20 } from "../lib/common/lib/openzeppelin-contracts-upgradeable/lib
 import { IERC20Extended } from "../lib/common/src/interfaces/IERC20Extended.sol";
 import { AccessControlUpgradeable } from "../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/access/AccessControlUpgradeable.sol";
 import { PausableUpgradeable } from "../lib/common/lib/openzeppelin-contracts-upgradeable/contracts/utils/PausableUpgradeable.sol";
+import { ERC712ExtendedUpgradeable } from "../lib/common/src/ERC712ExtendedUpgradeable.sol";
 import { TypeConverter } from "../lib/common/src/libs/TypeConverter.sol";
 import { UIntMath } from "../lib/common/src/libs/UIntMath.sol";
 import { SafeERC20 } from "./libs/SafeERC20.sol";
@@ -36,7 +37,13 @@ abstract contract OrderBookStorageLayout {
     }
 }
 
-contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeable, PausableUpgradeable {
+contract OrderBook is
+    IOrderBook,
+    OrderBookStorageLayout,
+    AccessControlUpgradeable,
+    PausableUpgradeable,
+    ERC712ExtendedUpgradeable
+{
     using TypeConverter for *;
     using SafeERC20 for IERC20;
     using UIntMath for uint256;
@@ -47,6 +54,10 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
 
     /// @notice Version of the limit order system
     uint16 public constant VERSION = 1;
+
+    /// @notice the type hash used for cancel order signatures
+    /// @dev keccak256("CancelOrder(bytes32 orderId, address bridgeAdapter, bytes bridgeAdapterArgs)")
+    bytes32 public constant CANCEL_ORDER_TYPEHASH = 0x6919f4958bcd1b5b4e13b800c6d41c4792cfc2a12d0bd9ad19da6e0bfe8ac04f;
 
     /// @notice the portal contract used for cross-chain communication
     /// @dev sends crosschain messages to report fills and cancels on this chain to other chains
@@ -65,6 +76,8 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     function initialize(address admin, address pauser) external initializer {
         if (admin == address(0)) revert ZeroAdmin();
         if (pauser == address(0)) revert ZeroPauser();
+
+        __ERC712ExtendedUpgradeable_init("M0 OrderBook");
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(PAUSER_ROLE, pauser);
@@ -244,6 +257,63 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
             !(orderData_.recipient.toAddress() == msg.sender ||
                 (orderData_.originChainId == block.chainid && orderData_.sender.toAddress() == msg.sender))
         ) revert NotAuthorized();
+
+        messageId_ = _cancel(orderId_, orderData_, bridgeAdapter_, bridgeAdapterArgs_);
+    }
+
+    /// @inheritdoc IOrderBook
+    function cancelOrderFor(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        bytes calldata signature_
+    ) external payable override returns (bytes32 messageId_) {
+        messageId_ = _cancelOrderFor(orderId_, orderData_, signature_, address(0), new bytes(0));
+    }
+
+    /// @inheritdoc IOrderBook
+    function cancelOrderFor(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        bytes calldata signature_,
+        bytes calldata bridgeAdapterArgs_
+    ) external payable override returns (bytes32 messageId_) {
+        messageId_ = _cancelOrderFor(orderId_, orderData_, signature_, address(0), bridgeAdapterArgs_);
+    }
+
+    /// @inheritdoc IOrderBook
+    function cancelOrderFor(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        bytes calldata signature_,
+        address bridgeAdapter_,
+        bytes calldata bridgeAdapterArgs_
+    ) external payable override returns (bytes32 messageId_) {
+        messageId_ = _cancelOrderFor(orderId_, orderData_, signature_, bridgeAdapter_, bridgeAdapterArgs_);
+    }
+
+    function _cancelOrderFor(
+        bytes32 orderId_,
+        OrderData calldata orderData_,
+        bytes calldata signature_,
+        address bridgeAdapter_,
+        bytes memory bridgeAdapterArgs_
+    ) internal returns (bytes32 messageId_) {
+        // Verify signature
+        if (signature_.length == 64) {
+            (bytes32 r, bytes32 vs) = abi.decode(signature_, (bytes32, bytes32));
+            _revertIfInvalidSignature(
+                orderData_.recipient.toAddress(),
+                getCancelOrderDigest(orderId_, bridgeAdapter_, bridgeAdapterArgs_),
+                r,
+                vs
+            );
+        } else {
+            _revertIfInvalidSignature(
+                orderData_.recipient.toAddress(),
+                getCancelOrderDigest(orderId_, bridgeAdapter_, bridgeAdapterArgs_),
+                signature_
+            );
+        }
 
         messageId_ = _cancel(orderId_, orderData_, bridgeAdapter_, bridgeAdapterArgs_);
     }
@@ -640,6 +710,20 @@ contract OrderBook is IOrderBook, OrderBookStorageLayout, AccessControlUpgradeab
     /// @inheritdoc IOrderBook
     function isDestinationSupported(uint32 destChainId_) public view override returns (bool) {
         return destChainId_ == block.chainid || _getOrderBookStorageLocation().supportedDestinations[destChainId_];
+    }
+
+    /* ========== EIP-712 Digest Functions ========== */
+
+    /// @inheritdoc IOrderBook
+    function getCancelOrderDigest(
+        bytes32 orderId_,
+        address bridgeAdapter_,
+        bytes memory bridgeAdapterArgs_
+    ) public view override returns (bytes32) {
+        return
+            _getDigest(
+                keccak256(abi.encode(CANCEL_ORDER_TYPEHASH, orderId_, bridgeAdapter_, keccak256(bridgeAdapterArgs_)))
+            );
     }
 
     /* ========== Internal Helper Functions ========== */
