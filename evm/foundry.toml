@@ -8,6 +8,14 @@ optimizer_runs = 1000
 solc_version = "0.8.33"
 verbosity = 3
 fs_permissions = [{ access = "read-write", path = "./"}]
+# Context-scoped remappings for lib/safe-utils internal imports only.
+# The `lib/safe-utils/:` context prefix means these never affect import
+# resolution in src/, test/, script/, or any other lib.
+remappings = [
+    "lib/safe-utils/:forge-std/=lib/safe-utils/lib/forge-std/src/",
+    "lib/safe-utils/:safe-smart-account/=lib/safe-utils/lib/safe-smart-account/contracts/",
+    "lib/safe-utils/:solidity-http/=lib/safe-utils/lib/solidity-http/src/",
+]
 
 [lint]
 lint_on_build = false

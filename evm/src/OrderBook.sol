@@ -55,13 +55,9 @@ contract OrderBook is
     /// @notice Version of the limit order system
     uint16 public constant VERSION = 1;
 
-    /// @notice the type hash used for gasless order submission
-    /// @dev keccak256("GaslessOrderParams(uint16 version,address sender,uint64 nonce,uint32 originChainId,uint32 destChainId,uint32 fillDeadline,address tokenIn,bytes32 tokenOut,uint128 amountIn,uint128 amountOut,bytes32 recipient,bytes32 solver)")
-    bytes32 public constant GASLESS_ORDER_TYPEHASH = 0xdcc220f897990a71a7c6f1069339af0681016bb96f2d791f2214e234d7029603;
-
     /// @notice the type hash used for cancel order signatures
-    /// @dev keccak256("CancelOrder(bytes32 orderId, address bridgeAdapter, bytes bridgeAdapterArgs)")
-    bytes32 public constant CANCEL_ORDER_TYPEHASH = 0x6919f4958bcd1b5b4e13b800c6d41c4792cfc2a12d0bd9ad19da6e0bfe8ac04f;
+    /// @dev keccak256("CancelOrder(bytes32 orderId,address bridgeAdapter,bytes bridgeAdapterArgs)")
+    bytes32 public constant CANCEL_ORDER_TYPEHASH = 0xd7cf6d47f97dd3a3fc3f51421ddc4df9388bdfe3897719dccae3180a7a5a52e3;
 
     /// @notice the portal contract used for cross-chain communication
     /// @dev sends crosschain messages to report fills and cancels on this chain to other chains
@@ -134,58 +130,8 @@ contract OrderBook is
         orderId_ = _openOrder(msg.sender, orderParams_);
     }
 
-    /// @inheritdoc IOrderBook
-    function openOrderFor(
-        GaslessOrderParams calldata orderParams_,
-        bytes calldata orderSignature_
-    ) external override returns (bytes32 orderId_) {
-        orderId_ = _openOrderFor(orderParams_, orderSignature_);
-    }
-
-    /// @inheritdoc IOrderBook
-    function openOrderForWithPermit(
-        GaslessOrderParams calldata orderParams_,
-        bytes calldata orderSignature_,
-        uint256 deadline_,
-        uint8 v_,
-        bytes32 r_,
-        bytes32 s_
-    ) external override returns (bytes32 orderId_) {
-        try
-            IERC20Extended(orderParams_.tokenIn).permit(
-                orderParams_.sender,
-                address(this),
-                uint256(orderParams_.amountIn),
-                deadline_,
-                v_,
-                r_,
-                s_
-            )
-        {} catch {}
-        orderId_ = _openOrderFor(orderParams_, orderSignature_);
-    }
-
-    /// @inheritdoc IOrderBook
-    function openOrderForWithPermit(
-        GaslessOrderParams calldata orderParams_,
-        bytes calldata orderSignature_,
-        uint256 deadline_,
-        bytes memory permitSignature_
-    ) external override returns (bytes32 orderId_) {
-        try
-            IERC20Extended(orderParams_.tokenIn).permit(
-                orderParams_.sender,
-                address(this),
-                uint256(orderParams_.amountIn),
-                deadline_,
-                permitSignature_
-            )
-        {} catch {}
-        orderId_ = _openOrderFor(orderParams_, orderSignature_);
-    }
-
     function _openOrder(
-        address sender_,
+        address funder_,
         OrderParams memory orderParams_
     ) internal whenNotPaused returns (bytes32 orderId_) {
         // Validate order parameters
@@ -194,6 +140,7 @@ contract OrderBook is
         if (orderParams_.amountOut == 0) revert AmountOutZero();
         if (orderParams_.recipient == bytes32(0)) revert InvalidRecipient();
         if (orderParams_.solver == orderParams_.recipient) revert InvalidSolver();
+        if (orderParams_.sender == address(0)) revert ZeroSender();
 
         // Validate that tokenIn and tokenOut are not the same for same-chain orders
         uint32 chainId = block.chainid.safe32();
@@ -205,13 +152,13 @@ contract OrderBook is
 
         // Create order
         OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-        uint64 nonce_ = $.senderNonces[sender_]++;
+        uint64 nonce_ = $.senderNonces[orderParams_.sender]++;
 
         orderId_ = getOrderId(
             OrderData({
                 version: VERSION, // origin contract version
                 originChainId: chainId,
-                sender: sender_.toBytes32(),
+                sender: orderParams_.sender.toBytes32(),
                 nonce: nonce_,
                 destChainId: orderParams_.destChainId,
                 createdAt: uint64(block.timestamp),
@@ -239,61 +186,28 @@ contract OrderBook is
             nonce: nonce_,
             tokenIn: orderParams_.tokenIn,
             tokenOut: orderParams_.tokenOut,
-            sender: sender_,
+            sender: orderParams_.sender,
             recipient: orderParams_.recipient,
             amountIn: orderParams_.amountIn,
             amountOut: orderParams_.amountOut,
             solver: orderParams_.solver
         });
 
-        // Transfer tokens in from the sender, ensuring the required amount is received
-        IERC20(orderParams_.tokenIn).safeTransferExactFrom(sender_, address(this), uint256(orderParams_.amountIn));
+        // Transfer tokens in from the funder, ensuring the required amount is received
+        // Note: sender_ is the order owner (for cancellation/refunds), funder_ provides the tokens
+        IERC20(orderParams_.tokenIn).safeTransferExactFrom(funder_, address(this), uint256(orderParams_.amountIn));
 
         emit OrderOpened(
             orderId_,
-            sender_,
+            funder_,
+            orderParams_.sender,
             orderParams_.tokenIn,
             orderParams_.amountIn,
             orderParams_.destChainId,
             orderParams_.tokenOut,
             orderParams_.amountOut,
-            orderParams_.solver
-        );
-    }
-
-    function _openOrderFor(
-        GaslessOrderParams calldata orderParams_,
-        bytes calldata signature_
-    ) internal returns (bytes32 orderId_) {
-        // Verify signature
-        if (signature_.length == 64) {
-            (bytes32 r, bytes32 vs) = abi.decode(signature_, (bytes32, bytes32));
-            _revertIfInvalidSignature(orderParams_.sender, getGaslessOrderDigest(orderParams_), r, vs);
-        } else {
-            _revertIfInvalidSignature(orderParams_.sender, getGaslessOrderDigest(orderParams_), signature_);
-        }
-
-        // Verify origin chain and sender nonce
-        if (orderParams_.originChainId != block.chainid) revert InvalidOriginChain();
-        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-        // Requiring a nonce in the order provides replay protection for the sender
-        if (orderParams_.nonce != $.senderNonces[orderParams_.sender]) revert InvalidNonce();
-        // Verify version matches the current version
-        if (orderParams_.version != VERSION) revert InvalidOrderVersion();
-
-        // Open order on behalf of the sender
-        orderId_ = _openOrder(
-            orderParams_.sender,
-            OrderParams({
-                destChainId: orderParams_.destChainId,
-                tokenIn: orderParams_.tokenIn,
-                tokenOut: orderParams_.tokenOut,
-                amountIn: orderParams_.amountIn,
-                amountOut: orderParams_.amountOut,
-                recipient: orderParams_.recipient,
-                fillDeadline: orderParams_.fillDeadline,
-                solver: orderParams_.solver
-            })
+            orderParams_.solver,
+            orderParams_.fillDeadline
         );
     }
 
@@ -446,20 +360,21 @@ contract OrderBook is
                 amountInToRefund: amountInRemaining_
             });
 
-            messageId_ = bridgeAdapter_ == address(0)
-                ? IPortalV2Like(portal).sendCancelReport{ value: msg.value }(
-                    orderData_.originChainId,
-                    report_,
-                    msg.sender.toBytes32(), // refundAddress
-                    bridgeAdapterArgs_
-                )
-                : IPortalV2Like(portal).sendCancelReport{ value: msg.value }(
-                    orderData_.originChainId,
-                    report_,
-                    msg.sender.toBytes32(), // refundAddress
-                    bridgeAdapter_,
-                    bridgeAdapterArgs_
-                );
+            messageId_ =
+                bridgeAdapter_ == address(0)
+                    ? IPortalV2Like(portal).sendCancelReport{ value: msg.value }(
+                        orderData_.originChainId,
+                        report_,
+                        msg.sender.toBytes32(), // refundAddress
+                        bridgeAdapterArgs_
+                    )
+                    : IPortalV2Like(portal).sendCancelReport{ value: msg.value }(
+                        orderData_.originChainId,
+                        report_,
+                        msg.sender.toBytes32(), // refundAddress
+                        bridgeAdapter_,
+                        bridgeAdapterArgs_
+                    );
         }
 
         emit OrderCancelled(orderId_, messageId_);
@@ -586,23 +501,23 @@ contract OrderBook is
 
             // Send fill report to the origin chain and pass along msg.value
             // to the portal for crosschain message fee
-            bytes32 refundAddress = fillerParams_.refundAddress == bytes32(0)
-                ? msg.sender.toBytes32()
-                : fillerParams_.refundAddress;
-            messageId_ = bridgeAdapter_ == address(0)
-                ? IPortalV2Like(portal).sendFillReport{ value: msg.value }(
-                    orderData_.originChainId, // destinationChainId (of this message)
-                    report_,
-                    refundAddress,
-                    bridgeAdapterArgs_
-                )
-                : IPortalV2Like(portal).sendFillReport{ value: msg.value }(
-                    orderData_.originChainId, // destinationChainId (of this message)
-                    report_,
-                    refundAddress,
-                    bridgeAdapter_,
-                    bridgeAdapterArgs_
-                );
+            bytes32 refundAddress =
+                fillerParams_.refundAddress == bytes32(0) ? msg.sender.toBytes32() : fillerParams_.refundAddress;
+            messageId_ =
+                bridgeAdapter_ == address(0)
+                    ? IPortalV2Like(portal).sendFillReport{ value: msg.value }(
+                        orderData_.originChainId, // destinationChainId (of this message)
+                        report_,
+                        refundAddress,
+                        bridgeAdapterArgs_
+                    )
+                    : IPortalV2Like(portal).sendFillReport{ value: msg.value }(
+                        orderData_.originChainId, // destinationChainId (of this message)
+                        report_,
+                        refundAddress,
+                        bridgeAdapter_,
+                        bridgeAdapterArgs_
+                    );
         }
 
         emit OrderFilled(orderId_, msg.sender, amountInToRelease_, amountOutToFill_, messageId_);
@@ -800,30 +715,6 @@ contract OrderBook is
     /* ========== EIP-712 Digest Functions ========== */
 
     /// @inheritdoc IOrderBook
-    function getGaslessOrderDigest(GaslessOrderParams memory orderParams_) public view override returns (bytes32) {
-        return
-            _getDigest(
-                keccak256(
-                    abi.encode(
-                        GASLESS_ORDER_TYPEHASH,
-                        orderParams_.version,
-                        orderParams_.sender,
-                        orderParams_.nonce,
-                        orderParams_.originChainId,
-                        orderParams_.destChainId,
-                        orderParams_.fillDeadline,
-                        orderParams_.tokenIn,
-                        orderParams_.tokenOut,
-                        orderParams_.amountIn,
-                        orderParams_.amountOut,
-                        orderParams_.recipient,
-                        orderParams_.solver
-                    )
-                )
-            );
-    }
-
-    /// @inheritdoc IOrderBook
     function getCancelOrderDigest(
         bytes32 orderId_,
         address bridgeAdapter_,
@@ -879,9 +770,10 @@ contract OrderBook is
         amountOutToFill_ = fullFill_ ? amountOutRemaining_ : amountOutToFill_;
 
         // Calculate the corresponding amount of token in to release to the filler
-        uint128 amountInToRelease_ = fullFill_
-            ? totalAmountIn_ - amountInReleased_ // remaining amount
-            : ((uint256(totalAmountIn_) * amountOutToFill_) / totalAmountOut_).toUint128();
+        uint128 amountInToRelease_ =
+            fullFill_
+                ? totalAmountIn_ - amountInReleased_ // remaining amount
+                : ((uint256(totalAmountIn_) * amountOutToFill_) / totalAmountOut_).toUint128();
 
         return (fullFill_, amountInToRelease_, amountOutToFill_);
     }

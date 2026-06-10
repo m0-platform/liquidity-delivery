@@ -1,6 +1,6 @@
 # M0 Liquidity Delivery
 
-This repository contains the onchain and offchain components of the intent-based portions of the M0 Liquidity Delivery Network.
+This repository contains the onchain, limit-order, settlement contracts for the M0 Liquidity Delivery Network.
 
 The protocol is implemented for both EVM and SVM blockchains, in the respective `evm` and `svm` folders. READMEs within these folders provide more information about using and contributing to the respective codebases.
 

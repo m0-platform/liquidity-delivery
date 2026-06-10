@@ -155,6 +155,35 @@ ifndef ENV
 endif
 	@./ops/upgrade.sh --env $(ENV) --status
 
+## Safe Multisig Proposal Commands
+# Require SAFE_ADDRESS and PROPOSER_PRIVATE_KEY (or PROPOSER_ADDRESS + LEDGER_DERIVATION_PATH)
+# to be exported in the shell, passed on the command line, or added to the .env file.
+# Optional: SAFE_NONCE=<n> to queue multiple proposals with explicit nonces.
+
+.PHONY: propose-upgrade propose-upgrade-verify
+
+propose-upgrade: ## Deploy new implementation and propose upgrade to the Safe (ENV=prod CHAIN=mainnet)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make propose-upgrade ENV=prod CHAIN=mainnet"
+	@exit 1
+endif
+ifndef CHAIN
+	@echo "Error: CHAIN is required. Usage: make propose-upgrade ENV=prod CHAIN=mainnet"
+	@exit 1
+endif
+	@$(if $(SAFE_ADDRESS),SAFE_ADDRESS=$(SAFE_ADDRESS) )$(if $(SAFE_NONCE),SAFE_NONCE=$(SAFE_NONCE) )$(if $(PROPOSER_ADDRESS),PROPOSER_ADDRESS=$(PROPOSER_ADDRESS) )./ops/propose-upgrade.sh --env $(ENV) --chain $(CHAIN)
+
+propose-upgrade-verify: ## Propose upgrade and verify the implementation on the explorer (ENV=prod CHAIN=mainnet)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make propose-upgrade-verify ENV=prod CHAIN=mainnet"
+	@exit 1
+endif
+ifndef CHAIN
+	@echo "Error: CHAIN is required. Usage: make propose-upgrade-verify ENV=prod CHAIN=mainnet"
+	@exit 1
+endif
+	@$(if $(SAFE_ADDRESS),SAFE_ADDRESS=$(SAFE_ADDRESS) )$(if $(SAFE_NONCE),SAFE_NONCE=$(SAFE_NONCE) )$(if $(PROPOSER_ADDRESS),PROPOSER_ADDRESS=$(PROPOSER_ADDRESS) )./ops/propose-upgrade.sh --env $(ENV) --chain $(CHAIN) --verify
+
 ## Admin Commands
 
 .PHONY: transfer-admin-roles
@@ -190,6 +219,30 @@ ifndef NEW_PAUSER
 	@exit 1
 endif
 	@DRY_RUN=$(DRY_RUN) ./ops/transfer-pauser-role.sh --env $(ENV) --chain $(CHAIN) --new-pauser $(NEW_PAUSER)
+
+.PHONY: pause unpause
+
+pause: ## Pause the OrderBook on a chain (ENV=prod CHAIN=base)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make pause ENV=prod CHAIN=base"
+	@exit 1
+endif
+ifndef CHAIN
+	@echo "Error: CHAIN is required. Usage: make pause ENV=prod CHAIN=base"
+	@exit 1
+endif
+	@DRY_RUN=$(DRY_RUN) ./ops/pause.sh --env $(ENV) --chain $(CHAIN) --action pause
+
+unpause: ## Unpause the OrderBook on a chain (ENV=prod CHAIN=base)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make unpause ENV=prod CHAIN=base"
+	@exit 1
+endif
+ifndef CHAIN
+	@echo "Error: CHAIN is required. Usage: make unpause ENV=prod CHAIN=base"
+	@exit 1
+endif
+	@DRY_RUN=$(DRY_RUN) ./ops/pause.sh --env $(ENV) --chain $(CHAIN) --action unpause
 
 ## Status Commands
 
@@ -240,7 +293,8 @@ endif
 		--dest-chain $(DEST_CHAIN) --token-out $(TOKEN_OUT) --amount-out $(AMOUNT_OUT) \
 		$(if $(RECIPIENT),--recipient $(RECIPIENT)) \
 		$(if $(SOLVER),--solver $(SOLVER)) \
-		$(if $(DEADLINE),--deadline $(DEADLINE))
+		$(if $(DEADLINE),--deadline $(DEADLINE)) \
+		$(if $(SENDER),--sender $(SENDER))
 
 fill-order: ## Fill a test order (ENV=dev CHAIN=arbitrum_sepolia ORDER_ID=0x... ORIGIN_CHAIN=sepolia AMOUNT_OUT=...)
 ifndef ENV
@@ -322,6 +376,11 @@ help: ## Show this help
 	@echo "  make upgrade-all ENV=<dev|prod>                  Upgrade on all chains"
 	@echo "  make upgrade-status ENV=<dev|prod>               Show implementation status"
 	@echo ""
+	@echo "Safe Multisig Proposals (require SAFE_ADDRESS + proposer env vars):"
+	@echo "  make propose-upgrade ENV=<dev|prod> CHAIN=<alias>    Deploy impl + propose upgrade"
+	@echo "  make propose-upgrade-verify ENV=<dev|prod> CHAIN=<alias>  Same, with explorer verification"
+	@echo "  Optional: SAFE_NONCE=<n> to queue proposals with explicit nonces"
+	@echo ""
 	@echo "Admin:"
 	@echo "  make transfer-admin-roles ENV=<dev|prod> CHAIN=<alias> \\  Transfer admin roles to new admin"
 	@echo "       NEW_ADMIN=0x..."
@@ -331,6 +390,8 @@ help: ## Show this help
 	@echo "       NEW_PAUSER=0x..."
 	@echo "  make transfer-pauser-role ENV=<dev|prod> CHAIN=<alias> \\  Dry run pauser transfer"
 	@echo "       NEW_PAUSER=0x... DRY_RUN=true"
+	@echo "  make pause ENV=<dev|prod> CHAIN=<alias>          Pause the OrderBook"
+	@echo "  make unpause ENV=<dev|prod> CHAIN=<alias>        Unpause the OrderBook"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make open-order ENV=<dev|prod> CHAIN=<alias> \\    Create a test order"
@@ -370,3 +431,4 @@ help: ## Show this help
 	@echo "  make configure-routes ENV=dev DRY_RUN=true"
 	@echo "  make transfer-admin-roles ENV=prod CHAIN=base NEW_ADMIN=0x... DRY_RUN=true"
 	@echo "  make transfer-pauser-role ENV=prod CHAIN=base NEW_PAUSER=0x... DRY_RUN=true"
+	@echo "  make pause ENV=prod CHAIN=base DRY_RUN=true"

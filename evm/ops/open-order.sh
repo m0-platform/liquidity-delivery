@@ -90,7 +90,7 @@ usage() {
     echo "  $0 --env <dev|prod> --chain <alias> \\"
     echo "     --token-in <address> --amount-in <amount> \\"
     echo "     --dest-chain <alias> --token-out <address> --amount-out <amount> \\"
-    echo "     [--recipient <address>] [--solver <address>] [--deadline <seconds>]"
+    echo "     [--recipient <address>] [--solver <address>] [--deadline <seconds>] [--sender <address>]"
     echo ""
     echo "Required arguments:"
     echo "  --env             Environment (dev or prod)"
@@ -102,9 +102,12 @@ usage() {
     echo "  --amount-out      Amount of output token expected (in wei/smallest unit)"
     echo ""
     echo "Optional arguments:"
-    echo "  --recipient       Recipient address on destination (defaults to sender)"
+    echo "  --recipient       Recipient address on destination (defaults to order sender)"
     echo "  --solver          Designated solver address (zero = any solver)"
     echo "  --deadline        Deadline offset in seconds (default: 3600 = 1 hour)"
+    echo "  --sender          Order owner recorded on-chain (defaults to funder/broadcaster)."
+    echo "                    The funder always pays the input tokens; this only changes the"
+    echo "                    sender stored in OrderParams (controls cancel/refund rights)."
     echo ""
     echo "Environment variables:"
     echo "  DRY_RUN=true      Simulate without broadcasting"
@@ -131,6 +134,7 @@ main() {
     local recipient="0x0000000000000000000000000000000000000000000000000000000000000000"
     local solver="0x0000000000000000000000000000000000000000000000000000000000000000"
     local deadline="0"
+    local sender="0x0000000000000000000000000000000000000000"
 
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -172,6 +176,10 @@ main() {
                 ;;
             --deadline)
                 deadline="$2"
+                shift 2
+                ;;
+            --sender)
+                sender="$2"
                 shift 2
                 ;;
             --help|-h)
@@ -251,14 +259,17 @@ main() {
     log_info "Destination Chain ID: $dest_chain_id"
     log_info "Token Out: $token_out"
     log_info "Amount Out: $amount_out"
+    if [[ "$sender" != "0x0000000000000000000000000000000000000000" ]]; then
+        log_info "Order Sender (override): $sender"
+    fi
 
     # Build forge command
     local forge_cmd="FOUNDRY_PROFILE=production forge script script/test/OpenOrder.s.sol"
     forge_cmd="$forge_cmd --rpc-url $rpc_alias"
     forge_cmd="$forge_cmd -vvv"
     forge_cmd="$forge_cmd --ignored-error-codes 2424"
-    forge_cmd="$forge_cmd --sig 'run(address,uint128,uint32,bytes32,uint128,bytes32,bytes32,uint32)'"
-    forge_cmd="$forge_cmd $token_in $amount_in $dest_chain_id $token_out_bytes32 $amount_out $recipient $solver $deadline"
+    forge_cmd="$forge_cmd --sig 'run(address,uint128,uint32,bytes32,uint128,bytes32,bytes32,uint32,address)'"
+    forge_cmd="$forge_cmd $token_in $amount_in $dest_chain_id $token_out_bytes32 $amount_out $recipient $solver $deadline $sender"
 
     if [[ "${DRY_RUN:-false}" == "true" ]]; then
         log_warn "DRY RUN MODE - Simulating order creation (no broadcast)"

@@ -46,26 +46,30 @@ The M0 Liquidity Delivery protocol is an intent-based limit order system for cro
 ```solidity
 event OrderOpened(
     bytes32 indexed orderId,
+    address funder,
     address sender,
     address tokenIn,
     uint128 amountIn,
     uint32 indexed destChainId,
     bytes32 tokenOut,
     uint128 amountOut,
-    bytes32 indexed solver
+    bytes32 indexed solver,
+    uint32 fillDeadline
 );
 ```
 
-| Field         | Description                                                                 |
-| ------------- | --------------------------------------------------------------------------- |
-| `orderId`     | Unique identifier for the order                                             |
-| `sender`      | Address that provided input tokens                                          |
-| `tokenIn`     | Input token address on origin chain                                         |
-| `amountIn`    | Amount of input tokens escrowed                                             |
-| `destChainId` | Internal chain ID where order should be filled                              |
-| `tokenOut`    | Output token address on destination (bytes32 for cross-chain compatibility) |
-| `amountOut`   | Minimum output tokens expected by user                                      |
-| `solver`      | Exclusive solver address, or zero if any solver can fill                    |
+| Field          | Description                                                                 |
+| -------------- | --------------------------------------------------------------------------- |
+| `orderId`      | Unique identifier for the order                                             |
+| `funder`       | Address the provided the input tokens                                       |
+| `sender`       | Address that owns the order and receives any refunds                        |
+| `tokenIn`      | Input token address on origin chain                                         |
+| `amountIn`     | Amount of input tokens escrowed                                             |
+| `destChainId`  | Internal chain ID where order should be filled                              |
+| `tokenOut`     | Output token address on destination (bytes32 for cross-chain compatibility) |
+| `amountOut`    | Minimum output tokens expected by user                                      |
+| `solver`       | Exclusive solver address, or zero if any solver can fill                    |
+| `fillDeadline` | Timestamp that the order must be filled by                                  |
 
 **OrderFilled** - Emitted when an order is filled on the destination chain
 
