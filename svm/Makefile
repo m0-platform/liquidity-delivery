@@ -24,7 +24,7 @@ initialize:
 
 add-destination:
 	$(INJECT)
-	surfpool run add_destination -m raw.txtx.yml --env $(env) --unsupervised
+	surfpool run add_destination -m raw.txtx.yml --env $(env)
 	$(CLEAN)
 	@echo "Destination added"
 
@@ -38,3 +38,13 @@ run-localnet:
 	$(INJECT)
 	surfpool start -m raw.txtx.yml -r deployment -r initialize -a test4MzZzYk2NAP1222FSuKqq83GuXY5tHakqREDHPo
 	$(CLEAN)
+
+# TypeScript Scripts
+
+open-order: ## Open a test order
+	@./ops/open-order.sh --env $(env) \
+		--token-in $(TOKEN_IN) --amount-in $(AMOUNT_IN) \
+		--dest-chain-id $(DEST_CHAIN_ID) --token-out $(TOKEN_OUT) --amount-out $(AMOUNT_OUT) \
+		$(if $(RECIPIENT),--recipient $(RECIPIENT)) \
+		$(if $(SOLVER),--solver $(SOLVER)) \
+		$(if $(DEADLINE),--deadline $(DEADLINE))

@@ -7,17 +7,18 @@ import { ProxyAdmin } from "../../lib/common/lib/openzeppelin-contracts-upgradea
 import { ScriptBase } from "../ScriptBase.s.sol";
 import { OrderBook } from "../../src/OrderBook.sol";
 
-/// @title TransferRoles
-/// @notice Script to transfer all privileged roles from the current admin to a new admin
-/// @dev Transfers ProxyAdmin ownership, DEFAULT_ADMIN_ROLE, and PAUSER_ROLE in a single broadcast.
+/// @title TransferAdminRoles
+/// @notice Script to transfer admin roles from the current admin to a new admin
+/// @dev Transfers ProxyAdmin ownership and DEFAULT_ADMIN_ROLE in a single broadcast.
+///      Does NOT transfer PAUSER_ROLE — use TransferPauserRole.s.sol for that.
 ///      Idempotent: checks current on-chain state and skips already-completed operations.
-///      Usage: forge script script/admin/TransferRoles.s.sol --rpc-url <rpc> --broadcast \
+///      Usage: forge script script/admin/TransferAdminRoles.s.sol --rpc-url <rpc> --broadcast \
 ///             --sig "run(address)" <newAdmin>
-contract TransferRoles is ScriptBase {
-    /// @notice Transfer all roles to a new admin address
-    /// @param newAdmin_ The address to receive all roles
+contract TransferAdminRoles is ScriptBase {
+    /// @notice Transfer admin roles to a new admin address
+    /// @param newAdmin_ The address to receive admin roles
     function run(address newAdmin_) external {
-        require(newAdmin_ != address(0), "TransferRoles: zero address");
+        require(newAdmin_ != address(0), "TransferAdminRoles: zero address");
 
         address signer_ = vm.rememberKey(vm.envUint("ADMIN_PRIVATE_KEY"));
 
@@ -30,12 +31,9 @@ contract TransferRoles is ScriptBase {
 
         // Read current state
         bytes32 defaultAdminRole_ = orderBook_.DEFAULT_ADMIN_ROLE();
-        bytes32 pauserRole_ = orderBook_.PAUSER_ROLE();
 
         bool newAdminHasAdmin_ = orderBook_.hasRole(defaultAdminRole_, newAdmin_);
-        bool newAdminHasPauser_ = orderBook_.hasRole(pauserRole_, newAdmin_);
         bool signerHasAdmin_ = orderBook_.hasRole(defaultAdminRole_, signer_);
-        bool signerHasPauser_ = orderBook_.hasRole(pauserRole_, signer_);
         address currentProxyOwner_ = proxyAdminContract_.owner();
 
         // Log current state
@@ -46,9 +44,7 @@ contract TransferRoles is ScriptBase {
         console2.log("");
         console2.log("Current state:");
         console2.log("  New admin has DEFAULT_ADMIN_ROLE:", newAdminHasAdmin_);
-        console2.log("  New admin has PAUSER_ROLE:", newAdminHasPauser_);
         console2.log("  Signer has DEFAULT_ADMIN_ROLE:", signerHasAdmin_);
-        console2.log("  Signer has PAUSER_ROLE:", signerHasPauser_);
         console2.log("  ProxyAdmin owner:", currentProxyOwner_);
         console2.log("");
 
@@ -62,23 +58,7 @@ contract TransferRoles is ScriptBase {
             console2.log("New admin already has DEFAULT_ADMIN_ROLE, skipping");
         }
 
-        // 2. Grant PAUSER_ROLE to new admin
-        if (!newAdminHasPauser_) {
-            console2.log("Granting PAUSER_ROLE to new admin...");
-            orderBook_.grantRole(pauserRole_, newAdmin_);
-        } else {
-            console2.log("New admin already has PAUSER_ROLE, skipping");
-        }
-
-        // 3. Renounce PAUSER_ROLE from signer
-        if (signerHasPauser_) {
-            console2.log("Renouncing PAUSER_ROLE from signer...");
-            orderBook_.renounceRole(pauserRole_, signer_);
-        } else {
-            console2.log("Signer does not have PAUSER_ROLE, skipping");
-        }
-
-        // 4. Renounce DEFAULT_ADMIN_ROLE from signer (MUST be last role operation)
+        // 2. Renounce DEFAULT_ADMIN_ROLE from signer (MUST be last role operation)
         if (signerHasAdmin_) {
             console2.log("Renouncing DEFAULT_ADMIN_ROLE from signer...");
             orderBook_.renounceRole(defaultAdminRole_, signer_);
@@ -86,7 +66,7 @@ contract TransferRoles is ScriptBase {
             console2.log("Signer does not have DEFAULT_ADMIN_ROLE, skipping");
         }
 
-        // 5. Transfer ProxyAdmin ownership to new admin
+        // 3. Transfer ProxyAdmin ownership to new admin
         if (currentProxyOwner_ == signer_) {
             console2.log("Transferring ProxyAdmin ownership to new admin...");
             proxyAdminContract_.transferOwnership(newAdmin_);

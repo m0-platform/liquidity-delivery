@@ -7,7 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EVM_DIR="$(dirname "$SCRIPT_DIR")"
-CONFIG_FILE="$EVM_DIR/config/chains.json"
+CONFIG_FILE=""  # Set after env is parsed: chains.dev.json or chains.prod.json
 
 # 1Password account
 OP_ACCOUNT="mzerolabs.1password.com"
@@ -74,6 +74,11 @@ get_explorer_alias() {
     jq -r --arg a "$alias" '.chains[$a].explorerAlias // empty' "$CONFIG_FILE"
 }
 
+get_explorer_type() {
+    local alias=$1
+    jq -r --arg a "$alias" '.chains[$a].explorerType // empty' "$CONFIG_FILE"
+}
+
 get_chain_name() {
     local alias=$1
     jq -r --arg a "$alias" '.chains[$a].name // empty' "$CONFIG_FILE"
@@ -93,6 +98,7 @@ deploy_chain() {
     local chain_id=$(get_chain_id "$alias")
     local rpc_alias=$(get_rpc_alias "$alias")
     local explorer_alias=$(get_explorer_alias "$alias")
+    local explorer_type=$(get_explorer_type "$alias")
     local chain_name=$(get_chain_name "$alias")
 
     if [[ -z "$chain_id" ]]; then
@@ -124,17 +130,25 @@ deploy_chain() {
         log_warn "DRY RUN MODE - Simulating deployment (no broadcast)"
     else
         forge_cmd="$forge_cmd --broadcast"
+
+        if [[ "$verify" == "true" ]]; then
+            forge_cmd="$forge_cmd --verify"
+
+            if [[ "$explorer_type" != "etherscan" ]]; then
+                local verifier_env_var="$(echo "${alias}_VERIFIER" | tr '[:lower:]' '[:upper:]')"
+                local verifier_url_env_var="$(echo "${alias}_VERIFIER_URL" | tr '[:lower:]' '[:upper:]')"
+                forge_cmd="$forge_cmd --verifier \$$verifier_env_var --verifier-url \$$verifier_url_env_var"
+            fi
+        fi
     fi
 
-    if [[ "$verify" == "true" ]]; then
-        forge_cmd="$forge_cmd --verify"
-    fi
+    log_info "Forge command: $forge_cmd"
 
     log_info "Running with 1Password: op run --env-file=$env_file --account=$OP_ACCOUNT"
 
     # Execute from EVM directory with op run
     cd "$EVM_DIR"
-    op run --env-file="$env_file" --account="$OP_ACCOUNT" -- bash -c "DRY_RUN=${DRY_RUN:-false} $forge_cmd"
+    op run --env-file="$env_file" --account="$OP_ACCOUNT" -- bash -c "$forge_cmd"
 
     # Verify deployment file was created (skip in dry-run mode)
     if [[ "${DRY_RUN:-false}" == "true" ]]; then
@@ -157,7 +171,7 @@ usage() {
     echo "  $0 --env <dev|prod> --chain <alias> --verify  Deploy and verify on explorer"
     echo "  $0 --env <dev|prod> --all                     Deploy to all configured chains"
     echo "  $0 --env <dev|prod> --all --verify            Deploy to all chains with verification"
-    echo "  $0 --list                                     List all configured chains"
+    echo "  $0 --env <dev|prod> --list                    List all configured chains"
     echo ""
     echo "Options:"
     echo "  DRY_RUN=true  Simulate deployment without broadcasting (logs JSON to console)"
@@ -239,11 +253,6 @@ main() {
         esac
     done
 
-    if [[ "$list" == "true" ]]; then
-        list_chains
-        exit 0
-    fi
-
     # Validate environment is specified
     if [[ -z "$env" ]]; then
         log_error "Environment is required. Use --env dev or --env prod"
@@ -252,6 +261,12 @@ main() {
     fi
 
     validate_env "$env"
+    CONFIG_FILE="$EVM_DIR/config/chains.${env}.json"
+
+    if [[ "$list" == "true" ]]; then
+        list_chains
+        exit 0
+    fi
 
     if [[ "$all" == "true" ]]; then
         log_info "Deploying to all configured chains [env: $env]..."

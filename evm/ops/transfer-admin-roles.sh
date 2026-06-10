@@ -1,12 +1,12 @@
 #!/bin/bash
-# Transfer all privileged roles from deployer to a new admin on a single chain
-# Usage: ./ops/transfer-roles.sh --env prod --chain base --new-admin 0x...
-#        DRY_RUN=true ./ops/transfer-roles.sh --env prod --chain base --new-admin 0x...
+# Transfer admin roles (DEFAULT_ADMIN_ROLE + ProxyAdmin ownership) from deployer to a new admin
+# Usage: ./ops/transfer-admin-roles.sh --env prod --chain base --new-admin 0x...
+#        DRY_RUN=true ./ops/transfer-admin-roles.sh --env prod --chain base --new-admin 0x...
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EVM_DIR="$(dirname "$SCRIPT_DIR")"
-CONFIG_FILE="$EVM_DIR/config/chains.json"
+CONFIG_FILE=""  # Set after env is parsed: chains.dev.json or chains.prod.json
 
 # 1Password account
 OP_ACCOUNT="mzerolabs.1password.com"
@@ -111,12 +111,12 @@ transfer_roles() {
         exit 1
     fi
 
-    log_step "Transferring roles on $chain_name (chainId: $chain_id) [env: $env]"
+    log_step "Transferring admin roles on $chain_name (chainId: $chain_id) [env: $env]"
     log_info "OrderBook proxy: $orderbook"
     log_info "New admin: $new_admin"
 
     # Build forge command
-    local forge_cmd="FOUNDRY_PROFILE=production forge script script/admin/TransferRoles.s.sol"
+    local forge_cmd="FOUNDRY_PROFILE=production forge script script/admin/TransferAdminRoles.s.sol"
     forge_cmd="$forge_cmd --rpc-url $rpc_alias"
     forge_cmd="$forge_cmd --sig 'run(address)' $new_admin"
     forge_cmd="$forge_cmd -vvv"
@@ -138,19 +138,18 @@ transfer_roles() {
     if [[ "${DRY_RUN:-false}" == "true" ]]; then
         log_info "Dry run complete for $chain_name"
     else
-        log_info "Successfully transferred roles on $chain_name"
+        log_info "Successfully transferred admin roles on $chain_name"
         log_info "New admin: $new_admin"
     fi
 }
 
 # Show usage
 usage() {
-    echo "Transfer all privileged roles from deployer to a new admin"
+    echo "Transfer admin roles from deployer to a new admin"
     echo ""
     echo "Transfers:"
     echo "  1. DEFAULT_ADMIN_ROLE on OrderBook"
-    echo "  2. PAUSER_ROLE on OrderBook"
-    echo "  3. ProxyAdmin ownership"
+    echo "  2. ProxyAdmin ownership"
     echo ""
     echo "Usage:"
     echo "  $0 --env <dev|prod> --chain <alias> --new-admin <0x...>"
@@ -226,6 +225,8 @@ main() {
     fi
 
     validate_env "$env"
+    CONFIG_FILE="$EVM_DIR/config/chains.${env}.json"
+
     transfer_roles "$env" "$chain" "$new_admin"
 }
 
