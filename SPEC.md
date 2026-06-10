@@ -72,22 +72,9 @@ struct OrderParams {
     uint128 amountOut;
     bytes32 recipient;
     bytes32 solver;       // zero == any solver may fill
-}
-
-// Parameters for a gasless order opened by a third party with the user's signature
-struct GaslessOrderParams {
-    uint16 version;
-    address sender;
-    uint64 nonce;
-    uint32 originChainId;
-    uint32 destChainId;
-    uint32 fillDeadline;
-    address tokenIn;
-    bytes32 tokenOut;
-    uint128 amountIn;
-    uint128 amountOut;
-    bytes32 recipient;
-    bytes32 solver;
+    address sender;       // owner of the order (refund/cancel rights); tokens are
+                          // pulled from msg.sender, allowing a wrapper contract
+                          // to fund an order on behalf of `sender`
 }
 
 // Complete data about an order, stored only on the origin chain
@@ -208,13 +195,15 @@ bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
 ```solidity
 event OrderOpened(
     bytes32 orderId,
+    address funder,
     address indexed sender,
     address tokenIn,
     uint128 amountIn,
     uint32 indexed destChainId,
     bytes32 tokenOut,
     uint128 amountOut,
-    bytes32 indexed solver
+    bytes32 indexed solver,
+    uint32 fillDeadline
 );
 event OrderFilled(
     bytes32 indexed orderId,
@@ -262,10 +251,11 @@ function openOrderWithPermit(
 - `fillDeadline >= block.timestamp`
 - `amountIn > 0`, `amountOut > 0`
 - `recipient != 0` and `recipient != solver`
+- `sender != 0`
 - For same-chain orders, `tokenOut != tokenIn`
 - The destination chain is supported (the current chain is always allowed for same-chain orders)
 
-It then increments the sender's nonce, computes the order ID, stores the `Order`, and pulls `amountIn` of `tokenIn` from the sender via `safeTransferExactFrom` (which guards against fee-on-transfer mismatches).
+It then increments `sender`'s nonce, computes the order ID, stores the `Order`, and pulls `amountIn` of `tokenIn` from `msg.sender` (the funder) via `safeTransferExactFrom` (which guards against fee-on-transfer mismatches). The `funder` (`msg.sender`) and the order's `sender` (the owner that holds cancel/refund rights) may differ — this allows a wrapper contract to fund an order on behalf of an end user without taking custody of the order itself. The `OrderOpened` event includes both `funder` and `sender` so indexers can attribute the order correctly.
 
 **Cancelling Orders**
 
@@ -277,6 +267,8 @@ Cancellation has been simplified to a single onchain action that always happens 
 function cancelOrder(bytes32 orderId, OrderData calldata orderData)
     external payable returns (bytes32 messageId);
 
+// Overloads accepting bridgeAdapter and bridgeAdapterArgs direct the resulting
+// CancelReport message through a specific Portal V2 bridge.
 // Gasless: anyone can cancel with a valid EIP-712 signature from the recipient
 function cancelOrderFor(
     bytes32 orderId,
@@ -302,32 +294,6 @@ Behavior:
 Because cross-chain messages can arrive out of order, the origin chain's `reportFill` accepts fills against orders in either `Created` or `Cancelled` status, and the running invariant `amountInReleased + amountInRefunded <= amountIn` prevents any over-distribution.
 
 ### Solver Actions
-
-**Submit Gasless Cross-chain Order on Behalf of a User (on Origin Chain)**
-
-```solidity
-function openOrderFor(
-    GaslessOrderParams calldata orderParams,
-    bytes calldata orderSignature
-) external returns (bytes32 orderId);
-
-// Variants combining the gasless order with an EIP-2612 permit for the input token
-function openOrderForWithPermit(
-    GaslessOrderParams calldata orderParams,
-    bytes calldata orderSignature,
-    uint256 deadline,
-    uint8 v, bytes32 r, bytes32 s
-) external returns (bytes32 orderId);
-
-function openOrderForWithPermit(
-    GaslessOrderParams calldata orderParams,
-    bytes calldata orderSignature,
-    uint256 deadline,
-    bytes memory permitSignature
-) external returns (bytes32 orderId);
-```
-
-The signature is verified against the EIP-712 digest produced by `getGaslessOrderDigest`. The contract additionally checks that `orderParams.originChainId == block.chainid`, that `orderParams.nonce` matches the sender's next nonce, and that `orderParams.version == VERSION`.
 
 **Fill Order (on Destination Chain)**
 
@@ -389,13 +355,6 @@ function getOrderData(bytes32 orderId) external view returns (OrderData memory);
 function getFilledAmounts(bytes32 orderId) external view returns (FilledAmounts memory);
 function getSenderNonce(address sender) external view returns (uint64);
 function isDestinationSupported(uint32 destChainId) external view returns (bool);
-
-function getGaslessOrderDigest(GaslessOrderParams memory params) external view returns (bytes32);
-function getCancelOrderDigest(
-    bytes32 orderId,
-    address bridgeAdapter,
-    bytes memory bridgeAdapterArgs
-) external view returns (bytes32);
 ```
 
 ### Deployment Topology (EVM)

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity >=0.8;
+pragma solidity ^0.8.0;
 
 interface IOrderBook {
     /* ========== Events ========== */
@@ -8,23 +8,27 @@ interface IOrderBook {
      * @notice Emitted when a new order is opened
      * @dev This event is emitted on the origin chain
      * @param orderId The ID of the order
-     * @param sender The address that provided the funds on the origin (this) chain
+     * @param funder The address that provided the input funds for the order
+     * @param sender The address that owns the order on the origin (this) chain
      * @param tokenIn The address of the input token on the origin (this) chain
      * @param amountIn The amount of input token provided
      * @param destChainId The internal chain ID where the order will be filled
      * @param tokenOut The address of the output token on the destination chain
      * @param amountOut The amount of output token expected
      * @param solver The address of the solver that will fill the order, or zero address if any solver can fill
+     * @param fillDeadline Timestamp by which the order must be filled on the destination chain
      */
     event OrderOpened(
         bytes32 orderId,
+        address funder,
         address indexed sender,
         address tokenIn,
         uint128 amountIn,
         uint32 indexed destChainId,
         bytes32 tokenOut,
         uint128 amountOut,
-        bytes32 indexed solver
+        bytes32 indexed solver,
+        uint32 fillDeadline
     );
 
     /**
@@ -55,7 +59,6 @@ interface IOrderBook {
 
     /**
      * @notice Emitted when an order is completed (fully filled)
-     * @dev This event is emitted on the destination chain
      * @param orderId The ID of the completed order
      */
     event OrderCompleted(bytes32 orderId);
@@ -105,10 +108,8 @@ interface IOrderBook {
     error InvalidDeadline();
     error InvalidDestinationChain();
     error InvalidMsgValue();
-    error InvalidNonce();
     error InvalidOrderStatus();
     error InvalidOrderVersion();
-    error InvalidOriginChain();
     error InvalidRecipient();
     error InvalidSolver();
     error InvalidReport();
@@ -122,6 +123,7 @@ interface IOrderBook {
     error ZeroAdmin();
     error ZeroPauser();
     error ZeroPortal();
+    error ZeroSender();
 
     /* ========== Structs and Enums ========== */
 
@@ -136,6 +138,7 @@ interface IOrderBook {
      * @param amountOut Amount of output token expected
      * @param recipient Address to receive the funds on the destination chain
      * @param solver Address of the solver that will fill the order, or zero address if any solver can fill
+     * @param sender Address that will own the order (for cancellation rights and refunds). Tokens are pulled from msg.sender.
      */
     struct OrderParams {
         uint32 destChainId;
@@ -146,39 +149,7 @@ interface IOrderBook {
         uint128 amountOut;
         bytes32 recipient;
         bytes32 solver;
-    }
-
-    /**
-     * @notice Parameters required to open a gasless order onchain
-     * @dev Addresses on the destination chain are stored as bytes32 to support non-EVM chains as destinations
-     * @dev This payload is hashed and included as the internal digest of the
-     *      EIP-712 payload required for gasless order submission
-     * @param version Version of the contract the order is created for
-     * @param sender Address that provided the funds on the origin chain, must sign the payload
-     * @param nonce Unique identifier for the order, must match the sender's next nonce on this chain
-     * @param originChainId internal chain ID where the order is created (must be this chain)
-     * @param destChainId internal chain ID where the order is to be filled
-     * @param fillDeadline Timestamp by which the order must be filled on the destination chain
-     * @param tokenIn Address of the input token on the origin chain
-     * @param tokenOut Address of the output token on the destination chain
-     * @param amountIn Amount of input token provided
-     * @param amountOut Amount of output token expected
-     * @param recipient Address to receive the funds on the destination chain
-     * @param solver Address of the solver that will fill the order, or zero address if any solver can fill
-     */
-    struct GaslessOrderParams {
-        uint16 version;
         address sender;
-        uint64 nonce;
-        uint32 originChainId;
-        uint32 destChainId;
-        uint32 fillDeadline;
-        address tokenIn;
-        bytes32 tokenOut;
-        uint128 amountIn;
-        uint128 amountOut;
-        bytes32 recipient;
-        bytes32 solver;
     }
 
     /**
@@ -196,7 +167,7 @@ interface IOrderBook {
      * @dev Addresses on the destination chain are stored as bytes32 to support non-EVM chains
      * @param status Current status of the order
      * @param version Version of the contract when the order was created
-     * @param sender Address that provided the funds on the origin chain
+     * @param sender Address that owns the order on the origin chain for cancellation rights and refunds
      * @param nonce A counter tied to the sender to allow unique orders
      * @param destChainId Destination chain ID where the order is to be filled
      * @param createdAt Timestamp when the order was created
@@ -230,7 +201,7 @@ interface IOrderBook {
      *      information to fill the order on the destination chain
      *      The order ID is computed as the keccak256 hash of the packed-encoding of this struct
      * @param version Version of the contract when the order was created
-     * @param sender Address that provided the funds on the origin chain
+     * @param sender Address that owns the order on the origin chain for cancellation rights and refunds
      * @param nonce A counter tied to the sender to allow unique orders
      * @param originChainId internal chain ID where the order was created
      * @param destChainId Destination chain ID where the order is to be filled
@@ -365,57 +336,6 @@ interface IOrderBook {
         bytes memory permitSignature_
     ) external returns (bytes32 orderId_);
 
-    /**
-     * @notice Opens a gasless order on behalf of a user
-     * @dev More flexible method relying on an offchain signature to authorize order creation
-     * @param orderParams_ gasless order creation parameters (see GaslessOrderParams definition)
-     * @param orderSignature_ Order sender's signature of the EIP-712 payload
-     *        containing the orderParams (see getGaslessOrderDigest)
-     * @return orderId_ The unique ID of the opened order
-     */
-    function openOrderFor(
-        GaslessOrderParams calldata orderParams_,
-        bytes calldata orderSignature_
-    ) external returns (bytes32 orderId_);
-
-    /**
-     * @notice Opens a gasless order on behalf of a user with an EIP-2612 permit signature for token approval
-     * @dev More flexible method relying on an offchain signature to authorize order creation
-     * @param orderParams_ gasless order creation parameters (see GaslessOrderParams definition)
-     * @param orderSignature_ Order sender's signature of the EIP-712 payload
-     *        containing the orderParams (see getGaslessOrderDigest)
-     * @param deadline_ deadline for the permit signature
-     * @param v_ v parameter of the permit signature
-     * @param r_ r parameter of the permit signature
-     * @param s_ s parameter of the permit signature
-     * @return orderId_ The unique ID of the opened order
-     */
-    function openOrderForWithPermit(
-        GaslessOrderParams calldata orderParams_,
-        bytes calldata orderSignature_,
-        uint256 deadline_,
-        uint8 v_,
-        bytes32 r_,
-        bytes32 s_
-    ) external returns (bytes32 orderId_);
-
-    /**
-     * @notice Opens a gasless order on behalf of a user with an EIP-2612 permit signature for token approval
-     * @dev More flexible method relying on an offchain signature to authorize order creation
-     * @param orderParams_ gasless order creation parameters (see GaslessOrderParams definition)
-     * @param orderSignature_ Order sender's signature of the EIP-712 payload
-     *        containing the orderParams (see getGaslessOrderDigest)
-     * @param deadline_ deadline for the permit signature
-     * @param permitSignature_ packed encoding of the permit signature
-     * @return orderId_ The unique ID of the opened order
-     */
-    function openOrderForWithPermit(
-        GaslessOrderParams calldata orderParams_,
-        bytes calldata orderSignature_,
-        uint256 deadline_,
-        bytes memory permitSignature_
-    ) external returns (bytes32 orderId_);
-
     /* ========== Refunding Orders ========== */
 
     /**
@@ -426,7 +346,7 @@ interface IOrderBook {
      * @param orderData_ OrderData payload with all order information required to identify an order to be cancelled
      * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
-     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        This should be 0 for same chain cancels. For crosschain cancels, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
     function cancelOrder(bytes32 orderId_, OrderData calldata orderData_) external payable returns (bytes32 messageId_);
@@ -440,7 +360,7 @@ interface IOrderBook {
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
      * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
-     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        This should be 0 for same chain cancels. For crosschain cancels, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
     function cancelOrder(
@@ -459,7 +379,7 @@ interface IOrderBook {
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
      * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
-     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        This should be 0 for same chain cancels. For crosschain cancels, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
     function cancelOrder(
@@ -477,7 +397,7 @@ interface IOrderBook {
      * @param signature_ Order sender's signature of the EIP-712 payload (see getCancelOrderDigest)
      * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
-     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        This should be 0 for same chain cancels. For crosschain cancels, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
     function cancelOrderFor(
@@ -495,7 +415,7 @@ interface IOrderBook {
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
      * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
-     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        This should be 0 for same chain cancels. For crosschain cancels, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
     function cancelOrderFor(
@@ -515,7 +435,7 @@ interface IOrderBook {
      * @param bridgeAdapterArgs_ Additional data required by some crosschain message protocols (see PortalV2 for more info)
      * @return messageId_ The ID of the crosschain message reporting this cancellation back to the origin chain (zero for same-chain cancels)
      * @dev   The payable amount is forwarded to the underlying portal contract to send crosschain messages.
-     *        This should be 0 for same chain fills. For crosschain fills, see the Portal V2 contract for guidance on
+     *        This should be 0 for same chain cancels. For crosschain cancels, see the Portal V2 contract for guidance on
      *        getting a quote for the required fee
      */
     function cancelOrderFor(
@@ -663,12 +583,6 @@ interface IOrderBook {
     function isDestinationSupported(uint32 destChainId_) external view returns (bool);
 
     /* ========== EIP-712 Digest Functions ========== */
-
-    /**
-     * @notice Returns the EIP-712 digest that a user must sign to open a gasless order
-     * @param params_ gasless order creation parameters (see GaslessOrderParams definition)
-     */
-    function getGaslessOrderDigest(GaslessOrderParams memory params_) external view returns (bytes32);
 
     /**
      * @notice Returns the EIP-712 digest that a user must sign to cancel orders gaslessly

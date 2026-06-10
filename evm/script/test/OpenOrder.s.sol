@@ -10,8 +10,8 @@ import { IOrderBook } from "../../src/interfaces/IOrderBook.sol";
 /// @title OpenOrder
 /// @notice Script to create test orders on testnets
 /// @dev Usage: forge script script/test/OpenOrder.s.sol --rpc-url <rpc> --broadcast \
-///             --sig "run(address,uint128,uint32,bytes32,uint128,bytes32,bytes32,uint32)" \
-///             <tokenIn> <amountIn> <destChainId> <tokenOut> <amountOut> <recipient> <solver> <deadlineOffset>
+///             --sig "run(address,uint128,uint32,bytes32,uint128,bytes32,bytes32,uint32,address)" \
+///             <tokenIn> <amountIn> <destChainId> <tokenOut> <amountOut> <recipient> <solver> <deadlineOffset> <orderSender>
 /// @dev OrderData can be queried from the contract using getOrderData(orderId)
 contract OpenOrder is ScriptBase {
     /// @notice Default deadline offset (1 hour)
@@ -23,9 +23,12 @@ contract OpenOrder is ScriptBase {
     /// @param destChainId_ Destination chain ID where order will be filled
     /// @param tokenOut_ Address of output token on destination chain (as bytes32)
     /// @param amountOut_ Amount of output token expected
-    /// @param recipient_ Address to receive funds on destination (defaults to sender if zero)
+    /// @param recipient_ Address to receive funds on destination (defaults to order sender if zero)
     /// @param solver_ Designated solver address (zero = any solver can fill)
     /// @param deadlineOffset_ Seconds from now for fill deadline (defaults to 1 hour if zero)
+    /// @param orderSender_ Order owner recorded on-chain (defaults to funder if zero). The funder
+    ///                     (broadcaster) always pays the input tokens; this parameter only changes
+    ///                     the sender stored in OrderParams, which controls cancel/refund rights.
     /// @return orderId_ The unique ID of the created order
     function run(
         address tokenIn_,
@@ -35,21 +38,15 @@ contract OpenOrder is ScriptBase {
         uint128 amountOut_,
         bytes32 recipient_,
         bytes32 solver_,
-        uint32 deadlineOffset_
+        uint32 deadlineOffset_,
+        address orderSender_
     ) external returns (bytes32 orderId_) {
-        address sender_ = vm.rememberKey(vm.envUint("SENDER_PRIVATE_KEY"));
+        address funder_ = vm.rememberKey(vm.envUint("SENDER_PRIVATE_KEY"));
         address orderBook_ = _readDeployment(block.chainid);
 
-        // Approve orderbook to spend tokenIn if needed
-        uint256 currentAllowance_ = IERC20(tokenIn_).allowance(sender_, orderBook_);
-        if (currentAllowance_ < amountIn_) {
-            vm.broadcast(sender_);
-            IERC20(tokenIn_).approve(orderBook_, type(uint256).max);
-        }
-
-        // Build order params
+        // Build order params (defaults the on-chain order sender to the funder when not specified)
         IOrderBook.OrderParams memory orderParams_ = _buildOrderParams(
-            sender_,
+            orderSender_ == address(0) ? funder_ : orderSender_,
             tokenIn_,
             amountIn_,
             destChainId_,
@@ -60,8 +57,8 @@ contract OpenOrder is ScriptBase {
             deadlineOffset_
         );
 
-        // Execute order creation
-        orderId_ = _executeOpenOrder(sender_, orderBook_, orderParams_);
+        // Execute order creation (funder broadcasts and pays the input tokens)
+        orderId_ = _executeOpenOrder(funder_, orderBook_, orderParams_);
 
         // Fetch OrderData directly from the contract for logging
         IOrderBook.OrderData memory orderData_ = IOrderBook(orderBook_).getOrderData(orderId_);
@@ -101,20 +98,21 @@ contract OpenOrder is ScriptBase {
                 amountIn: amountIn_,
                 amountOut: amountOut_,
                 recipient: recipient,
-                solver: solver_
+                solver: solver_,
+                sender: sender_
             });
     }
 
     /// @notice Execute the order creation transaction
     function _executeOpenOrder(
-        address sender_,
+        address funder_,
         address orderBook_,
         IOrderBook.OrderParams memory orderParams_
     ) internal returns (bytes32 orderId_) {
-        // Check and approve token allowance
-        uint256 currentAllowance_ = IERC20(orderParams_.tokenIn).allowance(sender_, orderBook_);
+        // Check and approve token allowance (allowance is granted by the funder)
+        uint256 currentAllowance_ = IERC20(orderParams_.tokenIn).allowance(funder_, orderBook_);
 
-        vm.startBroadcast(sender_);
+        vm.startBroadcast(funder_);
 
         if (currentAllowance_ < orderParams_.amountIn) {
             IERC20(orderParams_.tokenIn).approve(orderBook_, type(uint256).max);

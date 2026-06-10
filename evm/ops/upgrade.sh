@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EVM_DIR="$(dirname "$SCRIPT_DIR")"
-CONFIG_FILE="$EVM_DIR/config/chains.json"
+CONFIG_FILE=""  # Set after env is parsed: chains.dev.json or chains.prod.json
 
 # 1Password account
 OP_ACCOUNT="mzerolabs.1password.com"
@@ -190,7 +190,7 @@ usage() {
     echo "  $0 --env <dev|prod> --chain <alias>           Upgrade on a specific chain"
     echo "  $0 --env <dev|prod> --chain <alias> --verify  Upgrade and verify on explorer"
     echo "  $0 --env <dev|prod> --all                     Upgrade on all deployed chains"
-    echo "  $0 --status                                   Show current deployment status"
+    echo "  $0 --env <dev|prod> --status                  Show current deployment status"
     echo ""
     echo "Options:"
     echo "  DRY_RUN=true  Simulate upgrade without broadcasting (logs JSON to console)"
@@ -256,11 +256,6 @@ main() {
         esac
     done
 
-    if [[ "$status" == "true" ]]; then
-        show_status
-        exit 0
-    fi
-
     # Validate environment is specified
     if [[ -z "$env" ]]; then
         log_error "Environment is required. Use --env dev or --env prod"
@@ -269,6 +264,12 @@ main() {
     fi
 
     validate_env "$env"
+    CONFIG_FILE="$EVM_DIR/config/chains.${env}.json"
+
+    if [[ "$status" == "true" ]]; then
+        show_status
+        exit 0
+    fi
 
     if [[ "$all" == "true" ]]; then
         log_info "Upgrading all deployed chains [env: $env]..."

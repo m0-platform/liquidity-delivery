@@ -109,7 +109,8 @@ abstract contract OrderBookTestBase is Test {
             amountOut: AMOUNT_OUT * 1e6, // Adjust amount out to match 6 decimals,
             recipient: users["alice"].toBytes32(),
             fillDeadline: uint32(block.timestamp) + FILL_DURATION,
-            solver: users["solver"].toBytes32()
+            solver: users["solver"].toBytes32(),
+            sender: users["alice"]
         });
         tokenIn = tokens["token-in-6D"];
         tokenOut = tokens["token-out-6D"];
@@ -152,6 +153,7 @@ abstract contract OrderBookTestBase is Test {
         address sender_,
         IOrderBook.OrderParams memory params_
     ) internal from(sender_) returns (bytes32) {
+        params_.sender = sender_;
         tokenIn.approve(address(orderBook), uint256(params_.amountIn));
         bytes32 orderId_ = orderBook.openOrder(params_);
 

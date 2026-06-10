@@ -9,8 +9,8 @@ import { IOrderBook } from "../../src/interfaces/IOrderBook.sol";
 /// @title CancelOrder
 /// @notice Script to cancel test orders on testnets
 /// @dev Usage: forge script script/test/CancelOrder.s.sol --rpc-url <dest_rpc> --broadcast \
-///             --sig "run(bytes32,string,bytes)" \
-///             <orderId> <originChainAlias> <bridgeAdapterArgs>
+///             --sig "run(bytes32,string,address,bytes)" \
+///             <orderId> <originChainAlias> <bridgeAdapter> <bridgeAdapterArgs>
 /// @dev Uses Forge's multichain fork support to query OrderData from the origin chain
 /// @dev Cancel authorization:
 ///      - Before deadline: recipient (or sender for same-chain orders) can cancel
@@ -24,6 +24,7 @@ contract CancelOrder is ScriptBase {
         address caller;
         address orderBook;
         bytes32 orderId;
+        address bridgeAdapter;
         uint256 portalFee;
         bool isSameChain;
     }
@@ -31,11 +32,13 @@ contract CancelOrder is ScriptBase {
     /// @notice Cancel an order
     /// @param orderId_ The ID of the order to cancel
     /// @param originChainAlias_ Chain alias (e.g., "sepolia") to query OrderData from
+    /// @param bridgeAdapter_ Bridge adapter address (zero = default adapter)
     /// @param bridgeAdapterArgs_ Optional bridge adapter args (e.g., signed Wormhole quote)
     /// @return messageId_ The cross-chain message ID (zero for same-chain cancels)
     function run(
         bytes32 orderId_,
         string calldata originChainAlias_,
+        address bridgeAdapter_,
         bytes calldata bridgeAdapterArgs_
     ) external returns (bytes32 messageId_) {
         // Store destination fork ID (the current --rpc-url)
@@ -48,7 +51,12 @@ contract CancelOrder is ScriptBase {
         vm.selectFork(destForkId_);
 
         // Build cancel configuration
-        CancelConfig memory config_ = _buildCancelConfig(orderId_, orderData_, bridgeAdapterArgs_.length == 0);
+        CancelConfig memory config_ = _buildCancelConfig(
+            orderId_,
+            orderData_,
+            bridgeAdapter_,
+            bridgeAdapterArgs_.length == 0 && bridgeAdapter_ == address(0)
+        );
 
         // Execute cancel
         messageId_ = _executeCancel(config_, orderData_, bridgeAdapterArgs_);
@@ -61,23 +69,33 @@ contract CancelOrder is ScriptBase {
     function _buildCancelConfig(
         bytes32 orderId_,
         IOrderBook.OrderData memory orderData_,
-        bool needsQuote_
+        address bridgeAdapter_,
+        bool needsPortalQuote_
     ) internal returns (CancelConfig memory config_) {
         config_.caller = vm.rememberKey(vm.envUint("SENDER_PRIVATE_KEY"));
         config_.orderBook = _readDeployment(block.chainid);
         config_.orderId = orderId_;
+        config_.bridgeAdapter = bridgeAdapter_;
         config_.isSameChain = orderData_.originChainId == block.chainid;
 
         // Verify order ID matches computed ID
         bytes32 computedOrderId_ = IOrderBook(config_.orderBook).getOrderId(orderData_);
         require(orderId_ == computedOrderId_, "Order ID mismatch");
 
-        // Determine Portal fee for cross-chain cancels
-        if (!config_.isSameChain && needsQuote_) {
-            address portal_ = _getPortalAddress();
-            config_.portalFee = _getPortalQuote(portal_, orderData_.originChainId);
-            // solhint-disable-next-line no-console
-            console2.log("Portal fee (wei):", config_.portalFee);
+        // Determine fee for cross-chain cancels
+        if (!config_.isSameChain) {
+            if (needsPortalQuote_) {
+                // Default adapter (Hyperlane): get quote from Portal on-chain
+                address portal_ = _getPortalAddress();
+                config_.portalFee = _getPortalQuote(portal_, orderData_.originChainId);
+                // solhint-disable-next-line no-console
+                console2.log("Portal fee (wei):", config_.portalFee);
+            } else {
+                // Non-default adapter (e.g., Wormhole): read fee from env var set by shell script
+                config_.portalFee = vm.envOr("BRIDGE_FEE", uint256(0));
+                // solhint-disable-next-line no-console
+                console2.log("Bridge fee from env (wei):", config_.portalFee);
+            }
         }
     }
 
@@ -89,14 +107,24 @@ contract CancelOrder is ScriptBase {
     ) internal returns (bytes32 messageId_) {
         vm.startBroadcast(config_.caller);
 
-        // Cancel order - no token approval needed since we're not transferring tokens
-        if (bridgeAdapterArgs_.length > 0) {
+        // Cancel order — select overload based on bridge adapter and args
+        if (config_.bridgeAdapter != address(0)) {
+            // Explicit bridge adapter (e.g., Wormhole)
+            messageId_ = IOrderBook(config_.orderBook).cancelOrder{ value: config_.portalFee }(
+                config_.orderId,
+                orderData_,
+                config_.bridgeAdapter,
+                bridgeAdapterArgs_
+            );
+        } else if (bridgeAdapterArgs_.length > 0) {
+            // Default adapter with extra args
             messageId_ = IOrderBook(config_.orderBook).cancelOrder{ value: config_.portalFee }(
                 config_.orderId,
                 orderData_,
                 bridgeAdapterArgs_
             );
         } else {
+            // Default adapter, no args
             messageId_ = IOrderBook(config_.orderBook).cancelOrder{ value: config_.portalFee }(
                 config_.orderId,
                 orderData_
@@ -137,11 +165,9 @@ contract CancelOrder is ScriptBase {
         console2.log("Origin OrderBook:", originOrderBook_);
     }
 
-    /// @notice Get Portal address from config
+    /// @notice Get Portal address from PORTAL_ADDRESS env var (set by shell script from chain config)
     function _getPortalAddress() internal view returns (address) {
-        string memory configPath_ = string.concat(vm.projectRoot(), "/config/chains.json");
-        string memory config_ = vm.readFile(configPath_);
-        return vm.parseJsonAddress(config_, ".portal");
+        return vm.envAddress("PORTAL_ADDRESS");
     }
 
     /// @notice Get Portal quote for cancel report

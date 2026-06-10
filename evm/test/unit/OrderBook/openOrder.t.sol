@@ -25,6 +25,8 @@ contract OpenOrderTest is OrderBookTestBase {
     //   [X] it reverts with an InvalidSolver error
     // [X] given a same-chain order with tokenOut equal to tokenIn
     //   [X] it reverts with a SameTokenOrder error
+    // [X] given the sender field is zero address
+    //   [X] it reverts with a ZeroSender error
     // [X] given the sender has not approved the order book to spend their token in
     //   [X] it reverts with an ERC20 transfer error
     // [X] given the sender has not enough balance of the token in
@@ -50,6 +52,14 @@ contract OpenOrderTest is OrderBookTestBase {
     //     [X] it stores the order against the correct order ID
     //     [X] it emits an OrderOpened event
     //     [X] it returns the order ID
+    // [X] given the funder (msg.sender) is different from the sender field
+    //   [X] it pulls tokens from the funder
+    //   [X] it stores the order with sender as the owner
+    //   [X] it increments the nonce for sender (not funder)
+    //   [X] it emits OrderOpened with both funder and sender
+    //   [X] the sender can cancel before deadline
+    //   [X] the funder cannot cancel before deadline (if not sender or recipient)
+    //   [X] the sender receives refunds on cancellation (not funder)
 
     function test_fillDeadlineBeforeCurrentTime_reverts() public {
         params.fillDeadline = uint32(block.timestamp - 1);
@@ -129,12 +139,14 @@ contract OpenOrderTest is OrderBookTestBase {
         emit IOrderBook.OrderOpened(
             expOrderId,
             users["alice"],
+            users["alice"],
             params.tokenIn,
             params.amountIn,
             params.destChainId,
             params.tokenOut,
             params.amountOut,
-            params.solver
+            params.solver,
+            params.fillDeadline
         );
         bytes32 orderId = orderBook.openOrder(params);
 
@@ -207,5 +219,173 @@ contract OpenOrderTest is OrderBookTestBase {
         vm.prank(users["alice"]);
         vm.expectRevert(abi.encodeWithSelector(PausableUpgradeable.EnforcedPause.selector));
         orderBook.openOrderWithPermit(params, block.timestamp + 1 hours, 0, bytes32(0), bytes32(0));
+    }
+
+    // =========== Sender Field Tests ========== //
+
+    function test_senderIsZeroAddress_reverts() public {
+        params.sender = address(0);
+        vm.prank(users["alice"]);
+        tokenIn.approve(address(orderBook), params.amountIn);
+
+        vm.prank(users["alice"]);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.ZeroSender.selector));
+        orderBook.openOrder(params);
+    }
+
+    function test_funderDifferentFromSender_success() public {
+        // Bob (funder) opens an order with Alice as sender
+        address funder = users["bob"];
+        address sender = users["alice"];
+        params.sender = sender;
+
+        // Calculate expected order ID (using Alice as sender, nonce 0)
+        bytes32 expOrderId = _getOrderIdFromParams(sender, 0, params);
+
+        // Bob approves and opens the order
+        vm.prank(funder);
+        tokenIn.approve(address(orderBook), params.amountIn);
+
+        uint256 funderBalanceBefore = tokenIn.balanceOf(funder);
+        uint256 senderBalanceBefore = tokenIn.balanceOf(sender);
+
+        vm.prank(funder);
+        vm.expectEmit(true, true, true, true);
+        emit IOrderBook.OrderOpened(
+            expOrderId,
+            funder, // funder is Bob
+            sender, // sender is Alice
+            params.tokenIn,
+            params.amountIn,
+            params.destChainId,
+            params.tokenOut,
+            params.amountOut,
+            params.solver,
+            params.fillDeadline
+        );
+        bytes32 orderId = orderBook.openOrder(params);
+
+        assertEq(orderId, expOrderId);
+
+        // Tokens pulled from funder (Bob), not sender (Alice)
+        assertEq(tokenIn.balanceOf(funder), funderBalanceBefore - params.amountIn);
+        assertEq(tokenIn.balanceOf(sender), senderBalanceBefore); // unchanged
+
+        // Order stored with Alice as sender
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        assertEq(order.sender, sender);
+
+        // Nonce incremented for sender (Alice), not funder (Bob)
+        assertEq(orderBook.getSenderNonce(sender), 1);
+        assertEq(orderBook.getSenderNonce(funder), 0);
+    }
+
+    function test_funderDifferentFromSender_nonceIncrementsForSender() public {
+        address sender = users["alice"];
+        params.sender = sender;
+
+        // Initial nonces should be 0
+        assertEq(orderBook.getSenderNonce(sender), 0);
+        assertEq(orderBook.getSenderNonce(users["bob"]), 0);
+        assertEq(orderBook.getSenderNonce(users["carol"]), 0);
+
+        // Bob opens an order for Alice (Alice's nonce: 0 -> 1)
+        vm.prank(users["bob"]);
+        tokenIn.approve(address(orderBook), params.amountIn);
+        vm.prank(users["bob"]);
+        orderBook.openOrder(params);
+
+        assertEq(orderBook.getSenderNonce(sender), 1);
+        assertEq(orderBook.getSenderNonce(users["bob"]), 0);
+
+        // Carol opens an order for Alice (Alice's nonce: 1 -> 2)
+        vm.prank(users["carol"]);
+        tokenIn.approve(address(orderBook), params.amountIn);
+        vm.prank(users["carol"]);
+        orderBook.openOrder(params);
+
+        assertEq(orderBook.getSenderNonce(sender), 2);
+        assertEq(orderBook.getSenderNonce(users["bob"]), 0);
+        assertEq(orderBook.getSenderNonce(users["carol"]), 0);
+    }
+
+    function test_funderDifferentFromSender_senderReceivesRefund() public {
+        // Setup same-chain order so refund happens immediately
+        params.destChainId = CHAIN_ID;
+        params.tokenOut = address(tokens["token-out-6D"]).toBytes32();
+
+        address funder = users["bob"];
+        address sender = users["alice"];
+        params.sender = sender;
+
+        // Bob opens the order
+        vm.prank(funder);
+        tokenIn.approve(address(orderBook), params.amountIn);
+        vm.prank(funder);
+        bytes32 orderId = orderBook.openOrder(params);
+
+        uint256 funderBalanceBefore = tokenIn.balanceOf(funder);
+        uint256 senderBalanceBefore = tokenIn.balanceOf(sender);
+
+        // Alice (sender) cancels the order
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        vm.prank(sender);
+        orderBook.cancelOrder(orderId, _getOrderDataFromOrder(orderId, order), new bytes(0));
+
+        // Refund goes to sender (Alice), not funder (Bob)
+        assertEq(tokenIn.balanceOf(sender), senderBalanceBefore + params.amountIn);
+        assertEq(tokenIn.balanceOf(funder), funderBalanceBefore); // unchanged
+    }
+
+    function test_funderDifferentFromSender_funderCannotCancelBeforeDeadline_reverts() public {
+        // Setup same-chain order
+        params.destChainId = CHAIN_ID;
+        params.tokenOut = address(tokens["token-out-6D"]).toBytes32();
+
+        address funder = users["bob"];
+        address sender = users["alice"];
+        params.recipient = users["carol"].toBytes32(); // recipient is Carol
+        params.sender = sender;
+
+        // Bob opens the order
+        vm.prank(funder);
+        tokenIn.approve(address(orderBook), params.amountIn);
+        vm.prank(funder);
+        bytes32 orderId = orderBook.openOrder(params);
+
+        // Bob (funder) attempts to cancel before deadline - should fail
+        // Bob is neither sender (Alice) nor recipient (Carol)
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        vm.prank(funder);
+        vm.expectRevert(abi.encodeWithSelector(IOrderBook.NotAuthorized.selector));
+        orderBook.cancelOrder(orderId, _getOrderDataFromOrder(orderId, order), new bytes(0));
+    }
+
+    function test_funderDifferentFromSender_senderCanCancelBeforeDeadline_success() public {
+        // Setup same-chain order
+        params.destChainId = CHAIN_ID;
+        params.tokenOut = address(tokens["token-out-6D"]).toBytes32();
+
+        address funder = users["bob"];
+        address sender = users["alice"];
+        params.sender = sender;
+
+        // Bob opens the order
+        vm.prank(funder);
+        tokenIn.approve(address(orderBook), params.amountIn);
+        vm.prank(funder);
+        bytes32 orderId = orderBook.openOrder(params);
+
+        // Verify order is created
+        IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Created));
+
+        // Alice (sender) cancels the order - should succeed
+        vm.prank(sender);
+        orderBook.cancelOrder(orderId, _getOrderDataFromOrder(orderId, order), new bytes(0));
+
+        // Verify order is cancelled
+        order = orderBook.getOrder(orderId);
+        assertEq(uint8(order.status), uint8(IOrderBook.OrderStatus.Cancelled));
     }
 }
