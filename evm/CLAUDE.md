@@ -105,6 +105,42 @@ make upgrade-all ENV=dev
 make upgrade-status
 ```
 
+#### Safe Multisig Proposals
+
+For chains where the ProxyAdmin owner has been transferred to a Safe multisig, upgrades
+are proposed to the Safe Transaction Service (via
+[m0-foundation/safe-utils](https://github.com/m0-foundation/safe-utils), vendored at
+`lib/safe-utils`) instead of executed directly. Signers then review and execute in the
+Safe UI. Pause/unpause is done directly with the deployer key, which holds PAUSER_ROLE.
+
+Required environment variables (export in shell, pass on the make command line, or
+uncomment in `.env.<env>`):
+
+```bash
+export SAFE_ADDRESS="0x..."             # Safe that owns the ProxyAdmin
+export PROPOSER_PRIVATE_KEY="0x..."     # Safe owner/proposer key (software signing), OR:
+export PROPOSER_ADDRESS="0x..."         # with LEDGER_DERIVATION_PATH for Ledger signing
+export LEDGER_DERIVATION_PATH="m/44'/60'/0'/0/0"
+```
+
+```bash
+# Deploy a new implementation and propose ProxyAdmin.upgradeAndCall
+make propose-upgrade ENV=prod CHAIN=mainnet
+make propose-upgrade-verify ENV=prod CHAIN=mainnet  # also verifies the implementation on the explorer
+```
+
+Notes:
+
+- By default each proposal uses the current on-chain Safe nonce, so proposals submitted
+  before the previous one executes will conflict. To queue multiple proposals, pass
+  explicit nonces: `SAFE_NONCE=<n>`, `SAFE_NONCE=<n+1>`, etc.
+- The new implementation deployment is broadcast with `DEPLOYER_PRIVATE_KEY`; only the
+  `upgradeAndCall` goes through the Safe. `deployments/{chainId}.json` is NOT
+  updated — update the `implementation` field after the Safe transaction executes.
+- `propose-upgrade-verify` verifies the newly deployed implementation contract (the only
+  contract broadcast by the script) on the block explorer.
+- `DRY_RUN=true` simulates without broadcasting or submitting a proposal.
+
 ### Direct Script Usage
 
 Scripts can also be called directly:
@@ -124,6 +160,10 @@ Scripts can also be called directly:
 ./ops/upgrade.sh --env dev --chain sepolia
 ./ops/upgrade.sh --env dev --all
 ./ops/upgrade.sh --status
+
+# Safe multisig upgrade proposal
+./ops/propose-upgrade.sh --env prod --chain mainnet
+./ops/propose-upgrade.sh --env prod --chain mainnet --verify
 ```
 
 ### Adding a New Chain

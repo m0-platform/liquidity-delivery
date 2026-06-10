@@ -147,6 +147,35 @@ endif
 upgrade-status: ## Show current deployment and implementation status
 	@./ops/upgrade.sh --status
 
+## Safe Multisig Proposal Commands
+# Require SAFE_ADDRESS and PROPOSER_PRIVATE_KEY (or PROPOSER_ADDRESS + LEDGER_DERIVATION_PATH)
+# to be exported in the shell, passed on the command line, or added to the .env file.
+# Optional: SAFE_NONCE=<n> to queue multiple proposals with explicit nonces.
+
+.PHONY: propose-upgrade propose-upgrade-verify
+
+propose-upgrade: ## Deploy new implementation and propose upgrade to the Safe (ENV=prod CHAIN=mainnet)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make propose-upgrade ENV=prod CHAIN=mainnet"
+	@exit 1
+endif
+ifndef CHAIN
+	@echo "Error: CHAIN is required. Usage: make propose-upgrade ENV=prod CHAIN=mainnet"
+	@exit 1
+endif
+	@$(if $(SAFE_ADDRESS),SAFE_ADDRESS=$(SAFE_ADDRESS) )$(if $(SAFE_NONCE),SAFE_NONCE=$(SAFE_NONCE) )$(if $(PROPOSER_ADDRESS),PROPOSER_ADDRESS=$(PROPOSER_ADDRESS) )./ops/propose-upgrade.sh --env $(ENV) --chain $(CHAIN)
+
+propose-upgrade-verify: ## Propose upgrade and verify the implementation on the explorer (ENV=prod CHAIN=mainnet)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make propose-upgrade-verify ENV=prod CHAIN=mainnet"
+	@exit 1
+endif
+ifndef CHAIN
+	@echo "Error: CHAIN is required. Usage: make propose-upgrade-verify ENV=prod CHAIN=mainnet"
+	@exit 1
+endif
+	@$(if $(SAFE_ADDRESS),SAFE_ADDRESS=$(SAFE_ADDRESS) )$(if $(SAFE_NONCE),SAFE_NONCE=$(SAFE_NONCE) )$(if $(PROPOSER_ADDRESS),PROPOSER_ADDRESS=$(PROPOSER_ADDRESS) )./ops/propose-upgrade.sh --env $(ENV) --chain $(CHAIN) --verify
+
 ## Admin Commands
 
 .PHONY: transfer-roles
@@ -286,6 +315,11 @@ help: ## Show this help
 	@echo "  make upgrade ENV=<dev|prod> CHAIN=<alias>        Upgrade on a chain"
 	@echo "  make upgrade-all ENV=<dev|prod>                  Upgrade on all chains"
 	@echo "  make upgrade-status                              Show implementation status"
+	@echo ""
+	@echo "Safe Multisig Proposals (require SAFE_ADDRESS + proposer env vars):"
+	@echo "  make propose-upgrade ENV=<dev|prod> CHAIN=<alias>    Deploy impl + propose upgrade"
+	@echo "  make propose-upgrade-verify ENV=<dev|prod> CHAIN=<alias>  Same, with explorer verification"
+	@echo "  Optional: SAFE_NONCE=<n> to queue proposals with explicit nonces"
 	@echo ""
 	@echo "Admin:"
 	@echo "  make transfer-roles ENV=<dev|prod> CHAIN=<alias> \\  Transfer all roles to new admin"
