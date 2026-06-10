@@ -22,6 +22,8 @@ contract TransferAdminRoles is ScriptBase {
 
         address signer_ = vm.rememberKey(vm.envUint("ADMIN_PRIVATE_KEY"));
 
+        require(newAdmin_ != signer_, "TransferAdminRoles: new admin equals signer");
+
         // Read deployment
         address proxy_ = _readDeployment(block.chainid);
         address proxyAdmin_ = _getProxyAdmin(proxy_);

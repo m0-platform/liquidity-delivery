@@ -20,6 +20,8 @@ contract TransferPauserRole is ScriptBase {
 
         address signer_ = vm.rememberKey(vm.envUint("ADMIN_PRIVATE_KEY"));
 
+        require(newPauser_ != signer_, "TransferPauserRole: new pauser equals signer");
+
         // Read deployment
         address proxy_ = _readDeployment(block.chainid);
 
