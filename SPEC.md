@@ -269,6 +269,15 @@ function cancelOrder(bytes32 orderId, OrderData calldata orderData)
 
 // Overloads accepting bridgeAdapter and bridgeAdapterArgs direct the resulting
 // CancelReport message through a specific Portal V2 bridge.
+// Gasless: anyone can cancel with a valid EIP-712 signature from the recipient
+function cancelOrderFor(
+    bytes32 orderId,
+    OrderData calldata orderData,
+    bytes calldata signature
+) external payable returns (bytes32 messageId);
+
+// Each of the above also has overloads accepting bridgeAdapter and bridgeAdapterArgs
+// to direct the resulting CancelReport message through a specific Portal V2 bridge.
 ```
 
 Authorization rules:
@@ -337,7 +346,7 @@ function unpause() external; // PAUSER_ROLE
 
 The pause covers external order actions that would create new in-flight state (`openOrder*`, `cancelOrder*`, `fillOrder`) but **does not** affect inbound `reportFill` / `reportCancel`. This lets us pause the contract, drain in-flight cross-chain messages, and execute an upgrade gracefully (a behavior added per audit findings).
 
-### View Helpers
+### View / EIP-712 Helpers
 
 ```solidity
 function getOrderId(OrderData calldata orderData) external pure returns (bytes32);
