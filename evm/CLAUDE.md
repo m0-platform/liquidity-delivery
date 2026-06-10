@@ -106,13 +106,30 @@ make upgrade-all ENV=dev
 make upgrade-status
 ```
 
+#### Pause / Unpause
+
+Pause and unpause are executed directly with `PAUSER_PRIVATE_KEY` (must match
+`PAUSER_ADDRESS`, which holds PAUSER_ROLE on the OrderBook):
+
+```bash
+# Pause the OrderBook on a chain
+make pause ENV=prod CHAIN=base
+
+# Unpause the OrderBook on a chain
+make unpause ENV=prod CHAIN=base
+
+# Simulate without broadcasting
+make pause ENV=prod CHAIN=base DRY_RUN=true
+```
+
 #### Safe Multisig Proposals
 
 For chains where the ProxyAdmin owner has been transferred to a Safe multisig, upgrades
 are proposed to the Safe Transaction Service (via
 [m0-foundation/safe-utils](https://github.com/m0-foundation/safe-utils), vendored at
 `lib/safe-utils`) instead of executed directly. Signers then review and execute in the
-Safe UI. Pause/unpause is done directly with the deployer key, which holds PAUSER_ROLE.
+Safe UI. Pause/unpause is done directly with the pauser key via `make pause` / `make unpause`
+(see Pause / Unpause above).
 
 Required environment variables (export in shell, pass on the make command line, or
 uncomment in `.env.<env>`):
@@ -165,6 +182,10 @@ Scripts can also be called directly:
 # Safe multisig upgrade proposal
 ./ops/propose-upgrade.sh --env prod --chain mainnet
 ./ops/propose-upgrade.sh --env prod --chain mainnet --verify
+
+# Pause / unpause
+./ops/pause.sh --env prod --chain base --action pause
+./ops/pause.sh --env prod --chain base --action unpause
 ```
 
 ### Adding a New Chain

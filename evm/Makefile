@@ -220,6 +220,30 @@ ifndef NEW_PAUSER
 endif
 	@DRY_RUN=$(DRY_RUN) ./ops/transfer-pauser-role.sh --env $(ENV) --chain $(CHAIN) --new-pauser $(NEW_PAUSER)
 
+.PHONY: pause unpause
+
+pause: ## Pause the OrderBook on a chain (ENV=prod CHAIN=base)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make pause ENV=prod CHAIN=base"
+	@exit 1
+endif
+ifndef CHAIN
+	@echo "Error: CHAIN is required. Usage: make pause ENV=prod CHAIN=base"
+	@exit 1
+endif
+	@DRY_RUN=$(DRY_RUN) ./ops/pause.sh --env $(ENV) --chain $(CHAIN) --action pause
+
+unpause: ## Unpause the OrderBook on a chain (ENV=prod CHAIN=base)
+ifndef ENV
+	@echo "Error: ENV is required. Usage: make unpause ENV=prod CHAIN=base"
+	@exit 1
+endif
+ifndef CHAIN
+	@echo "Error: CHAIN is required. Usage: make unpause ENV=prod CHAIN=base"
+	@exit 1
+endif
+	@DRY_RUN=$(DRY_RUN) ./ops/pause.sh --env $(ENV) --chain $(CHAIN) --action unpause
+
 ## Status Commands
 
 .PHONY: status
@@ -366,6 +390,8 @@ help: ## Show this help
 	@echo "       NEW_PAUSER=0x..."
 	@echo "  make transfer-pauser-role ENV=<dev|prod> CHAIN=<alias> \\  Dry run pauser transfer"
 	@echo "       NEW_PAUSER=0x... DRY_RUN=true"
+	@echo "  make pause ENV=<dev|prod> CHAIN=<alias>          Pause the OrderBook"
+	@echo "  make unpause ENV=<dev|prod> CHAIN=<alias>        Unpause the OrderBook"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make open-order ENV=<dev|prod> CHAIN=<alias> \\    Create a test order"
@@ -405,3 +431,4 @@ help: ## Show this help
 	@echo "  make configure-routes ENV=dev DRY_RUN=true"
 	@echo "  make transfer-admin-roles ENV=prod CHAIN=base NEW_ADMIN=0x... DRY_RUN=true"
 	@echo "  make transfer-pauser-role ENV=prod CHAIN=base NEW_PAUSER=0x... DRY_RUN=true"
+	@echo "  make pause ENV=prod CHAIN=base DRY_RUN=true"
