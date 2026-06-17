@@ -49,6 +49,7 @@ base = "${BASE_RPC_URL}"
 moca = "${MOCA_RPC_URL}"
 citrea = "${CITREA_RPC_URL}"
 arbitrum = "${ARBITRUM_RPC_URL}"
+monad = "${MONAD_RPC_URL}"
 
 [etherscan]
 mainnet = { key = "${ETHERSCAN_API_KEY}" }
@@ -57,3 +58,4 @@ arbitrum_sepolia = { key = "${ETHERSCAN_API_KEY}" }
 base_sepolia = { key = "${ETHERSCAN_API_KEY}" }
 base = { key = "${ETHERSCAN_API_KEY}" }
 arbitrum = { key = "${ETHERSCAN_API_KEY}" }
+monad = { key = "${ETHERSCAN_API_KEY}" }
