@@ -83,6 +83,19 @@
         "hyperlane": "0xfCc1d596Ad6cAb0b5394eAa447d8626813180f32",
         "layerzero": "0x77EF4e9D37524069f81890C537a5c5d390bb4b4d"
       }
+    },
+    "rise": {
+      "chainId": 4153,
+      "name": "Rise",
+      "rpcAlias": "rise",
+      "explorerAlias": "rise",
+      "explorerType": "blockscout",
+      "portal": "0xD925C84b55E4e44a53749fF5F2a5A13F63D128fd",
+      "adapters": {
+        "wormhole": "",
+        "hyperlane": "",
+        "layerzero": "0x77EF4e9D37524069f81890C537a5c5d390bb4b4d"
+      }
     }
   }
 }
