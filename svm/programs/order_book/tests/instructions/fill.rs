@@ -1225,6 +1225,7 @@ mod xchain_orders {
     //     [X] it fully fills the order in one transaction
     //     [X] it transfers amount_out of token_out to the recipient
     //     [X] it updates amount_out_filled and amount_in_released to full amounts
+    //     [X] it succeeds when amount_in exceeds u64::MAX (origin-chain 18-decimal token)
     // [X] given all those checks pass and the order exists and is partially filled
     //   [X] given the amount_out_to_fill is less than the remaining amount out
     //     [X] it transfers amount_out_to_fill of token_out to the recipient
@@ -1992,6 +1993,58 @@ mod xchain_orders {
         test.ctx
             .execute_instruction(ix, &[&solver])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::ProgramPaused));
+
+        Ok(())
+    }
+    #[test]
+    fn fill_foreign_order_full_fill_amount_in_exceeds_u64_max_success() -> Result<(), Box<dyn Error>> {
+        // amount_in is denominated in the origin chain token and may exceed u64::MAX
+        // (e.g. 1000 DAI = 1e21). It is only used in the u128 fill report here, so the
+        // fill must succeed and report the full amount.
+        let amount_in: u128 = 1_000_000_000_000_000_000_000; // 1e21
+        assert!(amount_in > u64::MAX as u128);
+
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+        let mut order_data = default_foreign_order_data(&test, "alice");
+        order_data.amount_in = amount_in;
+        let order_id = order_data.compute_order_id();
+
+        let alice_token_out_ata = test.get_ata("token-out-spl-6", "alice");
+        let solver_token_out_ata = test.get_ata("token-out-spl-6", "solver");
+        let alice_balance_before = test.get_token_balance(&alice_token_out_ata)?;
+        let solver_balance_before = test.get_token_balance(&solver_token_out_ata)?;
+
+        test.fill_foreign_order("solver", &order_data, order_data.amount_out as u64)?;
+
+        let alice_balance_after = test.get_token_balance(&alice_token_out_ata)?;
+        let solver_balance_after = test.get_token_balance(&solver_token_out_ata)?;
+
+        assert_eq!(
+            alice_balance_after,
+            alice_balance_before + order_data.amount_out as u64,
+            "Recipient should receive full amount_out"
+        );
+        assert_eq!(
+            solver_balance_after,
+            solver_balance_before - order_data.amount_out as u64,
+            "Solver should pay full amount_out"
+        );
+
+        let (_, foreign_order) = test.get_foreign_order_account(&order_id)?;
+        assert_eq!(
+            foreign_order.data.status,
+            order_book::state::OrderStatus::Completed,
+            "Order should be Completed"
+        );
+        assert_eq!(
+            foreign_order.data.amount_out_filled, order_data.amount_out,
+            "Order should be fully filled"
+        );
+        assert_eq!(
+            foreign_order.data.amount_in_released, amount_in,
+            "Full amount_in (> u64::MAX) should be recorded as released"
+        );
 
         Ok(())
     }
