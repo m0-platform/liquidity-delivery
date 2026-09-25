@@ -15,6 +15,22 @@ use anchor_spl::{
 };
 use std::ops::Deref;
 
+/// Parameters required to open an order onchain
+///
+/// Note: addresses on the destination chain are stored as 32 bytes to support non-SVM chains
+/// as destinations
+///
+/// - `dest_chain_id`: destination chain ID where the order is to be filled
+/// - `created_at`: timestamp at which the client built the order
+/// - `fill_deadline`: timestamp by which the order must be filled on the destination chain
+/// - `token_out`: address of the output token on the destination chain
+/// - `amount_in`: amount of input token provided
+/// - `amount_out`: amount of output token expected
+/// - `recipient`: address to receive the funds on the destination chain
+/// - `solver`: address of the solver that will fill the order, or zero if any solver can fill
+/// - `sender`: address that will own the order (for cancellation rights and refunds). Tokens are
+///   pulled from `payer_token_in_account`, so the funder and the order owner may differ (e.g. a
+///   deposit address funding an order for an end user).
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct OrderParams {
     pub dest_chain_id: u32,
@@ -25,6 +41,7 @@ pub struct OrderParams {
     pub amount_out: u128,
     pub recipient: [u8; 32],
     pub solver: [u8; 32],
+    pub sender: Pubkey,
 }
 
 const CREATED_AT_WINDOW: u64 = 300; // 300 second (5 minute) window for created_at timestamp
@@ -61,13 +78,13 @@ pub struct OpenOrder<'info> {
         token::mint = token_in_mint,
         token::token_program = token_in_program,
     )]
-    pub sender_token_in_account: InterfaceAccount<'info, TokenAccount>,
+    pub payer_token_in_account: InterfaceAccount<'info, TokenAccount>,
 
     #[account(
         init_if_needed,
         payer = payer,
         space = ANCHOR_DISCRIMINATOR_SIZE + Nonce::INIT_SPACE,
-        seeds = [NONCE_SEED_PREFIX, sender_token_in_account.deref().owner.as_ref()],
+        seeds = [NONCE_SEED_PREFIX, params.sender.as_ref()],
         bump
     )]
     pub sender_nonce_account: Account<'info, Nonce>,
@@ -78,7 +95,7 @@ pub struct OpenOrder<'info> {
         space = ANCHOR_DISCRIMINATOR_SIZE + Order::<NativeOrder>::INIT_SPACE,
         seeds = [ORDER_SEED_PREFIX, &compute_order_id(&OrderData {
                     version: VERSION as u16,
-                    sender: sender_token_in_account.deref().owner.to_bytes(),
+                    sender: params.sender.to_bytes(),
                     nonce: sender_nonce_account.value,
                     origin_chain_id: global_account.chain_id,
                     dest_chain_id: params.dest_chain_id,
@@ -138,6 +155,12 @@ impl OpenOrder<'_> {
         
         require!(params.recipient != [0u8; 32], OrderBookError::InvalidRecipient);
 
+        // The order owner must be explicit; refunds and cancel rights follow it
+        require!(
+            params.sender != Pubkey::default(),
+            OrderBookError::InvalidSender
+        );
+
         // On SVM, we allow the user to specify the created at timestamp to be within a small window from the current time
         // so that the PDA address can be precomputed off-chain without having to guess the exact slot it will be included in.
         let current_timestamp = Clock::get()?.unix_timestamp as u64;
@@ -166,7 +189,7 @@ impl OpenOrder<'_> {
 
     #[access_control(ctx.accounts.validate(&params))]
     pub fn handler(ctx: Context<Self>, params: OrderParams) -> Result<()> {
-        let sender: Pubkey = (&ctx.accounts.sender_token_in_account).owner;
+        let sender: Pubkey = params.sender;
 
         // Populate the order data
         ctx.accounts.order.set_inner(Order {
@@ -220,7 +243,7 @@ impl OpenOrder<'_> {
 
         // Check that amount_in is actually received
         transfer_exact_tokens(
-            &ctx.accounts.sender_token_in_account,
+            &ctx.accounts.payer_token_in_account,
             &mut ctx.accounts.order_token_in_ata,
             params.amount_in,
             &ctx.accounts.token_in_mint,
@@ -231,7 +254,7 @@ impl OpenOrder<'_> {
         // Emit the event
         emit_cpi!(OrderOpened {
             order_id,
-            funder: ctx.accounts.sender_token_in_account.deref().owner,
+            funder: ctx.accounts.payer_token_in_account.deref().owner,
             sender,
             token_in: ctx.accounts.token_in_mint.key(),
             amount_in: params.amount_in,

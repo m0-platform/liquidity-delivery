@@ -40,6 +40,7 @@ use std::error::Error;
 //   [X] it transfers ALL remaining tokens to origin_recipient
 //   [X] it sets amount_out_filled to equal amount_out
 //   [X] it sets amount_in_released correctly
+//   [X] it succeeds when amount_out exceeds u64::MAX (destination-chain 18-decimal token)
 // [X] given multiple partial fills are reported
 //   [X] it processes each fill correctly
 //   [X] it tracks cumulative amounts
@@ -85,6 +86,7 @@ fn test_report_fill_unauthorized_portal_reverts() -> Result<(), Box<dyn Error>> 
         amount_out: 1_000_000,
         recipient: test.get_user("alice").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     };
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
@@ -134,6 +136,7 @@ fn test_report_fill_invalid_source_chain_reverts() -> Result<(), Box<dyn Error>>
         amount_out: 1_000_000,
         recipient: test.get_user("alice").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     };
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
@@ -259,6 +262,7 @@ fn test_report_fill_order_completed_reverts() -> Result<(), Box<dyn Error>> {
         amount_out: 1_000_000,
         recipient: test.get_user("alice").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     };
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
@@ -320,6 +324,7 @@ fn test_report_fill_order_cancelled_reverts() -> Result<(), Box<dyn Error>> {
         amount_out: 1_000_000,
         recipient: test.get_user("alice").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     };
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
@@ -381,6 +386,7 @@ fn test_report_fill_cancelled_order_partial_refund_success() -> Result<(), Box<d
         amount_out: 1_000_000,
         recipient: test.get_user("alice").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     };
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
@@ -456,6 +462,7 @@ fn test_report_fill_cancelled_order_exceeds_remaining_reverts() -> Result<(), Bo
         amount_out: 1_000_000,
         recipient: test.get_user("alice").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     };
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
@@ -521,6 +528,7 @@ fn test_report_fill_zero_amount_reverts() -> Result<(), Box<dyn Error>> {
         amount_out: 1_000_000,
         recipient: test.get_user("alice").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     };
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
@@ -568,6 +576,7 @@ fn test_report_fill_wrong_token_mint_reverts() -> Result<(), Box<dyn Error>> {
         amount_out: 1_000_000,
         recipient: test.get_user("alice").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     };
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
@@ -624,6 +633,7 @@ fn test_report_fill_wrong_recipient_reverts() -> Result<(), Box<dyn Error>> {
         amount_out: 1_000_000,
         recipient: test.get_user("alice").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     };
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
@@ -679,6 +689,7 @@ fn test_report_fill_wrong_order_pda_reverts() -> Result<(), Box<dyn Error>> {
         amount_out: 1_000_000,
         recipient: test.get_user("alice").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     };
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
@@ -739,6 +750,7 @@ fn test_report_fill_partial_success() -> Result<(), Box<dyn Error>> {
         amount_out: 1_000_000,
         recipient: test.get_user("alice").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     };
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
@@ -813,6 +825,7 @@ fn test_report_fill_full_fill_success() -> Result<(), Box<dyn Error>> {
         amount_out: 1_000_000,
         recipient: test.get_user("alice").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     };
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
@@ -889,6 +902,7 @@ fn test_report_fill_multiple_partial_fills() -> Result<(), Box<dyn Error>> {
         amount_out: 1_000_000,
         recipient: test.get_user("alice").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     };
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
@@ -965,6 +979,7 @@ fn test_report_fill_with_donation_success() -> Result<(), Box<dyn Error>> {
         amount_out: 1_000_000,
         recipient: test.get_user("alice").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     };
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
@@ -1054,6 +1069,7 @@ fn test_report_fill_paused_success() -> Result<(), Box<dyn Error>> {
         amount_out: 1_000_000,
         recipient: test.get_user("alice").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     };
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
@@ -1104,6 +1120,7 @@ fn test_report_fill_amount_out_exceeds_remaining_reverts() -> Result<(), Box<dyn
         amount_out: 1_000_000,
         recipient: test.get_user("alice").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     };
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
@@ -1169,6 +1186,7 @@ fn test_report_fill_prorata_different_ratios_success() -> Result<(), Box<dyn Err
         amount_out: 2_000_000, // 1:2 ratio
         recipient: test.get_user("alice").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     };
     let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
 
@@ -1210,6 +1228,84 @@ fn test_report_fill_prorata_different_ratios_success() -> Result<(), Box<dyn Err
         solver_balance_after - solver_balance_before,
         250_000,
         "Solver should receive pro-rata amount_in"
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_report_fill_full_fill_amount_out_exceeds_u64_max_success() -> Result<(), Box<dyn Error>> {
+    // amount_out is denominated in the destination chain token and may exceed u64::MAX
+    // (e.g. 1000 DAI = 1e21). The fill report must still complete the order and release
+    // the escrowed token_in, otherwise the solver's funds are locked.
+    let amount_out: u128 = 1_000_000_000_000_000_000_000; // 1e21
+    assert!(amount_out > u64::MAX as u128);
+
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
+
+    let order_params = order_book::instructions::open::OrderParams {
+        dest_chain_id: DEST_CHAIN_ID,
+        created_at: test.current_time(),
+        fill_deadline: test
+            .ctx
+            .svm
+            .get_sysvar::<anchor_lang::prelude::Clock>()
+            .unix_timestamp as u64
+            + 86400,
+        token_out: test.get_mint("token-out-spl-6").to_bytes(),
+        amount_in: 1_000_000,
+        amount_out,
+        recipient: test.get_user("alice").pubkey().to_bytes(),
+        solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
+    };
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+    let solver_token_in_ata = test.get_ata("token-in-spl-6", "solver");
+    let order_account = test
+        .ctx
+        .svm
+        .get_pda(&[ORDER_SEED_PREFIX, &order_id], &order_book::ID);
+    let order_token_in_ata =
+        get_associated_token_address(&order_account, &test.get_mint("token-in-spl-6"));
+
+    let solver_balance_before = test.get_token_balance(&solver_token_in_ata)?;
+    let order_balance_before = test.get_token_balance(&order_token_in_ata)?;
+
+    let full_fill_report = FillReport {
+        order_id,
+        amount_in_to_release: 1_000_000,
+        amount_out_filled: amount_out,
+        origin_recipient: test.get_user("solver").pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+    };
+
+    test.report_fill("admin", order_params.dest_chain_id, &full_fill_report)?;
+
+    let solver_balance_after = test.get_token_balance(&solver_token_in_ata)?;
+    let order_balance_after = test.get_token_balance(&order_token_in_ata)?;
+
+    assert_eq!(
+        solver_balance_after - solver_balance_before,
+        order_balance_before,
+        "Solver should receive ALL tokens from order account"
+    );
+    assert_eq!(order_balance_after, 0, "Order account should be empty");
+
+    let (_, order_data) = test.get_native_order_account(&order_id)?;
+    assert_eq!(
+        order_data.data.status,
+        order_book::state::OrderStatus::Completed,
+        "Order should be Completed"
+    );
+    assert_eq!(
+        order_data.data.amount_in_released, 1_000_000,
+        "amount_in_released should equal amount_in"
+    );
+    assert_eq!(
+        order_data.data.amount_out_filled, amount_out,
+        "amount_out_filled should equal amount_out"
     );
 
     Ok(())

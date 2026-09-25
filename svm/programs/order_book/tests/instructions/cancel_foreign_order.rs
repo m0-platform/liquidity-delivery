@@ -191,6 +191,7 @@ mod xchain_orders {
             amount_out: 1_000_000,
             recipient: test.get_user("alice").pubkey().to_bytes(),
             solver: test.get_user("solver").pubkey().to_bytes(),
+            sender: test.get_user("alice").pubkey(),
         };
         let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
         let (_, native_order) = test.get_native_order_account(&order_id)?;

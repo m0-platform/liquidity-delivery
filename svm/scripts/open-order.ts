@@ -38,6 +38,7 @@ interface CliArgs {
   amountOut: string;
   recipient: string; // hex bytes32
   solver: string; // hex bytes32
+  sender?: string; // base58 pubkey; order owner (refund/cancel rights), defaults to payer
   deadlineOffset: number; // seconds
   keypairPath: string;
   rpcUrl: string;
@@ -75,6 +76,9 @@ function parseArgs(): CliArgs {
         break;
       case "--solver":
         parsed.solver = args[++i].replace(/^0x/, "").padStart(64, "0");
+        break;
+      case "--sender":
+        parsed.sender = args[++i];
         break;
       case "--deadline":
         parsed.deadlineOffset = parseInt(args[++i]);
@@ -146,7 +150,11 @@ async function main() {
   const payer = loadKeypair(args.keypairPath);
   const connection = new Connection(args.rpcUrl, "confirmed");
 
+  // The order owner (refund/cancel rights); tokens are pulled from the payer's ATA
+  const sender = args.sender ? new PublicKey(args.sender) : payer.publicKey;
+
   console.log(`Payer:    ${payer.publicKey.toBase58()}`);
+  console.log(`Sender:   ${sender.toBase58()}${args.sender ? "" : " (defaulted to payer)"}`);
   console.log(`RPC:      ${args.rpcUrl.replace(/\/\/.*@/, "//***@")}`); // hide API key
   console.log(`Dry run:  ${args.dryRun}`);
   console.log();
@@ -185,7 +193,7 @@ async function main() {
 
   // Fetch sender nonce (default to 0 if account doesn't exist)
   const [senderNonceAccount] = PublicKey.findProgramAddressSync(
-    [NONCE_SEED_PREFIX, payer.publicKey.toBuffer()],
+    [NONCE_SEED_PREFIX, sender.toBuffer()],
     PROGRAM_ID
   );
 
@@ -208,7 +216,7 @@ async function main() {
   const tokenInProgram = await detectTokenProgram(connection, tokenInMint);
   console.log(`Token program: ${tokenInProgram.equals(TOKEN_2022_PROGRAM_ID) ? "Token-2022" : "Token"}`);
 
-  const senderTokenInAccount = getAssociatedTokenAddressSync(
+  const payerTokenInAccount = getAssociatedTokenAddressSync(
     tokenInMint,
     payer.publicKey,
     false,
@@ -218,7 +226,7 @@ async function main() {
   // Build OrderData for ID computation
   const orderData: OrderData = {
     version: 1,
-    sender: payer.publicKey.toBytes(),
+    sender: sender.toBytes(),
     nonce,
     originChainId,
     destChainId: args.destChainId,
@@ -275,6 +283,7 @@ async function main() {
     amountOut: new BN(args.amountOut),
     recipient: hexToBytes32(args.recipient),
     solver: hexToBytes32(args.solver),
+    sender,
   };
 
   console.log("\n--- Order Details ---");
@@ -298,7 +307,7 @@ async function main() {
       globalAccount,
       destinationAccount: args.destChainId !== originChainId ? destinationAccount : null,
       tokenInMint,
-      senderTokenInAccount,
+      payerTokenInAccount,
       senderNonceAccount,
       order: orderPda,
       orderTokenInAta,

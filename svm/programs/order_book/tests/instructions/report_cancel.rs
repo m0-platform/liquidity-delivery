@@ -45,6 +45,7 @@ fn default_order_params(test: &OrderBookTest) -> order_book::instructions::open:
         amount_out: 1_000_000,
         recipient: test.get_user("bob").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     }
 }
 
@@ -598,6 +599,36 @@ fn test_report_cancel_after_partial_fill_refund_exceeds_available_reverts() -> R
     test.ctx
         .execute_instruction(ix, &[&relayer, &portal_authority])?
         .assert_anchor_error(&format!("{:?}", OrderBookError::InvalidRefundAmount));
+
+    Ok(())
+}
+
+#[test]
+fn test_report_cancel_refund_goes_to_sender_not_funder() -> Result<(), Box<dyn Error>> {
+    let mut test = OrderBookTest::new()?;
+    test.initialize()?;
+
+    // Alice funds a cross-chain order owned by bob (bob has no token account yet)
+    let bob = test.get_user("bob");
+    let mut order_params = default_order_params(&test);
+    order_params.sender = bob.pubkey();
+    let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+    let alice_ata = test.get_ata("token-in-spl-6", "alice");
+    let alice_balance = test.get_token_balance(&alice_ata)?;
+
+    let cancel_report = order_book::instructions::CancelReport {
+        order_id,
+        order_sender: bob.pubkey().to_bytes(),
+        token_in: test.get_mint("token-in-spl-6").to_bytes(),
+        amount_in_to_refund: order_params.amount_in as u128,
+    };
+    test.report_cancel("carol", order_params.dest_chain_id, &cancel_report)?;
+
+    // The relayer created bob's ATA and the refund landed there, not with the funder
+    let bob_ata = get_associated_token_address(&bob.pubkey(), &test.get_mint("token-in-spl-6"));
+    assert_eq!(test.get_token_balance(&bob_ata)?, order_params.amount_in);
+    assert_eq!(test.get_token_balance(&alice_ata)?, alice_balance);
 
     Ok(())
 }

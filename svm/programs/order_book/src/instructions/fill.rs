@@ -4,7 +4,7 @@ use crate::{
     state::{
         ForeignOrder, GLOBAL_SEED, NativeOrder, ORDER_SEED_PREFIX, Order, 
         OrderBookGlobal, OrderData, OrderStatus, OrderType, compute_order_id
-    }, utils::{transfer_tokens_from_program, transfer_exact_tokens, transfer_exact_tokens_from_program}
+    }, utils::{muldiv_u128, transfer_tokens_from_program, transfer_exact_tokens, transfer_exact_tokens_from_program}
 };
 use anchor_lang::prelude::*;
 use anchor_spl::{
@@ -110,9 +110,14 @@ pub struct FillNativeOrder<'info> {
     )]
     pub recipient: UncheckedAccount<'info>,
 
+    /// Note: ATA for the recipient must exist to be filled.
+    /// It should be created by the recipient, perhaps bundled
+    /// with the "open_order" instruction.
+    /// The solver can optionally do this as part of the fill
+    /// transaction, but they will end up donating the rent
+    /// to the recipient.
     #[account(
-        init_if_needed,
-        payer = solver,
+        mut,
         associated_token::mint = token_out_mint,
         associated_token::authority = recipient,
         associated_token::token_program = token_out_program,
@@ -208,15 +213,15 @@ impl FillNativeOrder<'_> {
         }
 
         // Update the amount filled on the order
-        order.amount_in_released += amount_in_to_release as u128;
-        order.amount_out_filled += amount_out_to_fill as u128;
+        order.amount_in_released += amount_in_to_release;
+        order.amount_out_filled += amount_out_to_fill;
 
         // Transfer the output tokens from the solver to the recipient
         // Check that actual amount is received
         transfer_exact_tokens(
             &ctx.accounts.solver_token_out_account,
             &mut ctx.accounts.recipient_token_out_ata,
-            amount_out_to_fill,
+            amount_out_to_fill.try_into().map_err(|_| OrderBookError::InvalidFillAmount)?,
             &ctx.accounts.token_out_mint,
             &ctx.accounts.solver,
             &ctx.accounts.token_out_program,
@@ -227,7 +232,7 @@ impl FillNativeOrder<'_> {
         transfer_exact_tokens_from_program(
             &ctx.accounts.order_token_in_ata,
             &mut ctx.accounts.solver_token_in_account,
-            amount_in_to_release,
+            amount_in_to_release.try_into().map_err(|_| OrderBookError::InvalidFillAmount)?,
             &ctx.accounts.token_in_mint,
             &ctx.accounts.order.to_account_info(),
             &[&[ORDER_SEED_PREFIX, &order_id, &[ctx.accounts.order.bump]]],
@@ -238,8 +243,8 @@ impl FillNativeOrder<'_> {
         emit_cpi!(OrderFilled {
             order_id,
             solver: ctx.accounts.solver.key(),
-            amount_in_to_release: amount_in_to_release as u128,
-            amount_out_filled: amount_out_to_fill as u128,
+            amount_in_to_release,
+            amount_out_filled: amount_out_to_fill,
         });
 
         // If the order is fully filled, emit an order completed event
@@ -286,9 +291,13 @@ pub struct FillForeignOrder<'info> {
     )]
     pub recipient: UncheckedAccount<'info>,
 
+    /// Note: ATA for the recipient must exist to be filled.
+    /// It should be created by the recipient.
+    /// The solver can optionally do this as part of the fill
+    /// transaction, but they will end up donating the rent
+    /// to the recipient.
     #[account(
-        init_if_needed,
-        payer = solver,
+        mut,
         associated_token::mint = token_out_mint,
         associated_token::authority = recipient,
         associated_token::token_program = token_out_program,
@@ -413,15 +422,15 @@ impl<'info> FillForeignOrder<'info> {
         };
 
         // Update the fill amounts on the order
-        order.amount_in_released += amount_in_to_release as u128;
-        order.amount_out_filled += amount_out_to_fill as u128;
+        order.amount_in_released += amount_in_to_release;
+        order.amount_out_filled += amount_out_to_fill;
 
         // Transfer the output tokens from the solver to the recipient
         // Check that actual amount is received
         transfer_exact_tokens(
             &ctx.accounts.solver_token_out_account,
             &mut ctx.accounts.recipient_token_out_ata,
-            amount_out_to_fill,
+            amount_out_to_fill.try_into().map_err(|_| OrderBookError::InvalidFillAmount)?,
             &ctx.accounts.token_out_mint,
             &ctx.accounts.solver,
             &ctx.accounts.token_out_program,
@@ -444,8 +453,8 @@ impl<'info> FillForeignOrder<'info> {
             .with_remaining_accounts(ctx.remaining_accounts.to_vec()),
             order_id, // order_id: [u8; 32],
             order_data.token_in, // token_in: [u8; 32],
-            amount_in_to_release as u128, // amount_in_to_release: u128,
-            amount_out_to_fill as u128, // amount_out_filled: u128,
+            amount_in_to_release, // amount_in_to_release: u128,
+            amount_out_to_fill, // amount_out_filled: u128,
             fill_params.origin_recipient, // origin_recipient: [u8; 32],
             order_data.origin_chain_id, // origin_chain_id: u32,
         )?;
@@ -454,8 +463,8 @@ impl<'info> FillForeignOrder<'info> {
         emit_cpi!(OrderFilled {
             order_id,
             solver: ctx.accounts.solver.key(),
-            amount_in_to_release: amount_in_to_release as u128,
-            amount_out_filled: amount_out_to_fill as u128,
+            amount_in_to_release,
+            amount_out_filled: amount_out_to_fill,
         });
 
         Ok(())
@@ -679,7 +688,7 @@ fn calculate_fill(
     amount_in_released_: u128,
     amount_out_filled_: u128,
     amount_out_to_fill_: u128
-) -> Result<(bool, u64, u64)> {
+) -> Result<(bool, u128, u128)> {
     // Determine the amount out to fill as the minimum of the filler provided amount and the remaining unfilled amount
     let amount_out_remaining_ = total_amount_out_.checked_sub(amount_out_filled_).ok_or(OrderBookError::MathUnderflow)?;
     let full_fill_ = amount_out_to_fill_ >= amount_out_remaining_;
@@ -690,16 +699,77 @@ fn calculate_fill(
     };
 
     // Calculate the corresponding amount of token in to release to the filler
+    // The partial-fill product uses a 256-bit intermediate so u128 amounts cannot overflow
     let amount_in_to_release_ = if full_fill_ {
         total_amount_in_.checked_sub(amount_in_released_).ok_or(OrderBookError::MathUnderflow)? // remaining amount
     } else {
-        total_amount_in_.checked_mul(amount_out_to_fill_).ok_or(OrderBookError::MathOverflow)?
-            .checked_div(total_amount_out_).ok_or(OrderBookError::MathUnderflow)?
+        muldiv_u128(total_amount_in_, amount_out_to_fill_, total_amount_out_)?
     };
 
     Ok((
-        full_fill_, 
-        amount_in_to_release_.try_into().map_err(|_| OrderBookError::InvalidFillAmount)?, 
-        amount_out_to_fill_.try_into().map_err(|_| OrderBookError::InvalidFillAmount)?
+        full_fill_,
+        amount_in_to_release_,
+        amount_out_to_fill_
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // 1000 USDC (6 decimals) - fits in u64
+    const AMOUNT_6_DEC: u128 = 1_000_000_000;
+    // 1000 DAI (18 decimals) = 1e21 - exceeds u64::MAX (~1.8e19)
+    const AMOUNT_18_DEC: u128 = 1_000_000_000_000_000_000_000;
+
+    #[test]
+    fn calculate_fill_full_fill_amount_out_exceeds_u64_max() {
+        assert!(AMOUNT_18_DEC > u64::MAX as u128);
+
+        // Native order: amount_in on Solana (6 dec), amount_out on EVM (18 dec)
+        let (full_fill, amount_in_to_release, amount_out_to_fill) =
+            calculate_fill(AMOUNT_6_DEC, AMOUNT_18_DEC, 0, 0, AMOUNT_18_DEC).unwrap();
+
+        assert!(full_fill);
+        assert_eq!(u128::from(amount_in_to_release), AMOUNT_6_DEC);
+        assert_eq!(u128::from(amount_out_to_fill), AMOUNT_18_DEC);
+    }
+
+    #[test]
+    fn calculate_fill_partial_fill_amount_out_exceeds_u64_max() {
+        let half_out = AMOUNT_18_DEC / 2;
+        assert!(half_out > u64::MAX as u128);
+
+        let (full_fill, amount_in_to_release, amount_out_to_fill) =
+            calculate_fill(AMOUNT_6_DEC, AMOUNT_18_DEC, 0, 0, half_out).unwrap();
+
+        assert!(!full_fill);
+        assert_eq!(u128::from(amount_in_to_release), AMOUNT_6_DEC / 2);
+        assert_eq!(u128::from(amount_out_to_fill), half_out);
+    }
+
+    #[test]
+    fn calculate_fill_full_fill_amount_in_exceeds_u64_max() {
+        // Foreign order: amount_in on EVM (18 dec), amount_out on Solana (6 dec)
+        let (full_fill, amount_in_to_release, amount_out_to_fill) =
+            calculate_fill(AMOUNT_18_DEC, AMOUNT_6_DEC, 0, 0, AMOUNT_6_DEC).unwrap();
+
+        assert!(full_fill);
+        assert_eq!(u128::from(amount_in_to_release), AMOUNT_18_DEC);
+        assert_eq!(u128::from(amount_out_to_fill), AMOUNT_6_DEC);
+    }
+
+    #[test]
+    fn calculate_fill_partial_fill_product_exceeds_u128_max() {
+        // Both sides 18-decimal (e.g. DAI in, DAI out): the partial-fill
+        // proration multiplies 1e21 * 5e20 = 5e41, which exceeds u128::MAX
+        let half_out = AMOUNT_18_DEC / 2;
+
+        let (full_fill, amount_in_to_release, amount_out_to_fill) =
+            calculate_fill(AMOUNT_18_DEC, AMOUNT_18_DEC, 0, 0, half_out).unwrap();
+
+        assert!(!full_fill);
+        assert_eq!(amount_in_to_release, half_out);
+        assert_eq!(amount_out_to_fill, half_out);
+    }
 }

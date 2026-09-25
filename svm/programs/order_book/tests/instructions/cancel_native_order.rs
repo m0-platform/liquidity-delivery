@@ -47,6 +47,7 @@ mod local_orders {
             amount_out: 1_000_000,
             recipient: test.get_user("bob").pubkey().to_bytes(),
             solver: test.get_user("solver").pubkey().to_bytes(),
+            sender: test.get_user("alice").pubkey(),
         }
     }
 
@@ -579,6 +580,34 @@ mod local_orders {
         test.ctx
             .execute_instruction(ix, &[&test.get_user("alice")])?
             .assert_anchor_error(&format!("{:?}", OrderBookError::ProgramPaused));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cancel_native_order_refund_goes_to_sender_not_funder() -> Result<(), Box<dyn Error>> {
+        let mut test = OrderBookTest::new()?;
+        test.initialize()?;
+
+        // Alice funds the order, carol owns it (cancel/refund rights)
+        let mut order_params = default_order_params(&test);
+        order_params.sender = test.get_user("carol").pubkey();
+        let order_id = test.open_order("alice", "token-in-spl-6", &order_params)?;
+
+        let carol_ata = test.get_ata("token-in-spl-6", "carol");
+        let alice_ata = test.get_ata("token-in-spl-6", "alice");
+        let carol_balance = test.get_token_balance(&carol_ata)?;
+        let alice_balance = test.get_token_balance(&alice_ata)?;
+
+        // Carol (the order owner) cancels
+        test.cancel_native_order("carol", "carol", order_id)?;
+
+        // The refund lands with carol, not with the funder
+        assert_eq!(
+            test.get_token_balance(&carol_ata)?,
+            carol_balance + order_params.amount_in
+        );
+        assert_eq!(test.get_token_balance(&alice_ata)?, alice_balance);
 
         Ok(())
     }

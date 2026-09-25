@@ -32,6 +32,7 @@ fn default_order_params(test: &OrderBookTest) -> order_book::instructions::open:
         amount_out: 1_000_000,
         recipient: test.get_user("alice").pubkey().to_bytes(),
         solver: test.get_user("solver").pubkey().to_bytes(),
+        sender: test.get_user("alice").pubkey(),
     }
 }
 
