@@ -72,19 +72,24 @@ impl OrderBookTest {
         );
 
         // Create ATAs for alice and the solver and mint them tokens
+        // Bob's ATAs are created so he can be used as a recipient
+        // (recipients must have an ATA prior to fill)
         let alice = users.get("alice").unwrap();
+        let bob = users.get("bob").unwrap();
         let carol = users.get("carol").unwrap();
         let solver = users.get("solver").unwrap();
         let mut atas: HashMap<(&str, &str), Pubkey> = HashMap::new();
 
         for (token_name, token_mint) in mints.iter() {
             let alice_ata = ctx.svm.create_associated_token_account(token_mint, alice)?;
+            let bob_ata = ctx.svm.create_associated_token_account(token_mint, bob)?;
             let carol_ata = ctx.svm.create_associated_token_account(token_mint, carol)?;
             let solver_ata = ctx
                 .svm
                 .create_associated_token_account(token_mint, solver)?;
 
             atas.insert((token_name, "alice"), alice_ata);
+            atas.insert((token_name, "bob"), bob_ata);
             atas.insert((token_name, "carol"), carol_ata);
             atas.insert((token_name, "solver"), solver_ata);
 
@@ -635,15 +640,16 @@ impl OrderBookTest {
 
     fn create_open_order_ix(
         &self,
-        sender: &Pubkey,
+        payer: &Pubkey,
         token_in_mint: &Pubkey,
-        sender_token_in_account: &Pubkey,
+        payer_token_in_account: &Pubkey,
         token_authority: Option<&Pubkey>,
         order_params: &order_book::instructions::open::OrderParams,
     ) -> Result<([u8; 32], Instruction), Box<dyn Error>> {
         let (global_account, global_data) = self.get_global_account().unwrap();
-        let (sender_nonce_account, sender_nonce_data) =
-            self.get_sender_nonce_account(sender).unwrap();
+        let (sender_nonce_account, sender_nonce_data) = self
+            .get_sender_nonce_account(&order_params.sender)
+            .unwrap();
 
         let destination_account = if order_params.dest_chain_id != global_data.chain_id {
             Some(self.ctx.svm.get_pda(
@@ -659,7 +665,7 @@ impl OrderBookTest {
 
         let order_id = order_book::state::compute_order_id(&order_book::state::OrderData {
             version: order_book::constants::VERSION,
-            sender: sender.to_bytes(),
+            sender: order_params.sender.to_bytes(),
             nonce: sender_nonce_data.value,
             origin_chain_id: global_data.chain_id,
             dest_chain_id: order_params.dest_chain_id,
@@ -684,12 +690,12 @@ impl OrderBookTest {
             .accounts(order_book::accounts::OpenOrder {
                 program: order_book::ID,
                 event_authority: self.get_event_authority()?,
-                payer: *sender,
+                payer: *payer,
                 token_authority: token_authority.cloned(),
                 global_account,
                 destination_account,
                 token_in_mint: *token_in_mint,
-                sender_token_in_account: *sender_token_in_account,
+                payer_token_in_account: *payer_token_in_account,
                 sender_nonce_account,
                 order,
                 order_token_in_ata,
@@ -953,12 +959,12 @@ impl OrderBookTest {
     ) -> Result<[u8; 32], Box<dyn Error>> {
         let sender_keypair = self.users.get(sender).unwrap();
         let token_in_mint_pubkey = self.mints.get(token_in_mint).unwrap();
-        let sender_token_in_account = self.atas.get(&(token_in_mint, sender)).unwrap();
+        let payer_token_in_account = self.atas.get(&(token_in_mint, sender)).unwrap();
 
         let (order_id, ix) = self.create_open_order_ix(
             &sender_keypair.pubkey(),
             token_in_mint_pubkey,
-            sender_token_in_account,
+            payer_token_in_account,
             None,
             order_params,
         )?;

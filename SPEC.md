@@ -368,7 +368,8 @@ The Solana program (`svm/programs/order_book`) implements the same protocol with
 - **Order accounts.** Each order is its own PDA seeded by `["order", orderId]`. Two distinct shapes share that seed:
   - `Order<NativeOrder>` — the order originated on this chain (full data, status, and filled amounts in one account).
   - `Order<ForeignOrder>` — the order originated on another chain and is being filled / cancelled here (status + filled amounts only). A foreign order PDA is created lazily on first fill or cancel.
-- **Nonce account.** Per-sender nonces are tracked in `Nonce` PDAs seeded by `["nonce", sender]`.
+- **Nonce account.** Per-sender nonces are tracked in `Nonce` PDAs seeded by `["nonce", sender]`, where `sender` is the order owner supplied in `OrderParams`.
+- **Funder / sender split.** As on EVM, `open_order` takes an explicit `sender` in `OrderParams` — the order owner that holds cancel rights and receives refunds. It must be non-zero. Tokens are pulled from `payer_token_in_account`, whose owner (the funder) may differ from `sender`. The transfer is authorized by the optional `token_authority` signer, or by the `payer` if none is provided. The `OrderOpened` event reports both `funder` and `sender`.
 - **Global account.** A single `OrderBookGlobal` PDA holds the chain ID, the configured `portal_authority`, the admin (and pending `new_admin` for two-step transfers), and the paused flag.
 - **Destination accounts.** Supported destination chains are represented by `Destination` PDAs seeded by `["destination", destChainId]`.
 - **`createdAt` window.** Because Solana clients can't deterministically know which slot an instruction will land in, the user supplies `createdAt` and the program accepts any value within `[now, now + 300s]`. This lets the order PDA be precomputed offchain.
