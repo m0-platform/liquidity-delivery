@@ -51,6 +51,7 @@ citrea = "${CITREA_RPC_URL}"
 arbitrum = "${ARBITRUM_RPC_URL}"
 monad = "${MONAD_RPC_URL}"
 rise = "${RISE_RPC_URL}"
+zerog = "${ZEROG_RPC_URL}"
 
 [etherscan]
 mainnet = { key = "${ETHERSCAN_API_KEY}" }
