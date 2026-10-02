@@ -97,11 +97,11 @@
         "layerzero": "0x77EF4e9D37524069f81890C537a5c5d390bb4b4d"
       }
     },
-    "og": {
+    "zerog": {
       "chainId": 16661,
       "name": "0G Mainnet",
-      "rpcAlias": "og",
-      "explorerAlias": "og",
+      "rpcAlias": "zerog",
+      "explorerAlias": "zerog",
       "explorerType": "custom",
       "portal": "0xD925C84b55E4e44a53749fF5F2a5A13F63D128fd",
       "adapters": {
