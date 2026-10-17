@@ -108,9 +108,9 @@ contract FillOrderTest is OrderBookTestBase {
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
-                tokenOut: order.tokenOut,
-                recipient: order.recipient,
-                solver: order.solver
+                tokenOut: recordedOrderData[orderId].tokenOut,
+                recipient: recordedOrderData[orderId].recipient,
+                solver: recordedOrderData[orderId].solver
             }),
             IOrderBook.FillParams({
                 amountOutToFill: order.amountOut,
@@ -145,9 +145,9 @@ contract FillOrderTest is OrderBookTestBase {
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
-                tokenOut: order.tokenOut,
-                recipient: order.recipient,
-                solver: order.solver
+                tokenOut: recordedOrderData[orderId].tokenOut,
+                recipient: recordedOrderData[orderId].recipient,
+                solver: recordedOrderData[orderId].solver
             }),
             IOrderBook.FillParams({
                 amountOutToFill: order.amountOut,
@@ -174,11 +174,11 @@ contract FillOrderTest is OrderBookTestBase {
             createdAt: uint64(order.createdAt),
             fillDeadline: uint64(order.fillDeadline),
             tokenIn: order.tokenIn.toBytes32(),
-            tokenOut: order.tokenOut,
+            tokenOut: recordedOrderData[orderId].tokenOut,
             amountIn: order.amountIn,
             amountOut: order.amountOut,
-            recipient: order.recipient,
-            solver: order.solver
+            recipient: recordedOrderData[orderId].recipient,
+            solver: recordedOrderData[orderId].solver
         });
         orderId = orderBook.getOrderId(orderData);
 
@@ -220,9 +220,9 @@ contract FillOrderTest is OrderBookTestBase {
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
-                tokenOut: order.tokenOut,
-                recipient: order.recipient,
-                solver: order.solver
+                tokenOut: recordedOrderData[orderId].tokenOut,
+                recipient: recordedOrderData[orderId].recipient,
+                solver: recordedOrderData[orderId].solver
             }),
             IOrderBook.FillParams({
                 amountOutToFill: order.amountOut,
@@ -254,9 +254,9 @@ contract FillOrderTest is OrderBookTestBase {
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
-                tokenOut: order.tokenOut,
-                recipient: order.recipient,
-                solver: order.solver
+                tokenOut: recordedOrderData[orderId].tokenOut,
+                recipient: recordedOrderData[orderId].recipient,
+                solver: recordedOrderData[orderId].solver
             }),
             IOrderBook.FillParams({
                 amountOutToFill: order.amountOut,
@@ -293,9 +293,9 @@ contract FillOrderTest is OrderBookTestBase {
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
-                tokenOut: order.tokenOut,
-                recipient: order.recipient,
-                solver: order.solver
+                tokenOut: recordedOrderData[orderId].tokenOut,
+                recipient: recordedOrderData[orderId].recipient,
+                solver: recordedOrderData[orderId].solver
             }),
             IOrderBook.FillParams({
                 amountOutToFill: order.amountOut,
@@ -327,9 +327,9 @@ contract FillOrderTest is OrderBookTestBase {
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
-                tokenOut: order.tokenOut,
-                recipient: order.recipient,
-                solver: order.solver
+                tokenOut: recordedOrderData[orderId].tokenOut,
+                recipient: recordedOrderData[orderId].recipient,
+                solver: recordedOrderData[orderId].solver
             }),
             IOrderBook.FillParams({ amountOutToFill: 0, originRecipient: params.solver, refundAddress: bytes32(0) })
         );
@@ -367,9 +367,9 @@ contract FillOrderTest is OrderBookTestBase {
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
-                tokenOut: order.tokenOut,
-                recipient: order.recipient,
-                solver: order.solver
+                tokenOut: recordedOrderData[orderId].tokenOut,
+                recipient: recordedOrderData[orderId].recipient,
+                solver: recordedOrderData[orderId].solver
             }),
             IOrderBook.FillParams({
                 amountOutToFill: order.amountOut,
@@ -470,9 +470,9 @@ contract FillOrderTest is OrderBookTestBase {
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
-                tokenOut: order.tokenOut,
-                recipient: order.recipient,
-                solver: order.solver
+                tokenOut: recordedOrderData[orderId].tokenOut,
+                recipient: recordedOrderData[orderId].recipient,
+                solver: recordedOrderData[orderId].solver
             }),
             IOrderBook.FillParams({
                 amountOutToFill: fillAmount,
@@ -568,9 +568,9 @@ contract FillOrderTest is OrderBookTestBase {
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
-                tokenOut: order.tokenOut,
-                recipient: order.recipient,
-                solver: order.solver
+                tokenOut: recordedOrderData[orderId].tokenOut,
+                recipient: recordedOrderData[orderId].recipient,
+                solver: recordedOrderData[orderId].solver
             }),
             IOrderBook.FillParams({
                 amountOutToFill: fillAmount,
@@ -955,6 +955,7 @@ contract FillOrderTest is OrderBookTestBase {
         params.destChainId = CHAIN_ID;
         bytes32 orderId = _placeOrder(users["alice"], params);
         IOrderBook.Order memory order = orderBook.getOrder(orderId);
+        IOrderBook.OrderData memory orderData = _getOrderDataFromOrder(orderId, order);
 
         // Set the fill amount for the first fill to be a random value between 1 and amount out - 1
         fillAmount = (fillAmount % (order.amountOut - 1)) + 1;
@@ -972,24 +973,10 @@ contract FillOrderTest is OrderBookTestBase {
         emit IOrderBook.OrderFilled(orderId, params.solver.toAddress(), expectedAmountIn, fillAmount, bytes32(0));
         bytes32 messageId1 = orderBook.fillOrder(
             orderId,
-            IOrderBook.OrderData({
-                version: order.version,
-                originChainId: CHAIN_ID,
-                sender: order.sender.toBytes32(),
-                nonce: order.nonce,
-                destChainId: order.destChainId,
-                createdAt: uint64(order.createdAt),
-                fillDeadline: uint64(order.fillDeadline),
-                amountIn: order.amountIn,
-                amountOut: order.amountOut,
-                tokenIn: order.tokenIn.toBytes32(),
-                tokenOut: order.tokenOut,
-                recipient: order.recipient,
-                solver: order.solver
-            }),
+            orderData,
             IOrderBook.FillParams({
                 amountOutToFill: fillAmount,
-                originRecipient: order.solver,
+                originRecipient: orderData.solver,
                 refundAddress: bytes32(0)
             })
         );
@@ -1035,24 +1022,10 @@ contract FillOrderTest is OrderBookTestBase {
         );
         bytes32 messageId2 = orderBook.fillOrder(
             orderId,
-            IOrderBook.OrderData({
-                version: order.version,
-                originChainId: CHAIN_ID,
-                sender: order.sender.toBytes32(),
-                nonce: order.nonce,
-                destChainId: order.destChainId,
-                createdAt: uint64(order.createdAt),
-                fillDeadline: uint64(order.fillDeadline),
-                amountIn: order.amountIn,
-                amountOut: order.amountOut,
-                tokenIn: order.tokenIn.toBytes32(),
-                tokenOut: order.tokenOut,
-                recipient: order.recipient,
-                solver: order.solver
-            }),
+            orderData,
             IOrderBook.FillParams({
                 amountOutToFill: remainingAmountOut,
-                originRecipient: order.solver,
+                originRecipient: orderData.solver,
                 refundAddress: bytes32(0)
             })
         );
@@ -1126,9 +1099,9 @@ contract FillOrderTest is OrderBookTestBase {
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
-                tokenOut: order.tokenOut,
-                recipient: order.recipient,
-                solver: order.solver
+                tokenOut: recordedOrderData[orderId].tokenOut,
+                recipient: recordedOrderData[orderId].recipient,
+                solver: recordedOrderData[orderId].solver
             }),
             IOrderBook.FillParams({
                 amountOutToFill: order.amountOut,
@@ -1169,9 +1142,9 @@ contract FillOrderTest is OrderBookTestBase {
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
-                tokenOut: order.tokenOut,
-                recipient: order.recipient,
-                solver: order.solver
+                tokenOut: recordedOrderData[orderId].tokenOut,
+                recipient: recordedOrderData[orderId].recipient,
+                solver: recordedOrderData[orderId].solver
             }),
             IOrderBook.FillParams({
                 amountOutToFill: order.amountOut,
@@ -1208,9 +1181,9 @@ contract FillOrderTest is OrderBookTestBase {
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
-                tokenOut: order.tokenOut,
-                recipient: order.recipient,
-                solver: order.solver
+                tokenOut: recordedOrderData[orderId].tokenOut,
+                recipient: recordedOrderData[orderId].recipient,
+                solver: recordedOrderData[orderId].solver
             }),
             IOrderBook.FillParams({
                 amountOutToFill: order.amountOut,

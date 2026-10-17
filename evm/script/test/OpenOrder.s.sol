@@ -12,7 +12,8 @@ import { IOrderBook } from "../../src/interfaces/IOrderBook.sol";
 /// @dev Usage: forge script script/test/OpenOrder.s.sol --rpc-url <rpc> --broadcast \
 ///             --sig "run(address,uint128,uint32,bytes32,uint128,bytes32,bytes32,uint32,address)" \
 ///             <tokenIn> <amountIn> <destChainId> <tokenOut> <amountOut> <recipient> <solver> <deadlineOffset> <orderSender>
-/// @dev OrderData can be queried from the contract using getOrderData(orderId)
+/// @dev tokenOut, recipient, and solver are not stored onchain, so complete OrderData
+///      must be reconstructed from the OrderOpened event (or the params used to open)
 contract OpenOrder is ScriptBase {
     /// @notice Default deadline offset (1 hour)
     uint32 constant DEFAULT_DEADLINE_OFFSET = 3600;
@@ -60,8 +61,12 @@ contract OpenOrder is ScriptBase {
         // Execute order creation (funder broadcasts and pays the input tokens)
         orderId_ = _executeOpenOrder(funder_, orderBook_, orderParams_);
 
-        // Fetch OrderData directly from the contract for logging
+        // Fetch the stored order fields and complete the payload with the fields that are
+        // not stored onchain (tokenOut, recipient, and solver) from the params used to open
         IOrderBook.OrderData memory orderData_ = IOrderBook(orderBook_).getOrderData(orderId_);
+        orderData_.tokenOut = orderParams_.tokenOut;
+        orderData_.recipient = orderParams_.recipient;
+        orderData_.solver = orderParams_.solver;
 
         // Verify order ID matches (sanity check)
         bytes32 computedOrderId_ = IOrderBook(orderBook_).getOrderId(orderData_);

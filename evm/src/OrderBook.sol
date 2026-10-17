@@ -142,56 +142,69 @@ contract OrderBook is
         if (orderParams_.solver == orderParams_.recipient) revert InvalidSolver();
         if (orderParams_.sender == address(0)) revert ZeroSender();
 
-        // Validate that tokenIn and tokenOut are not the same for same-chain orders
-        uint32 chainId = block.chainid.safe32();
-        if (orderParams_.destChainId == chainId && orderParams_.tokenOut == orderParams_.tokenIn.toBytes32())
-            revert SameTokenOrder();
+        uint64 nonce_;
+        // Local scope to avoid stack too deep errors
+        {
+            // Validate that tokenIn and tokenOut are not the same for same-chain orders
+            uint32 chainId = block.chainid.safe32();
+            if (orderParams_.destChainId == chainId && orderParams_.tokenOut == orderParams_.tokenIn.toBytes32())
+                revert SameTokenOrder();
 
-        // Destination chain must either be the current chain or a supported destination
-        if (!isDestinationSupported(orderParams_.destChainId)) revert InvalidDestinationChain();
+            // Destination chain must either be the current chain or a supported destination
+            if (!isDestinationSupported(orderParams_.destChainId)) revert InvalidDestinationChain();
 
-        // Create order
-        OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
-        uint64 nonce_ = $.senderNonces[orderParams_.sender]++;
+            // Create order
+            OrderBookStorageStruct storage $ = _getOrderBookStorageLocation();
+            nonce_ = $.senderNonces[orderParams_.sender];
+            unchecked {
+                // a uint64 per-sender nonce cannot realistically overflow
+                $.senderNonces[orderParams_.sender] = nonce_ + 1;
+            }
 
-        orderId_ = getOrderId(
-            OrderData({
-                version: VERSION, // origin contract version
-                originChainId: chainId,
-                sender: orderParams_.sender.toBytes32(),
-                nonce: nonce_,
-                destChainId: orderParams_.destChainId,
-                createdAt: uint64(block.timestamp),
-                fillDeadline: uint64(orderParams_.fillDeadline),
-                tokenIn: orderParams_.tokenIn.toBytes32(),
-                tokenOut: orderParams_.tokenOut,
-                recipient: orderParams_.recipient,
-                amountIn: orderParams_.amountIn,
-                amountOut: orderParams_.amountOut,
-                solver: orderParams_.solver
-            })
-        );
+            orderId_ = getOrderId(
+                OrderData({
+                    version: VERSION, // origin contract version
+                    originChainId: chainId,
+                    sender: orderParams_.sender.toBytes32(),
+                    nonce: nonce_,
+                    destChainId: orderParams_.destChainId,
+                    createdAt: uint64(block.timestamp),
+                    fillDeadline: uint64(orderParams_.fillDeadline),
+                    tokenIn: orderParams_.tokenIn.toBytes32(),
+                    tokenOut: orderParams_.tokenOut,
+                    recipient: orderParams_.recipient,
+                    amountIn: orderParams_.amountIn,
+                    amountOut: orderParams_.amountOut,
+                    solver: orderParams_.solver
+                })
+            );
 
-        // Shouldn't be needed due to uniqueness of order ID, but
-        // it is good to be explicit about the expected state
-        // and this protects against a (very unlikely) hash collision
-        if ($.orders[orderId_].status != OrderStatus.DoesNotExist) revert OrderAlreadyExists();
+            Order storage order_ = $.orders[orderId_];
 
-        $.orders[orderId_] = Order({
-            version: VERSION, // origin contract version
-            status: OrderStatus.Created,
-            destChainId: orderParams_.destChainId,
-            createdAt: uint32(block.timestamp),
-            fillDeadline: orderParams_.fillDeadline,
-            nonce: nonce_,
-            tokenIn: orderParams_.tokenIn,
-            tokenOut: orderParams_.tokenOut,
-            sender: orderParams_.sender,
-            recipient: orderParams_.recipient,
-            amountIn: orderParams_.amountIn,
-            amountOut: orderParams_.amountOut,
-            solver: orderParams_.solver
-        });
+            // Shouldn't be needed due to uniqueness of order ID, but
+            // it is good to be explicit about the expected state
+            // and this protects against a (very unlikely) hash collision
+            if (order_.status != OrderStatus.DoesNotExist) revert OrderAlreadyExists();
+
+            // Only the fields needed onchain by fill, cancel, and crosschain report processing
+            // are written to storage. tokenOut, recipient, and solver are intentionally left
+            // unset (three fewer cold SSTOREs): they are bound to the order via the orderId hash,
+            // are supplied back through hash-verified OrderData calldata when filling/cancelling,
+            // and are available off-chain from the OrderOpened event.
+            // slot 0
+            order_.status = OrderStatus.Created;
+            order_.version = VERSION; // origin contract version
+            order_.sender = orderParams_.sender;
+            order_.nonce = nonce_;
+            // slot 1
+            order_.destChainId = orderParams_.destChainId;
+            order_.createdAt = uint32(block.timestamp);
+            order_.fillDeadline = orderParams_.fillDeadline;
+            order_.tokenIn = orderParams_.tokenIn;
+            // slot 3
+            order_.amountIn = orderParams_.amountIn;
+            order_.amountOut = orderParams_.amountOut;
+        }
 
         // Transfer tokens in from the funder, ensuring the required amount is received
         // Note: sender_ is the order owner (for cancellation/refunds), funder_ provides the tokens
@@ -201,11 +214,14 @@ contract OrderBook is
             orderId_,
             funder_,
             orderParams_.sender,
+            nonce_,
+            uint64(block.timestamp),
             orderParams_.tokenIn,
             orderParams_.amountIn,
             orderParams_.destChainId,
             orderParams_.tokenOut,
             orderParams_.amountOut,
+            orderParams_.recipient,
             orderParams_.solver,
             orderParams_.fillDeadline
         );

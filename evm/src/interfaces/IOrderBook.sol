@@ -7,27 +7,36 @@ interface IOrderBook {
     /**
      * @notice Emitted when a new order is opened
      * @dev This event is emitted on the origin chain
+     * @dev This event contains everything needed to reconstruct the OrderData payload required
+     *      to fill or cancel the order (tokenOut, recipient, and solver are not stored onchain):
+     *      version is the VERSION of the emitting contract and originChainId is the chain of emission
      * @param orderId The ID of the order
      * @param funder The address that provided the input funds for the order
      * @param sender The address that owns the order on the origin (this) chain
+     * @param nonce The sender nonce consumed by the order (part of the order ID hash)
+     * @param createdAt The timestamp when the order was created (part of the order ID hash)
      * @param tokenIn The address of the input token on the origin (this) chain
      * @param amountIn The amount of input token provided
      * @param destChainId The internal chain ID where the order will be filled
      * @param tokenOut The address of the output token on the destination chain
      * @param amountOut The amount of output token expected
+     * @param recipient The address to receive the funds on the destination chain
      * @param solver The address of the solver that will fill the order, or zero address if any solver can fill
      * @param fillDeadline Timestamp by which the order must be filled on the destination chain
      */
     event OrderOpened(
-        bytes32 orderId,
+        bytes32 indexed orderId,
         address funder,
         address indexed sender,
+        uint64 nonce,
+        uint64 createdAt,
         address tokenIn,
         uint128 amountIn,
         uint32 indexed destChainId,
         bytes32 tokenOut,
         uint128 amountOut,
-        bytes32 indexed solver,
+        bytes32 recipient,
+        bytes32 solver,
         uint32 fillDeadline
     );
 
@@ -165,6 +174,11 @@ interface IOrderBook {
     /**
      * @notice Complete data about an order originated on this chain
      * @dev Addresses on the destination chain are stored as bytes32 to support non-EVM chains
+     * @dev To reduce gas costs, orders are stored with tokenOut, recipient, and solver unset
+     *      (zero): those fields are bound to the order via the orderId hash, are supplied back
+     *      through hash-verified OrderData calldata when filling/cancelling, and are available
+     *      off-chain from the OrderOpened event. Orders stored by previous versions of the
+     *      contract have all fields set.
      * @param status Current status of the order
      * @param version Version of the contract when the order was created
      * @param sender Address that owns the order on the origin chain for cancellation rights and refunds
@@ -558,15 +572,20 @@ interface IOrderBook {
     /**
      * @notice Returns the state of a local order (i.e. one that originated on this chain)
      * @dev The order must have originated on this chain or the information will not be available
+     * @dev tokenOut, recipient, and solver are not stored for orders opened by this version of
+     *      the contract and are returned as zero; use the OrderOpened event to obtain them
      */
     function getOrder(bytes32 orderId_) external view returns (Order memory);
 
     /**
      * @notice Returns the OrderData for a local order (i.e. one that originated on this chain)
      * @dev The order must have originated on this chain or the information will not be available
-     *      This is a convenience function for solvers to get the OrderData needed to fill an order
+     * @dev For orders opened by this version of the contract, tokenOut, recipient, and solver are
+     *      not stored onchain and are returned as zero, so the returned struct will NOT hash to the
+     *      order ID. Reconstruct the complete OrderData from the OrderOpened event instead. Orders
+     *      stored by previous versions of the contract are returned complete.
      * @param orderId_ The ID of the order to get data for
-     * @return orderData_ The OrderData struct containing all order information needed to fill
+     * @return orderData_ The OrderData struct as stored (see note above about unset fields)
      */
     function getOrderData(bytes32 orderId_) external view returns (OrderData memory orderData_);
 

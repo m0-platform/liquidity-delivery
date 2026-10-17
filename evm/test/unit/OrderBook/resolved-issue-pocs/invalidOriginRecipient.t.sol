@@ -52,9 +52,9 @@ contract InvalidOriginRecipientTest is OrderBookTestBase {
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
-                tokenOut: order.tokenOut,
-                recipient: order.recipient,
-                solver: order.solver
+                tokenOut: recordedOrderData[orderId].tokenOut,
+                recipient: recordedOrderData[orderId].recipient,
+                solver: recordedOrderData[orderId].solver
             }),
             IOrderBook.FillParams({
                 amountOutToFill: params.amountOut,
@@ -94,9 +94,9 @@ contract InvalidOriginRecipientTest is OrderBookTestBase {
                 amountIn: order.amountIn,
                 amountOut: order.amountOut,
                 tokenIn: order.tokenIn.toBytes32(),
-                tokenOut: order.tokenOut,
-                recipient: order.recipient,
-                solver: order.solver
+                tokenOut: recordedOrderData[orderId].tokenOut,
+                recipient: recordedOrderData[orderId].recipient,
+                solver: recordedOrderData[orderId].solver
             }),
             IOrderBook.FillParams({
                 amountOutToFill: params.amountOut,

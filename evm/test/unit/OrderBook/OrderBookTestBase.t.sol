@@ -43,6 +43,10 @@ abstract contract OrderBookTestBase is Test {
 
     IOrderBook.OrderParams internal params;
 
+    // tokenOut, recipient, and solver are no longer stored onchain, so tests record them
+    // (keyed by order ID) when opening orders in order to reconstruct complete OrderData later
+    mapping(bytes32 orderId => IOrderBook.OrderData orderData) internal recordedOrderData;
+
     constructor() {
         // Insert tokens to be deployed
         TOKENS.push(Token("token-in-6D", "TI6", 6));
@@ -156,18 +160,42 @@ abstract contract OrderBookTestBase is Test {
         params_.sender = sender_;
         tokenIn.approve(address(orderBook), uint256(params_.amountIn));
         bytes32 orderId_ = orderBook.openOrder(params_);
+        _recordOrderData(orderId_, params_);
 
         return orderId_;
     }
 
+    /// @dev Records the complete OrderData for an order just opened with params_, combining
+    ///      the stored order fields with the params-only fields (tokenOut, recipient, solver)
+    ///      that are no longer written to storage
+    function _recordOrderData(bytes32 orderId_, IOrderBook.OrderParams memory params_) internal {
+        IOrderBook.Order memory order_ = orderBook.getOrder(orderId_);
+
+        recordedOrderData[orderId_] = IOrderBook.OrderData({
+            version: order_.version,
+            originChainId: CHAIN_ID,
+            sender: order_.sender.toBytes32(),
+            nonce: order_.nonce,
+            destChainId: order_.destChainId,
+            createdAt: uint64(order_.createdAt),
+            fillDeadline: uint64(order_.fillDeadline),
+            amountIn: order_.amountIn,
+            amountOut: order_.amountOut,
+            tokenIn: order_.tokenIn.toBytes32(),
+            tokenOut: params_.tokenOut,
+            recipient: params_.recipient,
+            solver: params_.solver
+        });
+    }
+
     function _fillOrder(address solver_, bytes32 orderId_, uint128 fillAmount_) internal from(solver_) {
         // Get the order data
-        IOrderBook.Order memory order = orderBook.getOrder(orderId_);
-        MockERC20(order.tokenOut.toAddress()).approve(address(orderBook), fillAmount_);
+        IOrderBook.OrderData memory orderData_ = _getOrderDataFromOrder(orderId_, orderBook.getOrder(orderId_));
+        MockERC20(orderData_.tokenOut.toAddress()).approve(address(orderBook), fillAmount_);
 
         orderBook.fillOrder(
             orderId_,
-            _getOrderDataFromOrder(orderId_, order),
+            orderData_,
             IOrderBook.FillParams({
                 amountOutToFill: fillAmount_,
                 originRecipient: solver_.toBytes32(),
@@ -200,6 +228,11 @@ abstract contract OrderBookTestBase is Test {
         bytes32 orderId_,
         IOrderBook.Order memory order_
     ) internal view returns (IOrderBook.OrderData memory) {
+        // tokenOut, recipient, and solver are unset in storage, so they are sourced from the
+        // data recorded at order creation; the remaining fields come from the provided order
+        // so that tests can tamper with them to construct mismatching OrderData
+        IOrderBook.OrderData memory recorded_ = recordedOrderData[orderId_];
+
         return
             IOrderBook.OrderData({
                 version: order_.version,
@@ -212,9 +245,9 @@ abstract contract OrderBookTestBase is Test {
                 amountIn: order_.amountIn,
                 amountOut: order_.amountOut,
                 tokenIn: order_.tokenIn.toBytes32(),
-                tokenOut: order_.tokenOut,
-                recipient: order_.recipient,
-                solver: order_.solver
+                tokenOut: recorded_.tokenOut,
+                recipient: recorded_.recipient,
+                solver: recorded_.solver
             });
     }
 

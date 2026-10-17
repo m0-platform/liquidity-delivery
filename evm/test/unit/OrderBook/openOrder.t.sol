@@ -140,11 +140,14 @@ contract OpenOrderTest is OrderBookTestBase {
             expOrderId,
             users["alice"],
             users["alice"],
+            0, // nonce
+            uint64(block.timestamp), // createdAt
             params.tokenIn,
             params.amountIn,
             params.destChainId,
             params.tokenOut,
             params.amountOut,
+            params.recipient,
             params.solver,
             params.fillDeadline
         );
@@ -164,12 +167,15 @@ contract OpenOrderTest is OrderBookTestBase {
         assertEq(order.fillDeadline, params.fillDeadline);
         assertEq(order.nonce, 0);
         assertEq(order.tokenIn, params.tokenIn);
-        assertEq(order.tokenOut, params.tokenOut);
         assertEq(order.sender, users["alice"]);
-        assertEq(order.recipient, params.recipient);
         assertEq(order.amountIn, params.amountIn);
         assertEq(order.amountOut, params.amountOut);
-        assertEq(order.solver, params.solver);
+
+        // tokenOut, recipient, and solver are intentionally not stored (gas optimization);
+        // they are bound to the order via the order ID hash and emitted in the OrderOpened event
+        assertEq(order.tokenOut, bytes32(0));
+        assertEq(order.recipient, bytes32(0));
+        assertEq(order.solver, bytes32(0));
     }
 
     function test_givenBothTokensHaveSixDecimals_success() public givenTokenInDecimals(6) givenTokenOutDecimals(6) {
@@ -255,11 +261,14 @@ contract OpenOrderTest is OrderBookTestBase {
             expOrderId,
             funder, // funder is Bob
             sender, // sender is Alice
+            0, // nonce
+            uint64(block.timestamp), // createdAt
             params.tokenIn,
             params.amountIn,
             params.destChainId,
             params.tokenOut,
             params.amountOut,
+            params.recipient,
             params.solver,
             params.fillDeadline
         );
@@ -323,6 +332,7 @@ contract OpenOrderTest is OrderBookTestBase {
         tokenIn.approve(address(orderBook), params.amountIn);
         vm.prank(funder);
         bytes32 orderId = orderBook.openOrder(params);
+        _recordOrderData(orderId, params);
 
         uint256 funderBalanceBefore = tokenIn.balanceOf(funder);
         uint256 senderBalanceBefore = tokenIn.balanceOf(sender);
@@ -352,6 +362,7 @@ contract OpenOrderTest is OrderBookTestBase {
         tokenIn.approve(address(orderBook), params.amountIn);
         vm.prank(funder);
         bytes32 orderId = orderBook.openOrder(params);
+        _recordOrderData(orderId, params);
 
         // Bob (funder) attempts to cancel before deadline - should fail
         // Bob is neither sender (Alice) nor recipient (Carol)
@@ -375,6 +386,7 @@ contract OpenOrderTest is OrderBookTestBase {
         tokenIn.approve(address(orderBook), params.amountIn);
         vm.prank(funder);
         bytes32 orderId = orderBook.openOrder(params);
+        _recordOrderData(orderId, params);
 
         // Verify order is created
         IOrderBook.Order memory order = orderBook.getOrder(orderId);

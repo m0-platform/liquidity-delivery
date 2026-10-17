@@ -2,6 +2,7 @@
 pragma solidity 0.8.33;
 
 import { console2 } from "../../lib/forge-std/src/Script.sol";
+import { Vm } from "../../lib/forge-std/src/Vm.sol";
 
 import { ScriptBase } from "../ScriptBase.s.sol";
 import { IOrderBook } from "../../src/interfaces/IOrderBook.sol";
@@ -159,10 +160,50 @@ contract CancelOrder is ScriptBase {
         // Verify order exists (version 0 indicates non-existent order)
         require(orderData_.version != 0, "Order does not exist on origin chain");
 
+        // tokenOut, recipient, and solver are not stored onchain for orders opened by the
+        // storage-optimized contract (recipient is never zero for fully stored orders), so
+        // they are recovered from the OrderOpened event on the origin chain
+        if (orderData_.recipient == bytes32(0)) {
+            _completeOrderDataFromEvent(orderId_, originOrderBook_, orderData_);
+        }
+
         // solhint-disable-next-line no-console
         console2.log("Queried order from origin chain:", originChainId_);
         // solhint-disable-next-line no-console
         console2.log("Origin OrderBook:", originOrderBook_);
+    }
+
+    /// @notice Completes OrderData with the fields that are not stored onchain
+    ///         (tokenOut, recipient, and solver) using the OrderOpened event
+    /// @dev Searches logs from block 0 by default; set ORDER_OPENED_FROM_BLOCK to
+    ///      narrow the search range if the RPC provider limits eth_getLogs
+    function _completeOrderDataFromEvent(
+        bytes32 orderId_,
+        address orderBook_,
+        IOrderBook.OrderData memory orderData_
+    ) internal {
+        bytes32[] memory topics_ = new bytes32[](2);
+        topics_[0] = IOrderBook.OrderOpened.selector;
+        topics_[1] = orderId_; // orderId is the first indexed topic
+
+        Vm.EthGetLogs[] memory logs_ = vm.eth_getLogs(
+            vm.envOr("ORDER_OPENED_FROM_BLOCK", uint256(0)),
+            block.number,
+            orderBook_,
+            topics_
+        );
+        require(logs_.length == 1, "OrderOpened event not found for order ID");
+
+        // Non-indexed event data:
+        // (funder, nonce, createdAt, tokenIn, amountIn, tokenOut, amountOut, recipient, solver, fillDeadline)
+        (, , , , , bytes32 tokenOut_, , bytes32 recipient_, bytes32 solver_, ) = abi.decode(
+            logs_[0].data,
+            (address, uint64, uint64, address, uint128, bytes32, uint128, bytes32, bytes32, uint32)
+        );
+
+        orderData_.tokenOut = tokenOut_;
+        orderData_.recipient = recipient_;
+        orderData_.solver = solver_;
     }
 
     /// @notice Get Portal address from PORTAL_ADDRESS env var (set by shell script from chain config)
