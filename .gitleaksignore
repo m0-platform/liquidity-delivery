@@ -1,0 +1,13 @@
+# Reviewed false alarms. Each line is file:rule:start-line.
+# A new secret on a different line still fails the scan.
+svm/scripts/__tests__/order-id.test.ts:bare-32-byte-hex:41
+svm/scripts/__tests__/order-id.test.ts:bare-32-byte-hex:47
+svm/scripts/__tests__/order-id.test.ts:bare-32-byte-hex:48
+svm/scripts/__tests__/order-id.test.ts:bare-32-byte-hex:51
+svm/scripts/__tests__/order-id.test.ts:bare-32-byte-hex:52
+svm/scripts/__tests__/order-id.test.ts:bare-32-byte-hex:64
+svm/runbooks/remove_destination/signers.mainnet.tx:generic-api-key:9
+svm/runbooks/add_destination/signers.mainnet.tx:generic-api-key:9
+svm/runbooks/deployment/signers.mainnet.tx:generic-api-key:13
+svm/runbooks/initialize/signers.mainnet.tx:generic-api-key:13
+guides/chain_deployment_plan.md:generic-api-key:376
